@@ -1,0 +1,17 @@
+{
+  "name": "banana-chat",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Banana Chat (orgchat) — self-hosted internal workspace chat. Monorepo per PRODUCT_SPEC.md §3.4.",
+  "packageManager": "pnpm@12.3.4",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev:web": "pnpm --filter @banana-chat/web dev",
+    "build:web": "pnpm --filter @banana-chat/web build",
+    "test": "pnpm -r --if-present test",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "lint": "pnpm -r --if-present lint"
+  }
+}

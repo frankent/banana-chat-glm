@@ -1,0 +1,38 @@
+{
+  "name": "@banana-chat/web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --noEmit",
+    "e2e": "node e2e/smoke.mjs"
+  },
+  "dependencies": {
+    "@banana-chat/api-client": "workspace:*",
+    "@banana-chat/chat-core": "workspace:*",
+    "@banana-chat/shared": "workspace:*",
+    "@tanstack/react-query": "^5.90.2",
+    "laravel-echo": "^1.17.1",
+    "pusher-js": "^8.4.0-rc2",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-router-dom": "^7.9.4",
+    "zustand": "^5.0.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.17",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.1.0",
+    "oxlint": "^1.79.0",
+    "puppeteer-core": "^25.10.0",
+    "tailwindcss": "^4.1.17",
+    "typescript": "~6.0.2",
+    "vite": "^8.2.2"
+  }
+}

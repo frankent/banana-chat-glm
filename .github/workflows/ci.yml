@@ -1,0 +1,81 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  api:
+    name: API — Pest + Pint
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: orgchat
+          POSTGRES_PASSWORD: orgchat
+          POSTGRES_DB: orgchat_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U orgchat"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_DATABASE: orgchat_test
+      DB_USERNAME: orgchat
+      DB_PASSWORD: orgchat
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_pgsql, redis, intl, zip
+          coverage: none
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate --force
+      - name: Pint
+        run: vendor/bin/pint --test
+      - name: Pest
+        run: vendor/bin/pest
+
+  web:
+    name: Packages + Web — Vitest + tsc + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 23
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm -r --if-present typecheck
+      - name: Unit tests
+        run: pnpm -r --if-present test
+      - name: Build web
+        run: pnpm --filter @banana-chat/web build

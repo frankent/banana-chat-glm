@@ -1,0 +1,223 @@
+# Banana Chat dev topology (TASK-INF-001, spec §3.1)
+#
+# Default profile ("make up"): stateful services + Reverb only.
+# The API and web dev servers run on the host (`make dev-api` / `make dev-web`)
+# for fast iteration; apps/api/.env points at the mapped host ports below.
+#
+# "full" profile ("make up-full"): api/worker/scheduler/web containerized too.
+#
+# Host ports are remapped (docker-desktop occupies 6379/8080 on this machine):
+#   postgres 5433 · redis 6380 · minio 9100/9101 · mailpit 8025 · reverb 8088
+
+name: banana-chat
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: orgchat
+      POSTGRES_PASSWORD: orgchat
+      POSTGRES_DB: orgchat
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orgchat -d orgchat"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    ports:
+      - "6380:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: orgchat
+      MINIO_ROOT_PASSWORD: orgchat123
+    ports:
+      - "9100:9000"
+      - "9101:9001"
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 orgchat orgchat123 &&
+      mc mb --ignore-existing local/orgchat &&
+      echo 'bucket orgchat ready'"
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "8025:8025"
+      - "1025:25"
+
+  reverb:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080
+    ports:
+      - "8088:8080"
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: orgchat
+      DB_USERNAME: orgchat
+      DB_PASSWORD: orgchat
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
+      SESSION_DRIVER: redis
+      BROADCAST_CONNECTION: reverb
+    volumes:
+      - ../apps/api:/app
+      - reverb-vendor:/app/vendor
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ---- full containerization (make up-full) ----
+  api:
+    profiles: ["full"]
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    command: php artisan serve --host=0.0.0.0 --port=8000
+    ports:
+      - "8000:8000"
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: orgchat
+      DB_USERNAME: orgchat
+      DB_PASSWORD: orgchat
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
+      SESSION_DRIVER: redis
+      BROADCAST_CONNECTION: reverb
+      REVERB_HOST: reverb
+      REVERB_PORT: 8080
+    volumes:
+      - ../apps/api:/app
+      - api-vendor:/app/vendor
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      reverb:
+        condition: service_started
+
+  worker:
+    profiles: ["full"]
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    command: php artisan queue:work --queue=default,media,push,retention --sleep=1 --tries=3
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: orgchat
+      DB_USERNAME: orgchat
+      DB_PASSWORD: orgchat
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
+      BROADCAST_CONNECTION: reverb
+      REVERB_HOST: reverb
+      REVERB_PORT: 8080
+    volumes:
+      - ../apps/api:/app
+      - worker-vendor:/app/vendor
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  scheduler:
+    profiles: ["full"]
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    command: php artisan schedule:work
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: orgchat
+      DB_USERNAME: orgchat
+      DB_PASSWORD: orgchat
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
+    volumes:
+      - ../apps/api:/app
+      - scheduler-vendor:/app/vendor
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    profiles: ["full"]
+    image: node:22-alpine
+    working_dir: /repo
+    command: sh -c "corepack enable && pnpm install --frozen-lockfile=false && pnpm --filter @banana-chat/web dev --host 0.0.0.0"
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_BASE: http://localhost:8000/api/v1
+      VITE_REVERB_HOST: localhost
+      VITE_REVERB_PORT: 8088
+      VITE_REVERB_SCHEME: http
+    volumes:
+      - ..:/repo
+      - web-node-modules:/repo/node_modules
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:
+  reverb-vendor:
+  api-vendor:
+  worker-vendor:
+  scheduler-vendor:
+  web-node-modules:

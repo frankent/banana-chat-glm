@@ -1,0 +1,30 @@
+# deps
+node_modules/
+vendor/
+
+# env & secrets
+.env
+.env.*.local
+apps/api/.env
+apps/web/.env.local
+*.pem
+*.key
+
+# build output
+dist/
+build/
+apps/web/dist/
+
+# caches
+.phpunit.cache/
+.phpunit.result.cache
+.php-cs-fixer.cache
+.turbo/
+*.tsbuildinfo
+coverage/
+
+# logs & os
+logs/*.log
+.DS_Store
+.idea/
+.vscode/
