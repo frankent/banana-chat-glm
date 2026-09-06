@@ -42,6 +42,22 @@ db-test: ## Create orgchat_test database if missing
 		|| $(COMPOSE) exec -T postgres createdb -U orgchat orgchat_test
 	@echo "orgchat_test ready"
 
+# ---- env switching (local docker vs cloud) ----
+
+use-cloud: ## Point apps/api/.env at Neon + DO Spaces + remote Redis (backs up local)
+	@test -f $(API_DIR)/.env.cloud.local || { echo "missing $(API_DIR)/.env.cloud.local"; exit 1; }
+	@test -f $(API_DIR)/.env.docker.local || cp $(API_DIR)/.env $(API_DIR)/.env.docker.local
+	@if cmp -s $(API_DIR)/.env $(API_DIR)/.env.cloud.local; then echo "already on cloud"; else cp $(API_DIR)/.env.cloud.local $(API_DIR)/.env; echo "→ cloud env active (Neon + Spaces + remote Redis)"; fi
+
+use-local: ## Restore the local docker env backup
+	@test -f $(API_DIR)/.env.docker.local || { echo "no local backup found"; exit 1; }
+	@if cmp -s $(API_DIR)/.env $(API_DIR)/.env.docker.local; then echo "already on local"; else cp $(API_DIR)/.env.docker.local $(API_DIR)/.env; echo "→ local docker env active"; fi
+
+which-env: ## Show which infra the .env currently points at
+	@grep -E '^DB_HOST=' $(API_DIR)/.env | sed 's/DB_HOST=/DB → /'
+	@grep -E '^REDIS_HOST=' $(API_DIR)/.env | sed 's/REDIS_HOST=/Redis → /'
+	@grep -E '^FILESYSTEM_DISK=' $(API_DIR)/.env | sed 's/FILESYSTEM_DISK=/Storage → /'
+
 # ---- api ----
 
 migrate: ## Run pending migrations
@@ -101,5 +117,5 @@ typecheck: ## TypeScript check across packages
 
 ci-local: test test-web typecheck build-web ## Local CI approximation
 
-.PHONY: help up up-core up-full down down-full ps logs restart-reverb db-test migrate fresh seed tinker \
+.PHONY: help up up-core up-full down down-full ps logs restart-reverb db-test use-cloud use-local which-env migrate fresh seed tinker \
         dev-api dev-reverb dev-worker test test-filter pint stan install dev-web build-web e2e test-web typecheck ci-local

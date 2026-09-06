@@ -24,6 +24,22 @@ make dev-web          # terminal 3 — http://localhost:5173
 
 The dev topology is hybrid (plan D1): PHP/Vite run on the host, stateful services + Reverb in Docker. An all-container `full` profile exists (`make up-full`).
 
+### Cloud infra (Neon + DigitalOcean Spaces + remote Redis)
+
+The data layer can run on managed services instead of local Docker. Credentials live in `apps/api/.env.cloud.local` (gitignored). Switch with:
+
+```bash
+make use-cloud     # Neon Postgres + DO Spaces (s3 disk, prefix banana-chat/) + remote Redis (cache+queue)
+make which-env     # show what .env currently points at
+make use-local     # restore the local Docker env backup
+```
+
+Notes:
+- Migrations + seed already applied to Neon (`neondb`); demo accounts work there too.
+- Tests always run against the local `orgchat_test` Docker DB — never the cloud one.
+- After switching env, restart any `queue:work` process (it caches env at boot).
+- Realtime still needs Reverb (local container or self-hosted); see EMQX note in the deviation log.
+
 ### Demo accounts (after `make seed`)
 
 | Login | Password | Where |
