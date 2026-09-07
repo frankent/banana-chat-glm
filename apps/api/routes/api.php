@@ -67,6 +67,10 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/rooms/{room}/read', [MessageController::class, 'markRead'])->whereUlid('room');
         Route::get('/rooms/{room}/read-status', [MessageController::class, 'readStatus'])->whereUlid('room');
 
+        // API-042/043 — edit/delete (FR-MSG-005/006); params resolve in-controller
+        Route::patch('/messages/{message}', [MessageController::class, 'update'])->whereUlid('message');
+        Route::delete('/messages/{message}', [MessageController::class, 'destroy'])->whereUlid('message');
+
         // API-060/061/062 — media (FR-MEDIA-001/004). Params resolve in-controller.
         Route::post('/uploads', [UploadController::class, 'store']);
         Route::post('/uploads/{attachment}/complete', [UploadController::class, 'complete'])->whereUlid('attachment');

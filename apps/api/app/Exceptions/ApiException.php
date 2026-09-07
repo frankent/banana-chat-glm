@@ -118,6 +118,16 @@ class ApiException extends RuntimeException
         return new self('MSG_ATTACHMENT_INVALID', 'ไฟล์แนบไม่ถูกต้อง (ไม่ใช่ของคุณ, workspace ไม่ตรง, สถานะไม่พร้อม หรือถูกใช้ไปแล้ว)', 422);
     }
 
+    public static function msgEditWindowExpired(): self
+    {
+        return new self('MSG_EDIT_WINDOW_EXPIRED', 'พ้นระยะเวลาที่แก้ไขข้อความได้', 422);
+    }
+
+    public static function msgNotEditable(): self
+    {
+        return new self('MSG_NOT_EDITABLE', 'ข้อความนี้แก้ไขไม่ได้ (ข้อความระบบหรือถูกลบไปแล้ว)', 422);
+    }
+
     // ---- Media errors (FR-MEDIA-001, §7.1) ----
 
     public static function mediaTooLarge(int $maxBytes): self

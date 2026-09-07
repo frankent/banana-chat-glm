@@ -73,10 +73,31 @@ export function ChatView() {
       void queryClient.invalidateQueries({ queryKey: ['rooms', slug] });
     };
 
-    channel.listen('.message.created', onMessage).listen('.room.read', onRead);
+    // EVT-011 edit — merge by id (store.add)
+    const onUpdated = (envelope: EventEnvelope<{ message: Message }>) => {
+      const message = envelope.data?.message;
+      if (message !== undefined) {
+        store.add(message);
+      }
+    };
+
+    // EVT-012 delete — tombstone keeps seq, drops body (FR-MSG-006)
+    const onDeleted = (envelope: EventEnvelope<{ message_id: string; delete_reason: string | null }>) => {
+      const data = envelope.data;
+      if (data?.message_id !== undefined) {
+        store.markDeleted(data.message_id, new Date().toISOString(), data.delete_reason ?? 'sender');
+        void queryClient.invalidateQueries({ queryKey: ['rooms', slug] });
+      }
+    };
+
+    channel.listen('.message.created', onMessage).listen('.room.read', onRead)
+      .listen('.message.updated', onUpdated)
+      .listen('.message.deleted', onDeleted);
     return () => {
       channel.stopListening('.message.created');
       channel.stopListening('.room.read');
+      channel.stopListening('.message.updated');
+      channel.stopListening('.message.deleted');
       echo.leave(`room.${roomId}`);
     };
   }, [echo, roomId, slug, me, queryClient]);
@@ -114,6 +135,18 @@ export function ChatView() {
   const seen = other !== undefined && other.last_read_seq >= myNewestSeq && myNewestSeq > 0;
 
   let lastDay = '';
+
+  // FR-MSG-005/006 — edit (sender only), delete (sender anytime, moderator for others)
+  const canModerate = roomQuery.data?.my_role === 'owner' || roomQuery.data?.my_role === 'admin';
+  const editMessage = async (messageId: string, body: string) => {
+    await endpoints.editMessage(messageId, slug, body);
+    void queryClient.invalidateQueries({ queryKey: ['rooms', slug] });
+  };
+  const deleteMessage = async (messageId: string) => {
+    await endpoints.deleteMessage(messageId, slug);
+    void queryClient.invalidateQueries({ queryKey: ['rooms', slug] });
+  };
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
@@ -150,7 +183,13 @@ export function ChatView() {
                   <span className="rounded-full bg-slate-200 px-3 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">{day}</span>
                 </div>
               )}
-              <MessageItem message={message} mine={message.sender_id === me.id} />
+              <MessageItem
+                message={message}
+                mine={message.sender_id === me.id}
+                canModerate={canModerate}
+                onEdit={editMessage}
+                onDelete={deleteMessage}
+              />
             </div>
           );
         })}

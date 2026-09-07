@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Message\MessageEditor;
 use App\Domain\Message\MessageSerializer;
 use App\Domain\Message\MessageWriter;
 use App\Domain\Room\RoomPolicy;
@@ -18,8 +19,8 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * API-040/041/045/046 — messages, read pointer, read status
- * (FR-MSG-001/003/009, FR-READ-001/002).
+ * API-040..043/045/046 — messages, edit/delete, read pointer, read status
+ * (FR-MSG-001/003/005/006/009, FR-READ-001/002).
  */
 class MessageController extends Controller
 {
@@ -27,6 +28,7 @@ class MessageController extends Controller
         private readonly RoomPolicy $policy,
         private readonly MessageWriter $writer,
         private readonly MessageSerializer $serializer,
+        private readonly MessageEditor $editor,
     ) {}
 
     /**
@@ -125,6 +127,51 @@ class MessageController extends Controller
         return response()->json([
             'data' => ['message' => $this->serializer->toArray($message)],
         ], $created ? 201 : 200);
+    }
+
+    /**
+     * API-042 — edit body (FR-MSG-005). Sender only, inside the window.
+     */
+    public function update(Request $request, string $messageId): JsonResponse
+    {
+        $data = $request->validate([
+            'body' => ['nullable', 'string'], // empty → domain MSG_EMPTY (TrimStrings strips whitespace first)
+        ]);
+
+        $message = $this->messageOrFail($messageId);
+        $membership = $this->policy->membershipOrFail($message->room()->firstOrFail(), $request->user());
+
+        $message = $this->editor->edit($message, $request->user(), $data['body']);
+
+        return response()->json([
+            'data' => ['message' => $this->serializer->toArray($message)],
+        ]);
+    }
+
+    /**
+     * API-043 — soft delete (FR-MSG-006). Sender anytime; owner/admin as
+     * moderator. Idempotent — repeat deletes return 204.
+     */
+    public function destroy(Request $request, string $messageId): JsonResponse
+    {
+        $message = $this->messageOrFail($messageId);
+        $room = $message->room()->firstOrFail();
+        $membership = $this->policy->membershipOrFail($room, $request->user());
+
+        $deletedBy = $this->editor->assertDeletableBy($message, $request->user(), $membership);
+        $this->editor->delete($message, $request->user(), $deletedBy);
+
+        return response()->json(status: 204);
+    }
+
+    /**
+     * Workspace-scoped resolution (global scope active under workspace.context).
+     * Deleted rows resolve too — delete replays are idempotent and edits
+     * reject them with MSG_NOT_EDITABLE, not 404.
+     */
+    private function messageOrFail(string $messageId): Message
+    {
+        return Message::query()->findOrFail($messageId);
     }
 
     /**

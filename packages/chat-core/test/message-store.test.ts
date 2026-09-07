@@ -134,3 +134,42 @@ describe('TC-CORE-006 replace', () => {
     expect(store.newestSeq).toBe(42);
   });
 });
+
+describe('TC-CORE-013 edit merge (EVT-011)', () => {
+  it('merges message.updated payloads by id — edit fields replace old values', () => {
+    const store = new MessageStore('r1');
+    const original = msg(1, { body: 'v1' });
+    store.add(original);
+    store.add({ ...original, body: 'v2', edited_at: '2026-09-07T00:00:00Z', edit_count: 1 });
+    const [m] = store.getState().messages;
+    expect(m.body).toBe('v2');
+    expect(m.edit_count).toBe(1);
+    expect(store.getState().messages).toHaveLength(1);
+  });
+});
+
+describe('TC-CORE-014 tombstone (EVT-012, FR-MSG-006)', () => {
+  it('markDeleted keeps seq, drops body + attachments, sets deleted_at', () => {
+    const store = new MessageStore('r1');
+    const withFile = msg(2, { attachments: [{ id: 'a1' } as Message['attachments'][number]] });
+    store.add(msg(1));
+    store.add(withFile);
+
+    store.markDeleted(withFile.id, '2026-09-07T00:00:00Z', 'sender');
+
+    const tomb = store.getState().messages.find((m) => m.id === withFile.id)!;
+    expect(tomb.seq).toBe(2);
+    expect(tomb.body).toBeNull();
+    expect(tomb.attachments).toEqual([]);
+    expect(tomb.deleted_at).toBe('2026-09-07T00:00:00Z');
+    expect(tomb.delete_reason).toBe('sender');
+    expect(store.allSeqs).toEqual([1, 2]); // seq preserved for pagination
+  });
+
+  it('ignores unknown ids (event raced ahead of history load)', () => {
+    const store = new MessageStore('r1');
+    store.replace([msg(1)]);
+    store.markDeleted('never-seen', '2026-09-07T00:00:00Z', 'sender');
+    expect(store.getState().messages).toHaveLength(1);
+  });
+});

@@ -125,6 +125,25 @@ export class Endpoints {
     });
   }
 
+  // -- edit/delete (API-042/043) --
+
+  /** API-042 — sender-only body edit (FR-MSG-005). */
+  editMessage(messageId: string, slug: string, body: string) {
+    return this.api.request<{ message: Message }>(`/api/v1/messages/${messageId}`, {
+      method: 'PATCH',
+      body: { body },
+      workspaceSlug: slug,
+    });
+  }
+
+  /** API-043 — soft delete, 204 (FR-MSG-006). */
+  deleteMessage(messageId: string, slug: string) {
+    return this.api.request<void>(`/api/v1/messages/${messageId}`, {
+      method: 'DELETE',
+      workspaceSlug: slug,
+    });
+  }
+
   // -- media (API-060/061/062) --
 
   createUpload(

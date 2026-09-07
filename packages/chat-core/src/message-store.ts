@@ -90,6 +90,19 @@ export class MessageStore {
     this.recompute();
   }
 
+  /**
+   * EVT-012 message.deleted — the row stays (seq preserved) but becomes a
+   * tombstone: body dropped, attachments gone (FR-MSG-006).
+   */
+  markDeleted(messageId: string, deletedAt: string, deleteReason: string): MessageStoreState {
+    const existing = this.byId.get(messageId);
+    if (existing !== undefined) {
+      this.byId.set(messageId, { ...existing, body: null, attachments: [], deleted_at: deletedAt, delete_reason: deleteReason });
+      this.recompute();
+    }
+    return this.state;
+  }
+
   dispose(): void {
     this.clearTimer();
   }
