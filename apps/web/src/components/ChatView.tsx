@@ -31,6 +31,14 @@ export function ChatView() {
     staleTime: 60_000,
   });
 
+  // roster for @mention autocomplete (FR-MSG-008)
+  const membersQuery = useQuery({
+    queryKey: ['room-members', roomId],
+    queryFn: () => endpoints.roomMembers(roomId!, slug!),
+    enabled: roomId !== undefined && slug !== undefined,
+    staleTime: 60_000,
+  });
+
   const readStatusQuery = useQuery({
     queryKey: ['read-status', roomId],
     queryFn: () => endpoints.readStatus(roomId!, slug!),
@@ -196,7 +204,7 @@ export function ChatView() {
         <div ref={bottomRef} />
       </div>
 
-      <Composer roomId={roomId} workspaceId={room?.room.workspace_id ?? currentWorkspace?.workspace.id ?? ''} slug={slug} senderId={me.id} />
+      <Composer roomId={roomId} workspaceId={room?.room.workspace_id ?? currentWorkspace?.workspace.id ?? ''} slug={slug} senderId={me.id} members={membersQuery.data ?? []} />
     </div>
   );
 }

@@ -69,6 +69,8 @@ export interface Message {
   deleted_at: string | null;
   delete_reason: string | null;
   created_at: string;
+  /** FR-MSG-008 — user ids mentioned by this message */
+  mentions: string[];
   attachments: Attachment[];
 }
 

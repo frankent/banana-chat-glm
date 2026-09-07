@@ -59,6 +59,9 @@ class MessageSerializer
             'deleted_at' => $message->deleted_at?->toIso8601String(),
             'delete_reason' => $message->delete_reason,
             'created_at' => $message->created_at?->toIso8601String(),
+            'mentions' => $deleted ? [] : ($message->relationLoaded('mentions')
+                ? $message->mentions->pluck('id')->values()->all()
+                : []),
             'attachments' => $deleted ? [] : $this->serializeAttachments($message),
         ];
     }
@@ -73,6 +76,7 @@ class MessageSerializer
         $message->loadMissing(
             ['sender' => fn ($q) => $q->select(['id', 'username', 'display_name', 'avatar_attachment_id'])],
             'attachments',
+            'mentions:id',
         );
 
         return app(self::class)->toArray($message);

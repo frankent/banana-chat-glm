@@ -55,6 +55,7 @@ class MessageController extends Controller
                 'sender:id,username,display_name,avatar_attachment_id',
                 'replyTo:id,room_id,sender_id,body,deleted_at',
                 'attachments',
+                'mentions:id',
             ]);
 
         if ($after !== null) {
@@ -122,6 +123,7 @@ class MessageController extends Controller
             'sender:id,username,display_name,avatar_attachment_id',
             'replyTo:id,room_id,sender_id,body,deleted_at',
             'attachments',
+            'mentions:id',
         ]);
 
         return response()->json([

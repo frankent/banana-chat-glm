@@ -30,6 +30,7 @@ class MessageWriter
     public function __construct(
         private readonly SettingsService $settings,
         private readonly MessageSerializer $serializer,
+        private readonly MentionSync $mentions,
     ) {}
 
     /**
@@ -105,6 +106,9 @@ class MessageWriter
             foreach ($attachments as $position => $attachment) {
                 $message->attachments()->attach($attachment->id, ['position' => $position + 1]);
             }
+
+            // FR-MSG-008 — parse @mentions under the room lock
+            $this->mentions->sync($message, $locked, $sender);
 
             $locked->forceFill([
                 'last_seq' => $seq,

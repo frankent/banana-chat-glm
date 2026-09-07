@@ -94,6 +94,11 @@ export class Endpoints {
     return this.api.request<RoomDetail>(`/api/v1/rooms/${roomId}`, { workspaceSlug: slug });
   }
 
+  /** Room roster for @mention autocomplete (flat cursor-paginated array, API-024). */
+  roomMembers(roomId: string, slug: string) {
+    return this.api.request<Array<UserStub & { role: string }>>(`/api/v1/rooms/${roomId}/members?limit=100`, { workspaceSlug: slug });
+  }
+
   // -- messages (API-040/041) --
 
   messages(roomId: string, slug: string, params: { before_seq?: number; after_seq?: number; limit?: number } = {}) {
@@ -142,6 +147,14 @@ export class Endpoints {
       method: 'DELETE',
       workspaceSlug: slug,
     });
+  }
+
+  // -- mentions (API-044) --
+
+  /** API-044 — messages mentioning me in the workspace, newest first. */
+  myMentions(slug: string, cursor?: string) {
+    const qs = cursor !== undefined ? `?cursor=${cursor}` : '';
+    return this.api.request<{ messages: Message[]; next_cursor: string | null }>(`/api/v1/me/mentions${qs}`, { workspaceSlug: slug });
   }
 
   // -- media (API-060/061/062) --

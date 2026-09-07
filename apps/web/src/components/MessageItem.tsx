@@ -30,6 +30,30 @@ function systemText(message: Message): string {
   }
 }
 
+const MENTION_TOKEN = /(@[a-zA-Z0-9][a-zA-Z0-9_.]*)/g;
+
+/** FR-MSG-008 — render @tokens as chips; text stays escaped (split, no HTML). */
+function BodyWithMentions({ body, mine }: { body: string; mine: boolean }) {
+  const parts = body.split(MENTION_TOKEN);
+  return (
+    <p className="whitespace-pre-wrap break-words text-sm">
+      {parts.map((part, i) =>
+        part.startsWith('@') && part.length > 1 ? (
+          <span
+            key={i}
+            data-testid="mention-chip"
+            className={`rounded px-0.5 font-medium ${mine ? 'bg-yellow-500/30' : 'bg-yellow-200/70'}`}
+          >
+            {part}
+          </span>
+        ) : (
+          part
+        ),
+      )}
+    </p>
+  );
+}
+
 /** FR-MEDIA-004 — thumbnails inline, originals open in a new tab on click. */
 function AttachmentView({ attachment }: { attachment: Attachment }) {
   const thumb = attachment.urls.thumb_md ?? attachment.urls.thumb_sm ?? attachment.urls.original;
@@ -200,7 +224,7 @@ export function MessageItem({ message, mine, canModerate = false, onEdit, onDele
                 ))}
               </div>
             )}
-            {message.body !== null && <p className="whitespace-pre-wrap break-words text-sm">{message.body}</p>}
+            {message.body !== null && <BodyWithMentions body={message.body} mine={mine} />}
           </>
         )}
         <p className="mt-0.5 text-right text-[10px] text-slate-500">

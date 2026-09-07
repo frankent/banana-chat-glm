@@ -29,6 +29,7 @@ class MessageEditor
         private readonly SettingsService $settings,
         private readonly MessageSerializer $serializer,
         private readonly AuditLogger $audit,
+        private readonly MentionSync $mentions,
     ) {}
 
     public function edit(Message $message, User $actor, ?string $body): Message
@@ -59,8 +60,11 @@ class MessageEditor
                 'edit_count' => $message->edit_count + 1,
             ])->save();
 
+            // FR-MSG-005/008 — re-parse mentions for the new body (TC-MSG-053)
+            $this->mentions->sync($message, $message->room()->firstOrFail(), $actor);
+
             $fresh = $message->refresh();
-            $fresh->loadMissing('sender:id,username,display_name,avatar_attachment_id', 'attachments');
+            $fresh->loadMissing('sender:id,username,display_name,avatar_attachment_id', 'attachments', 'mentions:id');
 
             broadcast(new MessageUpdated($fresh->room()->firstOrFail(), MessageSerializer::forEvent($fresh)));
 

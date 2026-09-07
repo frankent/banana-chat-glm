@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { DEFAULT_SETTINGS } from '@banana-chat/shared';
+import type { UserStub } from '@banana-chat/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { endpoints } from '../lib/api';
 import { roomStore } from '../lib/room-stores';
@@ -12,6 +13,8 @@ interface ComposerProps {
   workspaceId: string;
   slug: string;
   senderId: string;
+  /** room roster for @mention autocomplete (FR-MSG-008, TASK-WEB-006) */
+  members?: UserStub[];
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -20,9 +23,14 @@ const STATUS_LABEL: Record<string, string> = {
   processing: 'กำลังประมวลผล…',
 };
 
+/** @token immediately before the caret (username charset per FR-MSG-008) */
+const MENTION_AT_CARET = /(?:^|\s)@([a-zA-Z0-9][a-zA-Z0-9_.]*)$/;
+
 /** TASK-WEB-006 — Enter sends, Shift+Enter newlines, optimistic insert, one draft per room. */
-export function Composer({ roomId, workspaceId, slug, senderId }: ComposerProps) {
+export function Composer({ roomId, workspaceId, slug, senderId, members = [] }: ComposerProps) {
   const [body, setBody] = useState('');
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
@@ -81,14 +89,81 @@ export function Composer({ roomId, workspaceId, slug, senderId }: ComposerProps)
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (mentionQuery !== null && mentionMatches.length > 0) {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        setMentionIndex((i) => (i + 1) % mentionMatches.length);
+        return;
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        setMentionIndex((i) => (i - 1 + mentionMatches.length) % mentionMatches.length);
+        return;
+      }
+      if (event.key === 'Enter' || event.key === 'Tab') {
+        event.preventDefault();
+        applyMention(mentionMatches[mentionIndex]!);
+        return;
+      }
+      if (event.key === 'Escape') {
+        setMentionQuery(null);
+        return;
+      }
+    }
+
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
       void send();
     }
   };
 
+  // ---- @mention autocomplete (FR-MSG-008) ----
+
+  const mentionMatches = useMemo(() => {
+    if (mentionQuery === null || members.length === 0) {
+      return [];
+    }
+    const q = mentionQuery.toLowerCase();
+    return members
+      .filter((m) => m.id !== senderId)
+      .filter((m) => m.username.toLowerCase().startsWith(q) || m.username.toLowerCase().includes(q) || m.display_name.toLowerCase().includes(q))
+      .slice(0, 8);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mentionQuery, members, senderId]);
+
+  useEffect(() => {
+    setMentionIndex(0);
+  }, [mentionQuery]);
+
+  const applyMention = (user: UserStub) => {
+    const textarea = textareaRef.current;
+    if (textarea === null) return;
+    const caret = textarea.selectionStart ?? body.length;
+    const before = body.slice(0, caret);
+    const after = body.slice(caret);
+    const match = MENTION_AT_CARET.exec(before);
+    if (match === null) return;
+    const insertStart = caret - match[1].length; // keep the @, replace the partial username
+    const next = `${body.slice(0, insertStart)}${user.username} ${after}`;
+    setBody(next);
+    setMentionQuery(null);
+    requestAnimationFrame(() => {
+      const pos = insertStart + user.username.length + 1;
+      textarea.focus();
+      textarea.setSelectionRange(pos, pos);
+    });
+  };
+
+  const onBodyChange = (value: string) => {
+    setBody(value.slice(0, maxLength));
+    const textarea = textareaRef.current;
+    const caret = textarea?.selectionStart ?? value.length;
+    const match = MENTION_AT_CARET.exec(value.slice(0, caret));
+    setMentionQuery(match !== null ? match[1] : null);
+  };
+
   return (
-    <div className="border-t border-slate-200 bg-white p-3">
+    <div className="relative border-t border-slate-200 bg-white p-3">
       {staged.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-2" data-testid="composer-attachments">
           {staged.map((s) => (
@@ -142,7 +217,7 @@ export function Composer({ roomId, workspaceId, slug, senderId }: ComposerProps)
         <textarea
           ref={textareaRef}
           value={body}
-          onChange={(e) => setBody(e.target.value.slice(0, maxLength))}
+          onChange={(e) => onBodyChange(e.target.value)}
           onKeyDown={onKeyDown}
           data-testid="composer-input"
           rows={Math.min(5, body.split('\n').length)}
@@ -158,6 +233,28 @@ export function Composer({ roomId, workspaceId, slug, senderId }: ComposerProps)
           Send
         </button>
       </div>
+      {mentionQuery !== null && mentionMatches.length > 0 && (
+        <div
+          className="absolute bottom-full left-12 mb-1 w-64 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg"
+          data-testid="mention-popup"
+        >
+          {mentionMatches.map((m, i) => (
+            <button
+              key={m.id}
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault(); // keep textarea focus/caret
+                applyMention(m);
+              }}
+              className={`block w-full px-3 py-1.5 text-left text-sm ${i === mentionIndex ? 'bg-yellow-100' : 'hover:bg-slate-50'}`}
+              data-testid="mention-option"
+            >
+              <span className="font-medium">@{m.username}</span>
+              <span className="ml-2 text-xs text-slate-400">{m.display_name}</span>
+            </button>
+          ))}
+        </div>
+      )}
       {body.length > maxLength - 200 && (
         <p className="mt-1 text-right text-xs text-slate-400">{body.length}/{maxLength}</p>
       )}

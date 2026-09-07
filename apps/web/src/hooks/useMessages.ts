@@ -90,6 +90,7 @@ export function optimisticMessage(
     deleted_at: null,
     delete_reason: null,
     created_at: new Date().toISOString(),
+    mentions: [],
     attachments,
   };
 }

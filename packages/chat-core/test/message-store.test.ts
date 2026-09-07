@@ -23,6 +23,7 @@ function msg(seq: number, overrides: Partial<Message> = {}): Message {
     delete_reason: null,
     created_at: new Date(2026, 0, 1, 0, 0, 0, seq).toISOString(),
     attachments: [],
+    mentions: [],
     ...overrides,
   };
 }

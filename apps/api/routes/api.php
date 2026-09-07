@@ -45,6 +45,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/workspace', [WorkspaceController::class, 'show']);
         Route::get('/members', [WorkspaceController::class, 'members']);
         Route::get('/sync', [WorkspaceController::class, 'sync']);
+        Route::get('/me/mentions', [MeController::class, 'mentions']); // API-044 (auth ws)
 
         // Room params resolve inside the controller (RoomController::roomOrFail):
         // SubstituteBindings runs before workspace.context sets the scope, so
