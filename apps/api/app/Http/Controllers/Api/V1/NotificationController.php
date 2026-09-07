@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Device;
+use App\Models\InAppNotification;
 use App\Models\Room;
 use App\Models\RoomNotificationSetting;
 use App\Models\User;
@@ -180,6 +181,74 @@ class NotificationController extends Controller
                 'focused_room_id' => $data['room_id'] ?? null,
                 'focused_at' => now(),
             ]);
+
+        return response()->json(['data' => ['ok' => true]]);
+    }
+
+    /**
+     * API-073 — in-app notification center feed (FR-NOTI-006): mention,
+     * added to room, session revoked. Cursor paginated, newest first.
+     */
+    public function index(Request $request): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+        $limit = 30;
+
+        $query = InAppNotification::query()
+            ->where('user_id', $user->id)
+            ->with('actor:id,username,display_name')
+            ->orderByDesc('created_at')
+            ->orderByDesc('id');
+
+        $cursor = $request->query('cursor');
+        if (is_string($cursor) && $cursor !== '') {
+            [$at, $id] = explode('|', $cursor, 2) + [null, null];
+            if ($at !== null) {
+                $query->where(function ($sub) use ($at, $id) {
+                    $sub->where('created_at', '<', $at)
+                        ->orWhere(fn ($s2) => $s2->where('created_at', $at)->where('id', '<', $id ?? ''));
+                });
+            }
+        }
+
+        $rows = $query->take($limit + 1)->get();
+
+        $next = null;
+        if ($rows->count() > $limit) {
+            $last = $rows[$limit - 1];
+            $next = $last->created_at->toIso8601String().'|'.$last->id;
+            $rows = $rows->take($limit);
+        }
+
+        return response()->json([
+            'data' => [
+                'notifications' => $rows->map(fn (InAppNotification $n) => $n->toApiArray())->values()->all(),
+                'next_cursor' => $next,
+            ],
+        ]);
+    }
+
+    /**
+     * API-073 — mark read: {ids: [...]} marks those rows, {} marks all.
+     */
+    public function markRead(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'ids' => ['sometimes', 'array', 'max:100'],
+            'ids.*' => ['ulid'],
+        ]);
+
+        /** @var User $user */
+        $user = $request->user();
+
+        $query = InAppNotification::query()
+            ->where('user_id', $user->id)
+            ->whereNull('read_at');
+        if (isset($data['ids'])) {
+            $query->whereIn('id', $data['ids']);
+        }
+        $query->update(['read_at' => now()]);
 
         return response()->json(['data' => ['ok' => true]]);
     }

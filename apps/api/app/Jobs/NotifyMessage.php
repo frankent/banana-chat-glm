@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Domain\Notification\FcmPushSender;
 use App\Domain\Notification\PushDecisionService;
 use App\Models\Device;
+use App\Models\InAppNotification;
 use App\Models\Message;
 use App\Models\Room;
 use App\Models\RoomMember;
@@ -53,6 +54,28 @@ class NotifyMessage implements ShouldQueue
 
         $mentioned = $message->mentions->pluck('id')->all();
         $sentKey = "push:sent:{$message->id}";
+
+        // FR-NOTI-006 — in-app center rows for mentioned users (independent
+        // of push mute rules: the feed is a pointer, not a delivery channel)
+        if (count($mentioned) > 0) {
+            foreach ($mentioned as $mentionedId) {
+                if ($mentionedId === $senderUser->id) {
+                    continue;
+                }
+                InAppNotification::query()->create([
+                    'user_id' => $mentionedId,
+                    'workspace_id' => $room->workspace_id,
+                    'type' => 'mention',
+                    'room_id' => $room->id,
+                    'actor_id' => $senderUser->id,
+                    'data' => [
+                        'message_id' => $message->id,
+                        'seq' => (int) $message->seq,
+                        'snippet' => mb_substr((string) $message->body, 0, 120),
+                    ],
+                ]);
+            }
+        }
 
         $members = RoomMember::query()
             ->where('room_id', $room->id)

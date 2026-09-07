@@ -7,6 +7,7 @@ use App\Exceptions\ApiException;
 use App\Models\AccessToken;
 use App\Models\ChatSession;
 use App\Models\Device;
+use App\Models\InAppNotification;
 use App\Models\User;
 use App\Services\SettingsService;
 use Carbon\CarbonInterface;
@@ -118,6 +119,20 @@ class TokenService
         DB::transaction(function () use ($session, $reason) {
             $session->fill(['revoked_at' => now(), 'revoked_reason' => $reason])->save();
             $session->accessTokens()->update(['revoked_at' => now()]);
+
+            // FR-NOTI-006 — a security row in the notification center. A
+            // routine self-logout is not security-relevant, everything else
+            // ("admin", "password_changed", …) is.
+            if ($reason !== 'logout') {
+                InAppNotification::query()->create([
+                    'user_id' => $session->user_id,
+                    'workspace_id' => null, // account-level event
+                    'type' => 'session_revoked',
+                    'room_id' => null,
+                    'actor_id' => null,
+                    'data' => ['session_id' => $session->id, 'reason' => $reason],
+                ]);
+            }
         });
 
         if ($broadcast) {

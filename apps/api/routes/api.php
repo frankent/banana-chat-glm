@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\MessageController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\RoomController;
+use App\Http\Controllers\Api\V1\SearchController;
 use App\Http\Controllers\Api\V1\UploadController;
 use App\Http\Controllers\Api\V1\WorkspaceController;
 use Illuminate\Support\Facades\Broadcast;
@@ -76,6 +77,14 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/members', [WorkspaceController::class, 'members']);
         Route::get('/sync', [WorkspaceController::class, 'sync']);
         Route::get('/me/mentions', [MeController::class, 'mentions']); // API-044 (auth ws)
+
+        // FR-NOTI-006 — feed spans workspaces (session_revoked is account
+        // level); the ws header only authenticates the caller's membership.
+        Route::get('/me/notifications', [NotificationController::class, 'index']); // API-073
+        Route::post('/me/notifications/read', [NotificationController::class, 'markRead']);
+
+        Route::get('/search/messages', [SearchController::class, 'messages']); // API-080
+        Route::get('/search/files', [SearchController::class, 'files']); // API-081
 
         // Room params resolve inside the controller (RoomController::roomOrFail):
         // SubstituteBindings runs before workspace.context sets the scope, so

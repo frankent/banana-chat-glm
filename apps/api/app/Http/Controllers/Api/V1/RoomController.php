@@ -17,6 +17,7 @@ use App\Events\RoomMemberRoleChanged;
 use App\Events\RoomUpdated;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
+use App\Models\InAppNotification;
 use App\Models\Message;
 use App\Models\Room;
 use App\Models\RoomMember;
@@ -340,6 +341,22 @@ class RoomController extends Controller
                 'user_ids' => array_map(fn (User $u) => $u->id, $addedUsers),
             ]);
             broadcast(new RoomMemberAdded($room->refresh(), $addedUsers, $user->id));
+
+            // FR-NOTI-006 — "added to room" rows for each newly added user
+            foreach ($addedUsers as $addedUser) {
+                if ($addedUser->id === $user->id) {
+                    continue; // self-add (join) is not a notification
+                }
+                InAppNotification::query()->create([
+                    'user_id' => $addedUser->id,
+                    'workspace_id' => $room->workspace_id,
+                    'type' => 'added_to_room',
+                    'room_id' => $room->id,
+                    'actor_id' => $user->id,
+                    'data' => ['room_name' => $room->name],
+                ]);
+            }
+
             $this->audit->log('room.member_added', actor: $user, targetType: 'room', targetId: $room->id, context: [
                 'added' => $added,
             ]);
