@@ -1,0 +1,24 @@
+# TASK-QA-007 — ZAP baseline rules (fail = job fails).
+# Gate per spec §12.2: 0 high/critical. Risk-code map:
+#   3=High 2=Medium 1=Low 0=Informational
+# Default policy FAILs everything medium+; we relax noisy API-irrelevant
+# passive rules to WARN so the weekly run stays actionable.
+# Format: <ruleId>	<threshold IGNORE|WARN|FAIL>	(<new risk> <desc> — informational)
+10015	WARN	 disclose anything via DEBUG-level logs — not routed
+10017	WARN	 Cookie without SameSite — API is token-based; admin sets its own
+10021	WARN	 X-Content-Type-Options already set; scans old caches may lag
+10027	WARN	 informational (ancient Apache hints)
+10028	WARN	 CSRF token in URL — admin login only, acceptable for scan noise
+10032	WARN	 viewstate — N/A
+10035	WARN	 HSTS on localhost/plain-HTTP CI target — enforced at edge in prod
+10036	WARN	 Server header version leak — stripped at edge proxy in prod
+10037	WARN	 X-Powered-By — stripped at edge proxy in prod
+10038	WARN	 CSP on API JSON — web host concern (SPA served separately)
+10096	WARN	 Timestamp in response
+10099	WARN	 Photon/PWA hints — N/A
+10202	WARN	ASF media — N/A
+20012	WARN	 CSRF token on admin forms — Filament handles it; passive noise
+20014	WARN	 HTTPS-only cookie flags — token-based API
+20015	WARN	 reveals debug IPs — internal CI target
+20016	WARN	 .pl source — N/A
+20017	WARN	 CDC — N/A

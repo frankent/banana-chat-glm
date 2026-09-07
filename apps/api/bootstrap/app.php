@@ -3,6 +3,7 @@
 use App\Exceptions\ApiException;
 use App\Http\Middleware\EnsureAccountActive;
 use App\Http\Middleware\EnsurePasswordFresh;
+use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\SetRequestId;
 use App\Http\Middleware\WorkspaceContextMiddleware;
 use Illuminate\Auth\AuthenticationException;
@@ -26,6 +27,9 @@ $app = Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->api(prepend: [SetRequestId::class]);
+
+        // NFR-SEC-008 — baseline security headers on API + admin responses
+        $middleware->prepend(SecurityHeaders::class);
 
         // No guest redirects — unauthenticated API calls get the 401 envelope
         $middleware->redirectGuestsTo(fn () => null);

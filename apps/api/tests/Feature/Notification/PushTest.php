@@ -13,6 +13,7 @@ use App\Models\RoomNotificationSetting;
 use App\Models\User;
 use App\Models\UserNotificationSetting;
 use App\Models\Workspace;
+use Carbon\Carbon;
 use Illuminate\Http\Client\Request as HttpRequest;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
@@ -172,6 +173,10 @@ test('TC-NOTI-008 mode=mentions: unmentioned skips, mentioned sends', function (
 });
 
 test('TC-NOTI-009 DND window skips (overnight range honored)', function () {
+    // pin the clock (spec §12.1): 17:00 UTC Monday = 00:00 Tuesday Bangkok —
+    // inside the overnight window (22:00→07:00), Tuesday ∈ dnd_days
+    $this->travelTo(Carbon::parse('2026-09-07 17:00:00', 'UTC'));
+
     UserNotificationSetting::query()->create([
         'user_id' => $this->somchai->id,
         'dnd_start' => '22:00',
@@ -186,7 +191,6 @@ test('TC-NOTI-009 DND window skips (overnight range honored)', function () {
     $message->id = (string) Str::ulid();
 
     $result = $service->shouldNotify($message, $this->room, $this->somchai, $this->tony->id, null, $this->somchai->notificationSetting, []);
-    // 04:00 UTC → 11:00 Bangkok — inside overnight DND (22:00→07:00) on the local clock
     expect($result)->toBeFalse();
 });
 

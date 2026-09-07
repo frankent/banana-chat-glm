@@ -1,0 +1,96 @@
+name: security
+
+on:
+  schedule:
+    # weekly, Sunday 03:17 UTC (off the :00 mark)
+    - cron: '17 3 * * 0'
+  workflow_dispatch:
+
+jobs:
+  audit:
+    name: Dependency audit — composer + pnpm (NFR-SEC-011)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 23
+          cache: pnpm
+      - name: Composer audit (fail on high/critical)
+        working-directory: apps/api
+        run: composer audit --audit-level=high
+      - name: pnpm audit (fail on high/critical)
+        run: pnpm audit --audit-level=high --prod
+
+  zap-baseline:
+    name: OWASP ZAP baseline (TASK-QA-007)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: orgchat
+          POSTGRES_PASSWORD: orgchat
+          POSTGRES_DB: orgchat_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U orgchat"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_DATABASE: orgchat_test
+      DB_USERNAME: orgchat
+      DB_PASSWORD: orgchat
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_pgsql, redis, intl, zip
+          coverage: none
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress
+      - name: Prepare environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate --force
+      - name: Start API
+        run: |
+          php artisan migrate --force &
+          php artisan serve --host=127.0.0.1 --port=8080 >/tmp/serve.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8080/api/v1/health >/dev/null && break || sleep 2; done
+          curl -sf http://127.0.0.1:8080/api/v1/health
+      - name: ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.15.0
+        with:
+          target: 'http://127.0.0.1:8080'
+          rules_file_name: '../.zap/rules.tsv'
+          fail_action: true
+          allow_issue_writing: false
+          artifact_name: zap-baseline
+      - name: Serve log on failure
+        if: failure()
+        run: cat /tmp/serve.log || true
