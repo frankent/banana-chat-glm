@@ -25,6 +25,8 @@ class SettingsService
         'upload.image.allowed_mimes' => ['jpeg', 'png', 'gif', 'webp', 'heic'],
         'upload.video.allowed_mimes' => ['mp4', 'quicktime', 'webm'],
         'upload.file.blocked_extensions' => ['exe', 'bat', 'cmd', 'sh', 'ps1', 'msi', 'scr', 'js', 'jar', 'com', 'vbs'],
+        'upload.multipart_threshold_bytes' => 52428800, // TASK-BE-024: >50MB on s3 ⇒ multipart
+        'upload.multipart_part_bytes' => 8388608, // 8MB parts (S3 min 5MB, max 10k parts)
         'room.group.max_members' => 500,
         'room.deleted_purge_days' => 30,
         'auth.password.min_length' => 10,

@@ -33,7 +33,8 @@ class UploadService
 
     /**
      * @param  array{kind: string, filename: string, mime_type: string, size_bytes: int, sha256?: ?string}  $input
-     * @return array{0: Attachment, 1: string} [attachment, put_url]
+     * @return array{0: Attachment, 1: ?string, 2: ?array{upload_id: string, part_size: int, part_urls: list<string>}}
+     *                                                                                                                 [attachment, put_url (null when multipart), multipart session (null when single PUT)]
      */
     public function create(User $uploader, string $workspaceId, array $input): array
     {
@@ -78,15 +79,44 @@ class UploadService
 
         /** @var FilesystemAdapter $disk */
         $disk = Storage::disk(config('filesystems.default'));
+
+        // TASK-BE-024 — S3 + >50MB ⇒ multipart session instead of one PUT
+        $threshold = $this->settings->int('upload.multipart_threshold_bytes');
+        if ($input['size_bytes'] > $threshold && S3Multipart::supports($disk)) {
+            $partBytes = $this->settings->int('upload.multipart_part_bytes');
+            $session = (new S3Multipart)->begin($disk, $storageKey, $input['size_bytes'], $partBytes);
+
+            if (count($session['part_urls']) > S3Multipart::MAX_PARTS) {
+                (new S3Multipart)->abort($disk, $storageKey, $session['upload_id']);
+                $attachment->delete();
+
+                throw ApiException::mediaTooLarge($maxBytes);
+            }
+
+            $attachment->forceFill([
+                'multipart_upload_id' => $session['upload_id'],
+                'multipart_part_bytes' => $partBytes,
+            ])->save();
+
+            return [$attachment, null, [
+                'upload_id' => $session['upload_id'],
+                'part_size' => $partBytes,
+                'part_urls' => $session['part_urls'],
+            ]];
+        }
+
         $putUrl = $disk->temporaryUploadUrl($storageKey, now()->addMinutes(15))['url'];
 
-        return [$attachment, $putUrl];
+        return [$attachment, $putUrl, null];
     }
 
     /**
-     * Verify + advance to uploaded. Idempotent.
+     * Verify + advance to uploaded. Idempotent. $parts carries the client's
+     * {part_number, etag} list for multipart sessions (TASK-BE-024).
+     *
+     * @param  list<array{part_number: int, etag: string}>|null  $parts
      */
-    public function complete(Attachment $attachment, User $uploader): Attachment
+    public function complete(Attachment $attachment, User $uploader, ?array $parts = null): Attachment
     {
         if ($attachment->uploader_id !== $uploader->id) {
             throw ApiException::msgAttachmentInvalid();
@@ -103,6 +133,16 @@ class UploadService
 
         /** @var FilesystemAdapter $disk */
         $disk = Storage::disk(config('filesystems.default'));
+
+        if ($attachment->multipart_upload_id !== null) {
+            if ($parts === null || $parts === []) {
+                throw new ApiException('VALIDATION_FAILED', 'ต้องระบุ parts สำหรับอัปโหลดแบบ multipart', 422, [
+                    'fields' => ['parts' => ['ต้องส่งรายการ {part_number, etag} ของทุก part']],
+                ]);
+            }
+
+            (new S3Multipart)->complete($disk, $attachment->storage_key, $attachment->multipart_upload_id, $parts);
+        }
 
         if (! $disk->exists($attachment->storage_key)) {
             throw ApiException::mediaUploadMissing();

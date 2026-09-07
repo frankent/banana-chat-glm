@@ -42,7 +42,7 @@ class UploadController extends Controller
             'sha256' => ['nullable', 'string'],
         ]);
 
-        [$attachment, $putUrl] = $this->uploads->create(
+        [$attachment, $putUrl, $multipart] = $this->uploads->create(
             $request->user(),
             (string) $this->context->id(),
             $data,
@@ -52,6 +52,8 @@ class UploadController extends Controller
             'data' => [
                 'attachment_id' => $attachment->id,
                 'put_url' => $putUrl,
+                // TASK-BE-024 — present only for S3 multipart (>50MB)
+                'multipart' => $multipart,
                 'headers' => [
                     'Content-Type' => 'application/octet-stream',
                 ],
@@ -68,7 +70,9 @@ class UploadController extends Controller
         // pending rows resolve via the scoped query too (scope active here)
         $attachment = Attachment::query()->findOrFail($attachmentId);
 
-        $attachment = $this->uploads->complete($attachment, $request->user());
+        $parts = $request->input('parts'); // multipart sessions only (TASK-BE-024)
+
+        $attachment = $this->uploads->complete($attachment, $request->user(), is_array($parts) ? $parts : null);
 
         return response()->json([
             'data' => ['attachment' => $this->serializer->toArray($attachment)],

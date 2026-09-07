@@ -30,6 +30,8 @@ class Attachment extends Model
         'storage_key',
         'checksum_sha256',
         'scan_result',
+        'multipart_upload_id',
+        'multipart_part_bytes',
         'width',
         'height',
         'duration_ms',
