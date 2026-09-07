@@ -51,12 +51,15 @@ class User extends Authenticatable implements FilamentHasNameContract, FilamentU
         'is_system_admin',
         'failed_login_count',
         'created_by',
+        'totp_secret',
+        'totp_enabled_at',
     ];
 
     protected $hidden = [
         'password_hash',
         'remember_token',
         'failed_login_count',
+        'totp_secret',
     ];
 
     protected function casts(): array
@@ -69,6 +72,8 @@ class User extends Authenticatable implements FilamentHasNameContract, FilamentU
             'last_seen_at' => 'datetime',
             'ai_consented_at' => 'datetime',
             'ai_memory_enabled' => 'boolean',
+            'totp_secret' => 'encrypted',
+            'totp_enabled_at' => 'datetime',
             'is_system_admin' => 'boolean',
             'failed_login_count' => 'integer',
         ];
