@@ -50,5 +50,10 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('api', function (Request $request) {
             return Limit::perMinute(300)->by($request->user()?->id ?: $request->ip());
         });
+
+        // FR-AI-010: AI send endpoints — 20/min per user
+        RateLimiter::for('ai-send', function (Request $request) {
+            return Limit::perMinute(20)->by('ai:'.$request->user()?->id);
+        });
     }
 }

@@ -76,6 +76,16 @@ class SettingsService
         return (int) $this->get($key, 0);
     }
 
+    public function bool(string $key): bool
+    {
+        return (bool) $this->get($key, false);
+    }
+
+    public function float(string $key): float
+    {
+        return (float) $this->get($key, 0.0);
+    }
+
     /**
      * @return list<mixed>
      */

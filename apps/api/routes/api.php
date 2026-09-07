@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\AiController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\MeController;
@@ -44,6 +45,29 @@ Route::prefix('v1')->group(function (): void {
         Route::put('/me/devices/{deviceId}', [NotificationController::class, 'updateDevice'])->whereUlid('deviceId');
         Route::put('/me/notification-settings', [NotificationController::class, 'updateSettings']);
         Route::post('/me/focus', [NotificationController::class, 'focus']);
+
+        // AI — user-owned resources; workspace header only gates/attributes
+        // (DEC-015). Memories need no workspace context (DEC-016).
+        Route::get('/ai/memories', [AiController::class, 'memories'])->middleware('workspace.context'); // API-110
+        Route::post('/ai/memories', [AiController::class, 'addMemory'])->middleware('workspace.context'); // API-113
+        Route::post('/ai/memories/clear', [AiController::class, 'clearMemories']); // API-112
+        Route::delete('/ai/memories/{memoryId}', [AiController::class, 'deleteMemory'])->whereUlid('memoryId'); // API-111
+        Route::post('/ai/consent', [AiController::class, 'consent']); // API-109
+        Route::get('/ai/messages/{messageId}', [AiController::class, 'showMessage'])->whereUlid('messageId'); // API-117
+        Route::post('/ai/messages/{messageId}/cancel', [AiController::class, 'cancel'])->whereUlid('messageId'); // API-108
+
+        Route::middleware('workspace.context')->group(function (): void {
+            Route::get('/ai/status', [AiController::class, 'status']); // API-100
+            Route::get('/ai/conversations', [AiController::class, 'conversations']); // API-101
+            Route::post('/ai/conversations', [AiController::class, 'createConversation']); // API-102
+            Route::get('/ai/conversations/{conversationId}', [AiController::class, 'showConversation'])->whereUlid('conversationId'); // API-103
+            Route::patch('/ai/conversations/{conversationId}', [AiController::class, 'updateConversation'])->whereUlid('conversationId'); // API-104
+            Route::delete('/ai/conversations/{conversationId}', [AiController::class, 'deleteConversation'])->whereUlid('conversationId'); // API-105
+            Route::get('/ai/conversations/{conversationId}/messages', [AiController::class, 'messages'])->whereUlid('conversationId'); // API-106
+            Route::post('/ai/conversations/{conversationId}/messages', [AiController::class, 'send'])
+                ->whereUlid('conversationId')->middleware('throttle:ai-send'); // API-107
+            Route::post('/ai/conversations/{conversationId}/focus', [AiController::class, 'focus'])->whereUlid('conversationId'); // API-118
+        });
     });
 
     // Workspace-scoped routes — X-Workspace-Id required (FR-WS-003 isolation)
