@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Playwright regression artifacts (TASK-INF-016)
+e2e-artifacts
