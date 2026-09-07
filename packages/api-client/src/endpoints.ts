@@ -4,7 +4,10 @@ import type {
   AiMemoryCategory,
   AiMessage,
   AiMessagePage,
+  AiRegenerateResponse,
+  AiSearchResult,
   AiSendResponse,
+  AiShareResponse,
   AiStatus,
   Attachment,
   FileSearchResult,
@@ -375,6 +378,42 @@ export class Endpoints {
       method: 'POST',
       workspaceSlug: slug,
     });
+  }
+
+  /** API-114 — FR-AI-009 regenerate the latest assistant message. */
+  aiRegenerate(messageId: string, slug: string) {
+    return this.api.request<AiRegenerateResponse>(`/api/v1/ai/messages/${messageId}/regenerate`, {
+      method: 'POST',
+      workspaceSlug: slug,
+    });
+  }
+
+  /** API-115 — FR-AI-009 edit the latest user message and re-send. */
+  aiEditMessage(messageId: string, slug: string, content: string) {
+    return this.api.request<AiSendResponse>(`/api/v1/ai/messages/${messageId}`, {
+      method: 'PATCH',
+      body: { content },
+      workspaceSlug: slug,
+    });
+  }
+
+  /** FR-AI-015 — share an assistant answer into a room. */
+  aiShare(messageId: string, slug: string, roomId: string) {
+    return this.api.request<AiShareResponse>(`/api/v1/ai/messages/${messageId}/share`, {
+      method: 'POST',
+      body: { room_id: roomId },
+      workspaceSlug: slug,
+    });
+  }
+
+  /** API-116 — FR-AI-020 search own AI conversations (q ≥ 2 chars). */
+  aiSearch(slug: string, q: string, cursor?: string) {
+    const query = new URLSearchParams({ q });
+    if (cursor !== undefined) query.set('cursor', cursor);
+    return this.api.request<{ results: AiSearchResult[]; next_cursor: string | null }>(
+      `/api/v1/ai/search?${query.toString()}`,
+      { workspaceSlug: slug },
+    );
   }
 
   /** API-118 — focus ping for push suppression. */

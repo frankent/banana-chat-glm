@@ -7,6 +7,7 @@ use App\Domain\Ai\AiCircuitBreaker;
 use App\Domain\Ai\AiGate;
 use App\Domain\Ai\ContextBuilder;
 use App\Domain\Ai\TokenEstimator;
+use App\Domain\Message\MessageWriter;
 use App\Http\Controllers\Controller;
 use App\Jobs\GenerateAiReply;
 use App\Models\AiConversation;
@@ -14,6 +15,8 @@ use App\Models\AiMessage;
 use App\Models\AiProvider;
 use App\Models\AiUsageDaily;
 use App\Models\AiUserMemory;
+use App\Models\Attachment;
+use App\Models\Room;
 use App\Models\User;
 use App\Services\SettingsService;
 use App\Support\WorkspaceContext;
@@ -21,6 +24,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Redis;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /**
  * API-100..113, 117, 118 — AI Assistant endpoints (FR-AI-001..008, 010).
@@ -373,6 +378,305 @@ class AiController extends Controller
         ], 202);
     }
 
+    /**
+     * API-114 — regenerate the LATEST assistant message (FR-AI-009):
+     * old answer → superseded (kept for "1/2" toggling), new pending row
+     * re-answers the same user message (parent_message_id preserved).
+     */
+    public function regenerate(Request $request, string $id): JsonResponse
+    {
+        if ($errorResponse = $this->requireGate($request)) {
+            return $errorResponse;
+        }
+
+        /** @var User $user */
+        $user = $request->user();
+
+        $message = AiMessage::query()->find($id);
+        if ($message === null || $message->user_id !== $user->id) {
+            return $this->error(404, 'NOT_FOUND');
+        }
+        if ($message->role !== 'assistant' || $message->superseded_at !== null) {
+            return $this->error(422, 'VALIDATION_FAILED', ['message' => ['ต้องเป็นข้อความตอบล่าสุดที่ยังไม่ถูกแทนที่']]); // TC-AI-077
+        }
+        if (! in_array($message->status, ['completed', 'failed', 'cancelled'], true)) {
+            return $this->error(409, 'AI_GENERATION_IN_PROGRESS');
+        }
+
+        $conversation = AiConversation::query()->notDeleted()->find($message->conversation_id);
+        if ($conversation === null) {
+            return $this->error(404, 'NOT_FOUND');
+        }
+
+        // only the latest live message may be regenerated
+        $hasNewer = AiMessage::query()
+            ->where('conversation_id', $conversation->id)
+            ->where('seq', '>', $message->seq)
+            ->whereNull('superseded_at')
+            ->exists();
+        if ($hasNewer) {
+            return $this->error(422, 'VALIDATION_FAILED', ['message' => ['regenerate ได้เฉพาะข้อความตอบล่าสุด']]); // TC-AI-077
+        }
+
+        if ($guard = $this->generationGuard($request, $conversation)) {
+            return $guard;
+        }
+
+        [$provider] = $this->gate->resolve($user->id, $this->context->id());
+
+        $assistant = \DB::transaction(function () use ($conversation, $user, $message, $provider): AiMessage {
+            $message->forceFill(['superseded_at' => now()])->save();
+
+            $seq = (int) AiConversation::query()
+                ->whereKey($conversation->id)->lockForUpdate()->value('last_seq');
+
+            $assistant = AiMessage::create([
+                'conversation_id' => $conversation->id,
+                'user_id' => $user->id,
+                'workspace_id' => $message->workspace_id,
+                'seq' => $seq + 1,
+                'role' => 'assistant',
+                'content' => null,
+                'status' => 'pending',
+                'parent_message_id' => $message->parent_message_id, // same user question
+                'model' => $provider->model ?? null,
+            ]);
+
+            $conversation->forceFill([
+                'last_seq' => $seq + 1,
+                'message_count' => $conversation->message_count + 1,
+                'last_message_at' => now(),
+            ])->save();
+
+            return $assistant;
+        });
+
+        GenerateAiReply::dispatch($assistant->id)->onQueue('ai');
+        AiUsageDaily::bump($user->id, $this->context->id(), messages: 1); // FR-AI-010
+
+        return response()->json(['data' => ['assistant_message' => AiBroadcast::message($assistant)]], 202);
+    }
+
+    /**
+     * API-115 — edit the LATEST user message and re-send (FR-AI-009):
+     * everything after it (its old answer included) → superseded, then a
+     * fresh generation answers the edited question.
+     */
+    public function editMessage(Request $request, string $id): JsonResponse
+    {
+        if ($errorResponse = $this->requireGate($request)) {
+            return $errorResponse;
+        }
+
+        $data = $request->validate([
+            'content' => ['required', 'string', 'max:'.(2 * $this->settings->int('ai.max_message_chars'))],
+        ]);
+        $content = trim($data['content']);
+        if ($content === '') {
+            return $this->error(422, 'VALIDATION_FAILED', ['content' => ['ต้องมีเนื้อหา']]);
+        }
+        if (mb_strlen($content) > $this->settings->int('ai.max_message_chars')) {
+            return $this->error(422, 'AI_MESSAGE_TOO_LONG');
+        }
+
+        /** @var User $user */
+        $user = $request->user();
+
+        $message = AiMessage::query()->find($id);
+        if ($message === null || $message->user_id !== $user->id) {
+            return $this->error(404, 'NOT_FOUND');
+        }
+        if ($message->role !== 'user' || $message->superseded_at !== null) {
+            return $this->error(422, 'VALIDATION_FAILED', ['message' => ['ต้องเป็นข้อความถามล่าสุดที่ยังไม่ถูกแทนที่']]); // TC-AI-079
+        }
+
+        $conversation = AiConversation::query()->notDeleted()->find($message->conversation_id);
+        if ($conversation === null) {
+            return $this->error(404, 'NOT_FOUND');
+        }
+
+        // "latest user message" — its own assistant answer may follow; only a
+        // later USER message (a newer question) makes this one stale
+        $hasNewerQuestion = AiMessage::query()
+            ->where('conversation_id', $conversation->id)
+            ->where('seq', '>', $message->seq)
+            ->where('role', 'user')
+            ->whereNull('superseded_at')
+            ->exists();
+        if ($hasNewerQuestion) {
+            return $this->error(422, 'VALIDATION_FAILED', ['message' => ['แก้ไขได้เฉพาะข้อความถามล่าสุด']]); // TC-AI-079
+        }
+
+        if ($guard = $this->generationGuard($request, $conversation)) {
+            return $guard;
+        }
+
+        [$userMessage, $assistant] = \DB::transaction(function () use ($conversation, $user, $message, $content): array {
+            // cut the tail: every live message after the edited one is retired
+            AiMessage::query()
+                ->where('conversation_id', $conversation->id)
+                ->where('seq', '>', $message->seq)
+                ->whereNull('superseded_at')
+                ->update(['superseded_at' => now()]);
+
+            $message->forceFill(['content' => $content])->save();
+
+            $seq = (int) AiConversation::query()
+                ->whereKey($conversation->id)->lockForUpdate()->value('last_seq');
+
+            $assistant = AiMessage::create([
+                'conversation_id' => $conversation->id,
+                'user_id' => $user->id,
+                'workspace_id' => $message->workspace_id,
+                'seq' => $seq + 1,
+                'role' => 'assistant',
+                'content' => null,
+                'status' => 'pending',
+                'parent_message_id' => $message->id,
+            ]);
+
+            $conversation->forceFill([
+                'last_seq' => $seq + 1,
+                'message_count' => $conversation->message_count + 1,
+                'last_message_at' => now(),
+            ])->save();
+
+            return [$message, $assistant];
+        });
+
+        [$provider] = $this->gate->resolve($user->id, $this->context->id());
+        $assistant->forceFill(['model' => $provider->model ?? null])->save();
+
+        GenerateAiReply::dispatch($assistant->id)->onQueue('ai');
+        AiUsageDaily::bump($user->id, $this->context->id(), messages: 1); // FR-AI-010
+
+        return response()->json([
+            'data' => [
+                'user_message' => AiBroadcast::message($userMessage->refresh()),
+                'assistant_message' => AiBroadcast::message($assistant->refresh()),
+            ],
+        ], 202);
+    }
+
+    /**
+     * FR-AI-015 — share an assistant answer to a room in the current
+     * workspace as a normal message (metadata.source={type:'ai'}); content
+     * over message.max_length continues into an attached .md file.
+     */
+    public function share(Request $request, string $id): JsonResponse
+    {
+        $message = AiMessage::query()->find($id);
+        if ($message === null || $message->user_id !== $request->user()->id) {
+            return $this->error(404, 'NOT_FOUND');
+        }
+        if ($message->role !== 'assistant' || ($message->content ?? '') === '') {
+            return $this->error(422, 'VALIDATION_FAILED', ['message' => ['แชร์ได้เฉพาะคำตอบที่มีเนื้อหา']]);
+        }
+
+        $data = $request->validate([
+            'room_id' => ['required', 'ulid'],
+        ]);
+
+        /** @var User $user */
+        $user = $request->user();
+
+        // member-only, workspace-scoped (TC-AI-103); RoomPolicy style 404
+        $room = Room::query()
+            ->where('workspace_id', $this->context->id())
+            ->whereNull('deleted_at')
+            ->whereKey($data['room_id'])
+            ->whereHas('members', fn ($q) => $q->where('room_members.user_id', $user->id)->whereNull('room_members.left_at'))
+            ->first();
+        if ($room === null) {
+            return $this->error(404, 'NOT_FOUND'); // TC-AI-103
+        }
+
+        $content = (string) $message->content;
+        $maxLength = $this->settings->int('message.max_length');
+        $attachmentIds = [];
+
+        if (mb_strlen($content) > $maxLength) {
+            // full answer rides along as a .md attachment (TC-AI-102)
+            $attachment = $this->storeMarkdownAttachment($message, $content);
+            $attachmentIds = [$attachment->id];
+            $content = mb_substr($content, 0, $maxLength);
+        }
+
+        [$roomMessage] = app(MessageWriter::class)->write(
+            $room,
+            $user,
+            $content,
+            (string) Str::uuid(),
+            null,
+            $attachmentIds,
+        );
+        $roomMessage->forceFill([
+            'metadata' => ['source' => ['type' => 'ai', 'conversation_id' => $message->conversation_id]], // TC-AI-101
+        ])->save();
+
+        return response()->json(['data' => ['message' => $roomMessage]], 201);
+    }
+
+    /**
+     * API-116 — search own AI conversations by title + content (FR-AI-020,
+     * trgm ILIKE; results jump back into the conversation at that message).
+     */
+    public function search(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'q' => ['required', 'string', 'min:2', 'max:200'], // TC-AI-121
+            'cursor' => ['nullable', 'string'],
+        ]);
+
+        $q = trim($data['q']);
+        $like = '%'.str_replace(['%', '_', '\\'], ['\\%', '\\_', '\\\\'], $q).'%';
+
+        $query = AiMessage::query()
+            ->join('ai_conversations', 'ai_conversations.id', '=', 'ai_messages.conversation_id')
+            ->whereNull('ai_conversations.deleted_at') // TC-AI-120
+            ->where('ai_conversations.user_id', $request->user()->id)
+            ->where(function ($outer) use ($like) {
+                // content hit on a live message, or a title hit surfacing the
+                // whole conversation — both scoped to the caller above
+                $outer->where(function ($sub) use ($like) {
+                    $sub->whereNull('ai_messages.superseded_at')
+                        ->where('ai_messages.content', 'ILIKE', $like);
+                })->orWhere('ai_conversations.title', 'ILIKE', $like);
+            })
+            ->select('ai_messages.*')
+            ->with('conversation:id,user_id,title,archived_at')
+            ->orderByDesc('ai_messages.created_at')
+            ->orderByDesc('ai_messages.id');
+
+        if (is_string($data['cursor'] ?? null) && $data['cursor'] !== '') {
+            [$at, $id] = explode('|', $data['cursor'], 2) + [null, null];
+            if ($at !== null) {
+                $query->where(function ($sub) use ($at, $id) {
+                    $sub->where('ai_messages.created_at', '<', $at)
+                        ->orWhere(fn ($s2) => $s2->where('ai_messages.created_at', $at)->where('ai_messages.id', '<', $id ?? ''));
+                });
+            }
+        }
+
+        $rows = $query->take(26)->get();
+        $next = count($rows) > 25 ? $rows[24]->created_at->toIso8601String().'|'.$rows[24]->id : null;
+        $rows = $rows->take(25);
+
+        return response()->json([
+            'data' => [
+                'results' => $rows->map(fn (AiMessage $m) => [
+                    'message' => AiBroadcast::message($m),
+                    'conversation' => $m->conversation !== null ? [
+                        'id' => $m->conversation->id,
+                        'title' => $m->conversation->title,
+                        'archived_at' => $m->conversation->archived_at?->toIso8601String(),
+                    ] : null,
+                ])->values()->all(),
+                'next_cursor' => $next,
+            ],
+        ]);
+    }
+
     /** API-117 — single message; partial stream state from Redis while live. */
     public function showMessage(Request $request, string $id): JsonResponse
     {
@@ -495,6 +799,67 @@ class AiController extends Controller
     }
 
     // ---- helpers ---------------------------------------------------
+
+    /**
+     * Shared pre-flight for regenerate/edit-resend: quota (FR-AI-010),
+     * circuit breaker (NFR-OPS-011), in-flight + per-user concurrency.
+     */
+    private function generationGuard(Request $request, AiConversation $conversation): ?JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        [$provider] = $this->gate->resolve($user->id, $this->context->id());
+        $used = AiUsageDaily::messagesToday($user->id, $user->timezone ?? 'UTC');
+        if ($used >= $this->dailyLimit($provider)) {
+            $resets = now($user->timezone ?? 'UTC')->endOfDay()->utc();
+
+            return $this->error(429, 'AI_QUOTA_EXCEEDED', ['resets_at' => $resets->toIso8601String()]);
+        }
+
+        $breaker = AiCircuitBreaker::make();
+        if ($breaker->isOpen()) {
+            return $this->error(503, 'AI_PROVIDER_ERROR', ['retry_after_seconds' => max(1, $breaker->openRemaining())]);
+        }
+
+        $inFlight = AiMessage::query()
+            ->where('conversation_id', $conversation->id)
+            ->whereIn('status', ['pending', 'streaming'])
+            ->exists();
+        if ($inFlight) {
+            return $this->error(409, 'AI_GENERATION_IN_PROGRESS');
+        }
+
+        $concurrent = AiMessage::query()
+            ->whereIn('status', ['pending', 'streaming'])
+            ->where('role', 'assistant')
+            ->where('user_id', $user->id)
+            ->count();
+        if ($concurrent >= $this->settings->int('ai.max_concurrent_per_user')) {
+            return $this->error(409, 'AI_GENERATION_IN_PROGRESS', ['scope' => 'user']);
+        }
+
+        return null;
+    }
+
+    /** FR-AI-015 overflow path — full answer as a ready .md attachment. */
+    private function storeMarkdownAttachment(AiMessage $source, string $content): Attachment
+    {
+        $key = 'attachments/'.Str::ulid()->toBase32().'.md';
+        Storage::disk(config('filesystems.default'))->put($key, $content);
+
+        return Attachment::query()->create([
+            'workspace_id' => $source->workspace_id,
+            'uploader_id' => $source->user_id,
+            'kind' => 'file',
+            'status' => 'ready',
+            'original_name' => 'ai-reply-'.$source->id.'.md',
+            'mime_type' => 'text/markdown',
+            'size_bytes' => strlen($content),
+            'storage_key' => $key,
+            'checksum_sha256' => hash('sha256', $content),
+        ]);
+    }
 
     private function requireGate(Request $request): ?JsonResponse
     {

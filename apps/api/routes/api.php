@@ -68,6 +68,13 @@ Route::prefix('v1')->group(function (): void {
             Route::post('/ai/conversations/{conversationId}/messages', [AiController::class, 'send'])
                 ->whereUlid('conversationId')->middleware('throttle:ai-send'); // API-107
             Route::post('/ai/conversations/{conversationId}/focus', [AiController::class, 'focus'])->whereUlid('conversationId'); // API-118
+            Route::post('/ai/messages/{messageId}/regenerate', [AiController::class, 'regenerate'])
+                ->whereUlid('messageId')->middleware('throttle:ai-send'); // API-114 (FR-AI-009)
+            Route::patch('/ai/messages/{messageId}', [AiController::class, 'editMessage'])
+                ->whereUlid('messageId')->middleware('throttle:ai-send'); // API-115 (FR-AI-009)
+            Route::post('/ai/messages/{messageId}/share', [AiController::class, 'share'])
+                ->whereUlid('messageId'); // FR-AI-015
+            Route::get('/ai/search', [AiController::class, 'search']); // API-116 (FR-AI-020)
         });
     });
 

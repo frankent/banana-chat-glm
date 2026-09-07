@@ -32,6 +32,7 @@ class AiBroadcast
             'tokens_prompt' => $message->tokens_prompt,
             'tokens_completion' => $message->tokens_completion,
             'error_code' => $message->error_code,
+            'superseded_at' => $message->superseded_at?->toIso8601String(), // DEC-042 (FR-AI-009 "1/2" toggle)
             'created_at' => $message->created_at?->toIso8601String(),
             'completed_at' => $message->completed_at?->toIso8601String(),
         ];

@@ -291,6 +291,8 @@ export interface AiMessage {
   tokens_prompt: number | null;
   tokens_completion: number | null;
   error_code: string | null;
+  /** DEC-042 — set when regenerate/edit-resend retired this row (FR-AI-009 "1/2" toggle) */
+  superseded_at?: string | null;
   created_at: string | null;
   completed_at: string | null;
   partial_content?: string | null;
@@ -309,6 +311,22 @@ export interface AiMessagePage {
 export interface AiSendResponse {
   user_message: AiMessage;
   assistant_message: AiMessage | null;
+}
+
+/** API-114 regenerate response */
+export interface AiRegenerateResponse {
+  assistant_message: AiMessage;
+}
+
+/** FR-AI-015 share response — the created room message */
+export interface AiShareResponse {
+  message: Message;
+}
+
+/** API-116 search row — hit + the conversation it belongs to */
+export interface AiSearchResult {
+  message: AiMessage;
+  conversation: { id: string; title: string | null; archived_at: string | null } | null;
 }
 
 export interface AiMemory {

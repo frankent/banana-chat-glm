@@ -31,6 +31,8 @@ interface AiState {
   /** appended message list per conversation, oldest → newest */
   messages: Record<string, AiMessage[]>;
   hasMoreBefore: Record<string, boolean>;
+  /** FR-AI-009 — superseded versions fetched for the "1/2" toggle */
+  supersededVisible: Record<string, boolean>;
   loading: boolean;
   sending: boolean;
   /** bump on every stream mutation so subscribers re-render */
@@ -45,6 +47,12 @@ interface AiState {
   send: (conversationId: string, slug: string, content: string) => Promise<void>;
   cancel: (messageId: string, slug: string) => Promise<void>;
   retry: (conversationId: string, slug: string, content: string) => Promise<void>;
+  /** API-114 — regenerate the latest assistant answer (FR-AI-009) */
+  regenerate: (conversationId: string, messageId: string, slug: string) => Promise<void>;
+  /** API-115 — edit the latest user message and re-send (FR-AI-009) */
+  editResend: (conversationId: string, messageId: string, slug: string, content: string) => Promise<void>;
+  /** FR-AI-009 "1/2" — refetch with/without superseded rows */
+  toggleSuperseded: (conversationId: string, slug: string) => Promise<void>;
   closeConversation: () => void;
   setConsentOpen: (open: boolean) => void;
   giveConsent: (slug: string) => Promise<void>;
@@ -91,6 +99,7 @@ export const useAiStore = create<AiState>((set, get) => ({
   activeId: null,
   messages: {},
   hasMoreBefore: {},
+  supersededVisible: {},
   loading: false,
   sending: false,
   streamTick: 0,
@@ -133,11 +142,12 @@ export const useAiStore = create<AiState>((set, get) => ({
         set((st) => ({ messages: { ...st.messages, [conversationId]: cached } }));
       }
       const page = await endpoints.aiMessages(conversationId, slug, { limit: 50 });
+      const ascending = [...page.messages].reverse(); // API-106 returns newest-first
       set((st) => ({
-        messages: { ...st.messages, [conversationId]: page.messages },
+        messages: { ...st.messages, [conversationId]: ascending },
         hasMoreBefore: { ...st.hasMoreBefore, [conversationId]: page.has_more_before },
       }));
-      void cache?.saveMessages(conversationId, page.messages);
+      void cache?.saveMessages(conversationId, ascending);
     }
     // focus ping → suppress ai_completed push while the tab is open (API-118)
     void endpoints.aiFocus(conversationId, slug, true).catch(() => undefined);
@@ -145,13 +155,13 @@ export const useAiStore = create<AiState>((set, get) => ({
 
   async loadOlder(conversationId, slug) {
     const list = get().messages[conversationId] ?? [];
-    const oldest = list.find((m) => m.role === 'user') ?? list[0];
+    const oldest = list[0];
     if (oldest === undefined) {
       return;
     }
     const page = await endpoints.aiMessages(conversationId, slug, { before_seq: oldest.seq, limit: 50 });
     set((st) => ({
-      messages: { ...st.messages, [conversationId]: [...page.messages, ...(st.messages[conversationId] ?? [])] },
+      messages: { ...st.messages, [conversationId]: [...[...page.messages].reverse(), ...(st.messages[conversationId] ?? [])] },
       hasMoreBefore: { ...st.hasMoreBefore, [conversationId]: page.has_more_before },
     }));
   },
@@ -244,6 +254,46 @@ export const useAiStore = create<AiState>((set, get) => ({
       }));
     }
     await get().send(conversationId, slug, content);
+  },
+
+  /** API-114 — old answer → superseded (kept for the "1/2" toggle), new row streams. */
+  async regenerate(conversationId, messageId, slug) {
+    const res = await endpoints.aiRegenerate(messageId, slug);
+    set((st) => {
+      const list = st.messages[conversationId] ?? [];
+      const next = list.map((m) => (m.id === messageId ? { ...m, superseded_at: m.superseded_at ?? new Date().toISOString() } : m));
+      next.push(res.assistant_message);
+      return { messages: { ...st.messages, [conversationId]: next }, streamTick: st.streamTick + 1 };
+    });
+    streamStore.seed(res.assistant_message);
+    void get().refreshStatus(slug); // quota counter moved (FR-AI-010)
+  },
+
+  /** API-115 — replace the question, retire everything after it, stream a new answer. */
+  async editResend(conversationId, messageId, slug, content) {
+    const res = await endpoints.aiEditMessage(messageId, slug, content);
+    set((st) => {
+      const list = st.messages[conversationId] ?? [];
+      const at = list.findIndex((m) => m.id === messageId);
+      const kept = at >= 0 ? list.slice(0, at) : list;
+      const next = [...kept, res.user_message, ...(res.assistant_message !== null ? [res.assistant_message] : [])];
+      return { messages: { ...st.messages, [conversationId]: next }, streamTick: st.streamTick + 1 };
+    });
+    if (res.assistant_message !== null) {
+      streamStore.seed(res.assistant_message);
+    }
+    void get().refreshStatus(slug);
+  },
+
+  async toggleSuperseded(conversationId, slug) {
+    const include = !(get().supersededVisible[conversationId] ?? false);
+    set((st) => ({ supersededVisible: { ...st.supersededVisible, [conversationId]: include } }));
+    const page = await endpoints.aiMessages(conversationId, slug, { limit: 50, include_superseded: include });
+    const ascending = [...page.messages].reverse(); // oldest → newest
+    set((st) => ({
+      messages: { ...st.messages, [conversationId]: ascending },
+      hasMoreBefore: { ...st.hasMoreBefore, [conversationId]: page.has_more_before },
+    }));
   },
 
   closeConversation() {
