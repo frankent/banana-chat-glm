@@ -9,6 +9,7 @@ use App\Events\MessageCreated;
 use App\Events\RoomActivity;
 use App\Events\WorkspaceUnreadChanged;
 use App\Exceptions\ApiException;
+use App\Jobs\NotifyMessage;
 use App\Models\Attachment;
 use App\Models\Message;
 use App\Models\Room;
@@ -135,6 +136,11 @@ class MessageWriter
 
         if ($created) {
             $this->fanOut($message);
+
+            // FR-NOTI-002 — push fan-out (system messages never dispatch, TC-NOTI-011)
+            if ($message->type !== MessageType::System) {
+                NotifyMessage::dispatch($message->id);
+            }
         }
 
         return [$message, $created];

@@ -23,6 +23,8 @@ class Device extends Model
         'last_active_at',
         'push_failed_count',
         'push_disabled_at',
+        'focused_room_id',
+        'focused_at',
     ];
 
     protected $hidden = ['push_token'];
@@ -34,6 +36,7 @@ class Device extends Model
             'last_active_at' => 'datetime',
             'push_failed_count' => 'integer',
             'push_disabled_at' => 'datetime',
+            'focused_at' => 'datetime',
         ];
     }
 

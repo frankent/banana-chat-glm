@@ -9,8 +9,10 @@ return [
     |
     | This file is for storing the credentials for third party services such
     | as Mailgun, Postmark, AWS and more. This file provides the de facto
-    | location for this type of information, allowing packages to have
-    | a conventional file to locate the various service credentials.
+    | This file is for storing the credentials for third party services such
+    | as Mailgun, Postmark, AWS and more. This file provides the de facto
+    | place for this type of information. This file provides a conventional
+    | location to locate such information.
     |
     */
 
@@ -33,6 +35,11 @@ return [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
+    ],
+
+    // FR-NOTI-002 — empty key = stub mode (pushes logged, not delivered)
+    'fcm' => [
+        'server_key' => env('FCM_SERVER_KEY', ''),
     ],
 
 ];

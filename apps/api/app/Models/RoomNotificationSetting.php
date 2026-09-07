@@ -10,6 +10,8 @@ class RoomNotificationSetting extends Model
 {
     public $timestamps = false;
 
+    public $incrementing = false;
+
     protected $primaryKey = null; // composite (user_id, room_id)
 
     protected $fillable = ['user_id', 'room_id', 'mode', 'muted_until'];

@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\MessageController;
+use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\RoomController;
 use App\Http\Controllers\Api\V1\UploadController;
 use App\Http\Controllers\Api\V1\WorkspaceController;
@@ -38,6 +39,11 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/me/sessions', [AuthController::class, 'sessions']);
         Route::delete('/me/sessions/{sessionId}', [AuthController::class, 'revokeSession'])
             ->whereUlid('sessionId');
+
+        // API-070/072 + focus reporting (auth, workspace-agnostic)
+        Route::put('/me/devices/{deviceId}', [NotificationController::class, 'updateDevice'])->whereUlid('deviceId');
+        Route::put('/me/notification-settings', [NotificationController::class, 'updateSettings']);
+        Route::post('/me/focus', [NotificationController::class, 'focus']);
     });
 
     // Workspace-scoped routes — X-Workspace-Id required (FR-WS-003 isolation)
@@ -67,6 +73,7 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/rooms/{room}/messages', [MessageController::class, 'store'])->whereUlid('room');
         Route::post('/rooms/{room}/read', [MessageController::class, 'markRead'])->whereUlid('room');
         Route::get('/rooms/{room}/read-status', [MessageController::class, 'readStatus'])->whereUlid('room');
+        Route::put('/rooms/{room}/notifications', [NotificationController::class, 'roomSettings'])->whereUlid('room'); // API-071
 
         // API-042/043 — edit/delete (FR-MSG-005/006); params resolve in-controller
         Route::patch('/messages/{message}', [MessageController::class, 'update'])->whereUlid('message');
