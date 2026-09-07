@@ -79,3 +79,19 @@ jobs:
         run: pnpm -r --if-present test
       - name: Build web
         run: pnpm --filter @banana-chat/web build
+
+  docker:
+    name: API image build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build api image
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/api
+          file: apps/api/Dockerfile
+          push: false
+          tags: banana-chat/api:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
