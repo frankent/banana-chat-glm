@@ -175,16 +175,16 @@ test('TC-AI-007..013 conversation CRUD + ownership isolation', function () {
     $id = AiConversation::query()->where('user_id', $this->tony->id)->first()->id;
 
     $this->getJson('/api/v1/ai/conversations', wsHeaders($this->tonyToken, 'acme'))
-        ->assertOk()->assertJsonCount(1, 'data');
+        ->assertOk()->assertJsonCount(1, 'data.conversations');
 
     $this->patchJson("/api/v1/ai/conversations/{$id}", ['archived' => true], wsHeaders($this->tonyToken, 'acme'))
         ->assertOk()->assertJsonPath('data.conversation.archived_at', fn ($v) => $v !== null);
 
     // archived list only
     $this->getJson('/api/v1/ai/conversations?archived=1', wsHeaders($this->tonyToken, 'acme'))
-        ->assertOk()->assertJsonCount(1, 'data');
+        ->assertOk()->assertJsonCount(1, 'data.conversations');
     $this->getJson('/api/v1/ai/conversations', wsHeaders($this->tonyToken, 'acme'))
-        ->assertOk()->assertJsonCount(0, 'data');
+        ->assertOk()->assertJsonCount(0, 'data.conversations');
 
     // other user always 404 (never 403)
     $this->getJson("/api/v1/ai/conversations/{$id}", wsHeaders($this->somchaiToken, 'acme'))->assertStatus(404);

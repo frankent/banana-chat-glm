@@ -112,8 +112,10 @@ class AiController extends Controller
         }
 
         return response()->json([
-            'data' => $rows->map(fn (AiConversation $c) => AiBroadcast::conversationSummary($c))->values()->all(),
-            'meta' => ['next_cursor' => $next],
+            'data' => [
+                'conversations' => $rows->map(fn (AiConversation $c) => AiBroadcast::conversationSummary($c))->values()->all(),
+                'next_cursor' => $next,
+            ],
         ]);
     }
 
@@ -223,8 +225,8 @@ class AiController extends Controller
         $rows = $rows->take($limit);
 
         return response()->json([
-            'data' => $rows->map(fn (AiMessage $m) => AiBroadcast::message($m, ...$this->streamState($m)))->values()->all(),
-            'meta' => [
+            'data' => [
+                'messages' => $rows->map(fn (AiMessage $m) => AiBroadcast::message($m, ...$this->streamState($m)))->values()->all(),
                 'has_more_before' => $hasMore,
                 'oldest_seq' => $rows->isNotEmpty() ? (int) $rows->min('seq') : null,
                 'summary_up_to_seq' => (int) $conversation->summary_up_to_seq,

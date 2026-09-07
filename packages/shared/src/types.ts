@@ -187,3 +187,88 @@ export const ERROR_CODES = {
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_CODES;
+
+// ---- §5.14 / §8.9 AI Assistant wire types ----
+
+export type AiMessageRole = 'user' | 'assistant';
+export type AiMessageStatus = 'pending' | 'streaming' | 'completed' | 'cancelled' | 'failed';
+export type AiMemoryCategory = 'profile' | 'preference' | 'project' | 'other';
+
+/** API-100 */
+export interface AiStatus {
+  enabled: boolean;
+  configured: boolean;
+  allowed_in_workspace: boolean;
+  provider: { name: string; model: string; window_size: number } | null;
+  limits: { daily_messages: number; max_message_chars: number };
+  usage_today: { date: string; messages: number; tokens_in: number; tokens_out: number; failed: number };
+  memory_enabled: boolean;
+  consented: boolean;
+}
+
+/** §8.9 ai_conversation_summary */
+export interface AiConversationSummary {
+  id: string;
+  title: string | null;
+  title_source: 'user' | 'auto' | null;
+  message_count: number;
+  last_message_at: string | null;
+  archived_at: string | null;
+  generating: boolean;
+}
+
+/** §8.9 ai_message — partial_content/last_index present while live (API-117) */
+export interface AiMessage {
+  id: string;
+  conversation_id: string;
+  seq: number;
+  role: AiMessageRole;
+  status: AiMessageStatus;
+  content: string | null;
+  client_message_id: string | null;
+  parent_message_id: string | null;
+  model: string | null;
+  finish_reason: string | null;
+  tokens_prompt: number | null;
+  tokens_completion: number | null;
+  error_code: string | null;
+  created_at: string | null;
+  completed_at: string | null;
+  partial_content?: string | null;
+  last_index?: number | null;
+}
+
+/** API-106 page — array + pagination nested inside data (client unwraps the outer envelope) */
+export interface AiMessagePage {
+  messages: AiMessage[];
+  has_more_before: boolean;
+  oldest_seq: number | null;
+  summary_up_to_seq: number;
+}
+
+/** API-106 send response (202, or 200 on client_message_id replay) */
+export interface AiSendResponse {
+  user_message: AiMessage;
+  assistant_message: AiMessage | null;
+}
+
+export interface AiMemory {
+  id: string;
+  content: string;
+  category: AiMemoryCategory;
+  importance: number;
+  source: 'user' | 'assistant';
+  source_conversation_id?: string | null;
+  last_used_at?: string | null;
+  created_at?: string | null;
+}
+
+/** EVT-050..056 payloads arriving on private-user.{uid} */
+export type AiStreamEvent =
+  | { event: 'ai.message.started'; conversation_id: string; message_id: string }
+  | { event: 'ai.message.delta'; conversation_id: string; message_id: string; index: number; delta: string }
+  | { event: 'ai.message.completed'; message: AiMessage }
+  | { event: 'ai.message.failed'; conversation_id: string; message_id: string; error_code: string }
+  | { event: 'ai.conversation.updated'; conversation_summary: AiConversationSummary }
+  | { event: 'ai.conversation.compacted'; conversation_id: string }
+  | { event: 'ai.conversation.deleted'; conversation_id: string };

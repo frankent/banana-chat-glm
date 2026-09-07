@@ -34,6 +34,7 @@ describe('shared constants (§4.4 / §7)', () => {
       delete_reason: null,
       created_at: '2026-01-01T00:00:00Z',
       attachments: [],
+      mentions: [],
     };
     expect(message.seq).toBe(1);
   });

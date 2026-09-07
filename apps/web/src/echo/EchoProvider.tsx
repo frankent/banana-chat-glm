@@ -6,6 +6,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { EventEnvelope } from '@banana-chat/shared';
 import { tokenManager } from '../lib/api';
 import { useSession } from '../state/session';
+import { handleAiEvent } from '../state/ai';
+import type { AiStreamEvent } from '@banana-chat/shared';
 
 declare global {
   interface Window {
@@ -100,8 +102,27 @@ export function EchoProvider({ children }: { children: ReactNode }) {
         void logout();
       }
     });
+
+    // EVT-050..056 — AI assistant events (stream deltas, conversation churn)
+    const aiEvents = [
+      'ai.message.started',
+      'ai.message.delta',
+      'ai.message.completed',
+      'ai.message.failed',
+      'ai.conversation.updated',
+      'ai.conversation.compacted',
+      'ai.conversation.deleted',
+    ];
+    for (const name of aiEvents) {
+      channel.listen(`.${name}`, (envelope: EventEnvelope<Record<string, unknown>>) => {
+        handleAiEvent({ event: name, ...(envelope.data ?? {}) } as AiStreamEvent);
+      });
+    }
     return () => {
       channel.stopListening('.session.revoked');
+      for (const name of aiEvents) {
+        channel.stopListening(`.${name}`);
+      }
     };
   }, [instance, me, logout]);
 
