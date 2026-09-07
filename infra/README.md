@@ -66,3 +66,42 @@ answer `503 AI_PROVIDER_ERROR`) is application code, no infra needed.
 Routing these logs to Sentry/Slack: set the ops webhook/DSN when
 credentials exist and uncomment `Horizon::routeSlackNotificationsTo` in
 `HorizonServiceProvider` for queue-lag notifications.
+
+## Load testing (TASK-INF-012)
+
+`infra/k6/chat-load.js` runs three scenarios against a seeded stack
+(`make migrate && make seed`):
+
+| scenario | what | threshold |
+|---|---|---|
+| steady | VUs alternate send (API-040) / history (API-041) | write p95 < 300ms (NFR-PERF-001), read p95 < 200ms (NFR-PERF-002) |
+| race | 50 concurrent sends to one room (FR-MEM-001 AC) | unique, gapless seq |
+| audit | teardown reads the room tail, verifies the race seq run | `seq_anomalies == 0` |
+
+Run it with the full docker profile (`make up-full`) then:
+
+```sh
+make load-test                          # k6 in docker → host.docker.internal:8000
+DURATION=45s VUS=8 RACE_VUS=50 make load-test
+```
+
+Notes:
+- All tokens are minted once in `setup()` (staggered logins) — the login
+  limiter is 5/min/IP + 10/15min/username; per-VU logins would 429.
+- The race marker is minted in `setup()` too: k6 init code runs per VU,
+  so module-level values are not shared with `teardown`.
+- Race starts at DURATION+45s so steady has fully ramped down and cannot
+  pollute the audited window.
+- Nightly CI: `.github/workflows/load-test.yml` (01:23 ICT) or
+  `workflow_dispatch` with duration/vus/race_vus inputs.
+
+## Reverb horizontal scaling (TASK-INF-013 / BE-026)
+
+`make up-scale` starts a second Reverb node (`reverb-2`, :8089). Both
+nodes subscribe to the Redis pub/sub channel `reverb-scale`
+(`REVERB_SCALING_ENABLED=true`), so an event published through either
+instance reaches sockets connected to both — verify with
+`redis-cli PUBSUB NUMSUB reverb-scale` (= 2).
+
+`nginx/reverb-upstream.conf` is a ready-made sticky (ip_hash) upstream
+balancing the two nodes for a production-style front door.
