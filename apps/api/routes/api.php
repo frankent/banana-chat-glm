@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\MessageController;
 use App\Http\Controllers\Api\V1\RoomController;
+use App\Http\Controllers\Api\V1\UploadController;
 use App\Http\Controllers\Api\V1\WorkspaceController;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
@@ -65,6 +66,22 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/rooms/{room}/messages', [MessageController::class, 'store'])->whereUlid('room');
         Route::post('/rooms/{room}/read', [MessageController::class, 'markRead'])->whereUlid('room');
         Route::get('/rooms/{room}/read-status', [MessageController::class, 'readStatus'])->whereUlid('room');
+
+        // API-060/061/062 — media (FR-MEDIA-001/004). Params resolve in-controller.
+        Route::post('/uploads', [UploadController::class, 'store']);
+        Route::post('/uploads/{attachment}/complete', [UploadController::class, 'complete'])->whereUlid('attachment');
+        Route::get('/attachments/{attachment}', [UploadController::class, 'show'])->whereUlid('attachment');
+    });
+
+    // Local-disk media plumbing — signature-checked, no bearer/ws headers
+    // (same trust model as an S3 presigned URL; see MediaUrls).
+    Route::prefix('v1')->middleware('signed')->group(function (): void {
+        Route::put('/uploads/{attachment}/binary', [UploadController::class, 'binary'])
+            ->whereUlid('attachment')->name('uploads.binary');
+        Route::get('/attachments/{attachment}/file/{variant}', [UploadController::class, 'file'])
+            ->whereUlid('attachment')
+            ->whereIn('variant', ['original', 'thumb_sm', 'thumb_md', 'poster'])
+            ->name('attachments.file');
     });
 
     Route::get('/health', [HealthController::class, 'index']);

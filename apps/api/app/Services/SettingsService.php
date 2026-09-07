@@ -76,6 +76,16 @@ class SettingsService
         return (int) $this->get($key, 0);
     }
 
+    /**
+     * @return list<mixed>
+     */
+    public function array(string $key): array
+    {
+        $value = $this->get($key, []);
+
+        return is_array($value) ? array_values($value) : [];
+    }
+
     public function set(string $key, mixed $value, ?string $updatedBy = null): void
     {
         AppSetting::query()->updateOrInsert(

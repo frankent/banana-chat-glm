@@ -112,4 +112,45 @@ class ApiException extends RuntimeException
     {
         return new self('MSG_REPLY_INVALID', 'ข้อความที่ตอบกลับไม่พบในห้องนี้', 422);
     }
+
+    public static function msgAttachmentInvalid(): self
+    {
+        return new self('MSG_ATTACHMENT_INVALID', 'ไฟล์แนบไม่ถูกต้อง (ไม่ใช่ของคุณ, workspace ไม่ตรง, สถานะไม่พร้อม หรือถูกใช้ไปแล้ว)', 422);
+    }
+
+    // ---- Media errors (FR-MEDIA-001, §7.1) ----
+
+    public static function mediaTooLarge(int $maxBytes): self
+    {
+        return new self('MEDIA_TOO_LARGE', 'ไฟล์ใหญ่เกินกำหนด', 422, [
+            'max_bytes' => $maxBytes,
+        ]);
+    }
+
+    public static function mediaTypeBlocked(string $extension): self
+    {
+        return new self('MEDIA_TYPE_BLOCKED', 'ประเภทไฟล์นี้ถูกห้ามอัปโหลด', 422, [
+            'extension' => $extension,
+        ]);
+    }
+
+    public static function mediaMimeMismatch(string $sniffed, string $declared): self
+    {
+        return new self('MEDIA_MIME_MISMATCH', 'ชนิดไฟล์จริงไม่ตรงกับที่แจ้งไว้', 422, [
+            'sniffed_mime' => $sniffed,
+            'declared_mime' => $declared,
+        ]);
+    }
+
+    public static function mediaUploadMissing(): self
+    {
+        return new self('MEDIA_UPLOAD_MISSING', 'ยังไม่พบไฟล์ที่อัปโหลด กรุณา PUT ก่อนเรียก complete', 422);
+    }
+
+    public static function mediaSizeMismatch(int $declaredBytes): self
+    {
+        return new self('MEDIA_SIZE_MISMATCH', 'ขนาดไฟล์ที่อัปโหลดไม่ตรงกับที่แจ้กไว้', 422, [
+            'declared_bytes' => $declaredBytes,
+        ]);
+    }
 }

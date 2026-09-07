@@ -2,11 +2,14 @@
 
 namespace App\Domain\Message;
 
+use App\Enums\AttachmentKind;
+use App\Enums\AttachmentStatus;
 use App\Enums\MessageType;
 use App\Events\MessageCreated;
 use App\Events\RoomActivity;
 use App\Events\WorkspaceUnreadChanged;
 use App\Exceptions\ApiException;
+use App\Models\Attachment;
 use App\Models\Message;
 use App\Models\Room;
 use App\Models\RoomMember;
@@ -29,7 +32,11 @@ class MessageWriter
         private readonly MessageSerializer $serializer,
     ) {}
 
-    public function write(Room $room, User $sender, ?string $body, ?string $clientMessageId, ?string $replyToMessageId = null): array
+    /**
+     * @param  list<string>  $attachmentIds
+     * @return array{0: Message, 1: bool} [message, created]
+     */
+    public function write(Room $room, User $sender, ?string $body, ?string $clientMessageId, ?string $replyToMessageId = null, array $attachmentIds = []): array
     {
         $body = $body !== null ? trim($body) : null;
         $body = $body === '' ? null : $body; // whitespace-only counts as empty (FR-MSG-001 edge)
@@ -39,8 +46,12 @@ class MessageWriter
             throw ApiException::msgTooLong($maxLength);
         }
 
-        if ($body === null) {
-            throw ApiException::msgEmpty(); // attachments arrive in PH2
+        if ($body === null && $attachmentIds === []) {
+            throw ApiException::msgEmpty();
+        }
+
+        if (count($attachmentIds) > $this->settings->int('message.max_attachments')) {
+            throw ApiException::msgAttachmentInvalid();
         }
 
         if ($replyToMessageId !== null) {
@@ -54,7 +65,7 @@ class MessageWriter
             }
         }
 
-        [$message, $created] = DB::transaction(function () use ($room, $sender, $body, $clientMessageId, $replyToMessageId): array {
+        [$message, $created] = DB::transaction(function () use ($room, $sender, $body, $clientMessageId, $replyToMessageId, $attachmentIds): array {
             /** @var Room $locked */
             $locked = Room::query()
                 ->whereKey($room->id)
@@ -76,16 +87,24 @@ class MessageWriter
 
             $seq = $locked->last_seq + 1;
 
+            // FR-MSG-002 — claim attachments under the room lock so two
+            // concurrent sends can never reuse the same attachment
+            $attachments = $this->claimAttachments($locked, $sender, $attachmentIds);
+
             $message = Message::query()->create([
                 'room_id' => $locked->id,
                 'workspace_id' => $locked->workspace_id,
                 'sender_id' => $sender->id,
                 'seq' => $seq,
-                'type' => MessageType::Text,
+                'type' => $this->deriveType($body, $attachments),
                 'body' => $body,
                 'client_message_id' => $clientMessageId,
                 'reply_to_message_id' => $replyToMessageId,
             ]);
+
+            foreach ($attachments as $position => $attachment) {
+                $message->attachments()->attach($attachment->id, ['position' => $position + 1]);
+            }
 
             $locked->forceFill([
                 'last_seq' => $seq,
@@ -118,6 +137,92 @@ class MessageWriter
     }
 
     /**
+     * FR-MSG-002 — every id must be the sender's own, in this workspace,
+     * ready|processing, not an avatar, and not yet attached to any message.
+     * Unscoped query: pending rows from another workspace must 404-ish into
+     * one uniform 422, never leak existence.
+     *
+     * @param  list<string>  $attachmentIds
+     * @return list<Attachment>
+     */
+    private function claimAttachments(Room $room, User $sender, array $attachmentIds): array
+    {
+        if ($attachmentIds === []) {
+            return [];
+        }
+
+        $attachments = Attachment::withoutGlobalScopes()
+            ->whereKey($attachmentIds)
+            ->lockForUpdate()
+            ->get()
+            ->mapWithKeys(fn (Attachment $a) => [$a->id => $a]);
+
+        foreach ($attachmentIds as $id) {
+            $attachment = $attachments->get($id);
+
+            $ok = $attachment !== null
+                && $attachment->workspace_id === $room->workspace_id
+                && $attachment->uploader_id === $sender->id
+                && $attachment->kind !== AttachmentKind::Avatar
+                && in_array($attachment->status, [AttachmentStatus::Ready, AttachmentStatus::Processing, AttachmentStatus::Uploaded], true)
+                && ! $attachment->messages()->exists();
+
+            if (! $ok) {
+                throw ApiException::msgAttachmentInvalid();
+            }
+        }
+
+        // preserve the client's order
+        return array_map(fn (string $id) => $attachments->get($id), $attachmentIds);
+    }
+
+    /**
+     * FR-MSG-002 — all image → image, all video → video, else/mixed → file.
+     *
+     * @param  list<Attachment>  $attachments
+     */
+    private function deriveType(?string $body, array $attachments): MessageType
+    {
+        if ($attachments === []) {
+            return MessageType::Text;
+        }
+
+        $kinds = array_map(fn (Attachment $a) => $a->kind, $attachments);
+
+        $allImages = ! in_array(false, array_map(fn ($k) => $k === AttachmentKind::Image, $kinds), true);
+        $allVideos = ! in_array(false, array_map(fn ($k) => $k === AttachmentKind::Video, $kinds), true);
+
+        if ($allImages) {
+            return MessageType::Image;
+        }
+
+        if ($allVideos) {
+            return MessageType::Video;
+        }
+
+        return MessageType::File;
+    }
+
+    /**
+     * Room-list preview: body wins; attachment-only messages show a badge
+     * emoji + filename (spec FR-MSG-002 rendering rules).
+     */
+    private function previewText(Message $message): string
+    {
+        if ($message->body !== null && $message->body !== '') {
+            return $message->body;
+        }
+
+        $first = $message->attachments->first(); // loaded by forEvent()
+
+        return match ($message->type) {
+            MessageType::Image => '📷 รูปภาพ',
+            MessageType::Video => '🎬 วิดีโอ',
+            default => '📎 '.($first?->original_name ?? 'ไฟล์'),
+        };
+    }
+
+    /**
      * Post-commit broadcasts: EVT-010 to the room, EVT-015/024 to each member
      * on private-user so lists/badges update even for unsubscribed rooms.
      */
@@ -125,6 +230,7 @@ class MessageWriter
     {
         $room = $message->room()->firstOrFail();
         $payload = MessageSerializer::forEvent($message);
+        $preview = $this->previewText($message);
 
         broadcast(new MessageCreated($room, $payload));
 
@@ -136,7 +242,7 @@ class MessageWriter
         foreach ($members as $member) {
             $unread = max(0, $room->last_user_seq - $member->last_read_seq);
 
-            broadcast(new RoomActivity($room, $member->user_id, $payload['body'], $unread));
+            broadcast(new RoomActivity($room, $member->user_id, $preview, $unread));
 
             [$unreadRooms, $totalUnread] = $this->workspaceUnread($room->workspace_id, $member->user_id);
             broadcast(new WorkspaceUnreadChanged($room->workspace_id, $member->user_id, $unreadRooms, $totalUnread));

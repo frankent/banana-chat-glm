@@ -7,7 +7,7 @@
 export type WorkspaceRole = 'owner' | 'admin' | 'member';
 export type RoomRole = 'owner' | 'admin' | 'member';
 export type RoomType = 'dm' | 'group' | 'channel';
-export type MessageType = 'text' | 'system' | 'media' | 'file';
+export type MessageType = 'text' | 'system' | 'image' | 'video' | 'file';
 export type UserStatus = 'active' | 'suspended' | 'deactivated';
 
 export interface UserStub {
@@ -72,14 +72,35 @@ export interface Message {
   attachments: Attachment[];
 }
 
+export type AttachmentKind = 'image' | 'video' | 'file' | 'avatar';
+export type AttachmentStatus = 'pending' | 'uploaded' | 'processing' | 'ready' | 'failed' | 'deleted';
+
+/** §8.8 attachment — urls are presigned GETs, valid until urls_expire_at */
 export interface Attachment {
   id: string;
-  kind: 'image' | 'video' | 'file';
-  file_name: string;
-  size: number;
+  kind: AttachmentKind;
+  status: AttachmentStatus;
+  original_name: string;
   mime_type: string;
-  thumbnail_url: string | null;
-  url: string;
+  size_bytes: number;
+  width: number | null;
+  height: number | null;
+  duration_ms: number | null;
+  urls: {
+    original: string | null;
+    thumb_sm: string | null;
+    thumb_md: string | null;
+    poster: string | null;
+  };
+  urls_expire_at: string;
+}
+
+/** API-060 response */
+export interface UploadTicket {
+  attachment_id: string;
+  put_url: string;
+  headers: Record<string, string>;
+  expires_at: string;
 }
 
 export interface MessagePage {
@@ -119,6 +140,8 @@ export type RealtimeEventName =
   | 'room.activity'
   | 'room.typing'
   | 'presence.updated'
+  | 'attachment.ready'
+  | 'attachment.failed'
   | 'user.updated'
   | 'workspace.unread_changed'
   | 'workspace.member_added'

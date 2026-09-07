@@ -52,6 +52,7 @@ class MessageController extends Controller
             ->with([
                 'sender:id,username,display_name,avatar_attachment_id',
                 'replyTo:id,room_id,sender_id,body,deleted_at',
+                'attachments',
             ]);
 
         if ($after !== null) {
@@ -96,6 +97,8 @@ class MessageController extends Controller
             'client_message_id' => ['required', 'uuid'],
             'body' => ['nullable', 'string'],
             'reply_to_message_id' => ['nullable', 'ulid'],
+            'attachment_ids' => ['nullable', 'array', 'max:10'],
+            'attachment_ids.*' => ['ulid'],
         ]);
 
         $room = $this->roomOrFail($roomId);
@@ -110,11 +113,13 @@ class MessageController extends Controller
             $data['body'] ?? null,
             $data['client_message_id'],
             $data['reply_to_message_id'] ?? null,
+            $data['attachment_ids'] ?? [],
         );
 
         $message->loadMissing([
             'sender:id,username,display_name,avatar_attachment_id',
             'replyTo:id,room_id,sender_id,body,deleted_at',
+            'attachments',
         ]);
 
         return response()->json([

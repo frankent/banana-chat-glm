@@ -87,4 +87,8 @@ PRODUCT_SPEC.md the spec (§0 rules, §15/§16 deviation log)
 
 Shipped: auth (rotating refresh + reuse detection), workspaces + isolation, DM/group rooms, messages with per-room `seq` ordering + idempotent sends, realtime (Reverb) + read receipts + unread badges, admin panel, demo seed, tests, E2E smoke.
 
-Deferred (schema present, UI/API not): media upload, AI, push, search, edit/delete, mentions, typing/presence, mobile — see the deviation log in `PRODUCT_SPEC.md` §15/§16.
+## PH2 media (in progress)
+
+Shipped: presigned upload flow (`POST /uploads` → PUT → `complete` → `ProcessAttachment` worker → `attachment.ready`), attachments in messages (`attachment_ids[]`, type derivation, 📷/🎬/📎 previews), signed GET URLs (1h, SVG never inline), web composer 📎 upload + image/video/file rendering. Video processing is lite until ffmpeg lands in the worker container (DEC-034).
+
+Deferred (schema present, UI/API not): AI, push, search, edit/delete, mentions, typing/presence, mobile — see the deviation log in `PRODUCT_SPEC.md` §15/§16.

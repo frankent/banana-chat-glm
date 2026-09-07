@@ -19,6 +19,9 @@
     </source>
     <php>
         <env name="APP_ENV" value="testing"/>
+        <!-- signed media URLs are generated from APP_URL; pin so the cloud .env
+             (or a different port) can't break signature validation in tests -->
+        <env name="APP_URL" value="http://localhost"/>
         <env name="APP_KEY" value="base64:2fl+Ktvkfl+Fuz4Qp/A75G2RTiWVA/ZoKZvp6fiiM10="/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
@@ -37,6 +40,8 @@
         <env name="DB_DATABASE" value="orgchat_test"/>
         <env name="DB_USERNAME" value="orgchat"/>
         <env name="DB_PASSWORD" value="orgchat"/>
+        <!-- local docker pg has no TLS — neutralize cloud .env values -->
+        <env name="DB_SSLMODE" value="prefer"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
@@ -46,5 +51,15 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <!-- tests must NEVER reach cloud storage: pin the local disk and dummy
+             AWS creds regardless of which infra .env currently points at -->
+        <env name="FILESYSTEM_DISK" value="local"/>
+        <env name="AWS_ACCESS_KEY_ID" value="testing"/>
+        <env name="AWS_SECRET_ACCESS_KEY" value="testing"/>
+        <env name="AWS_DEFAULT_REGION" value="us-east-1"/>
+        <env name="AWS_BUCKET" value="testing"/>
+        <env name="AWS_ENDPOINT" value="http://127.0.0.1:9100"/>
+        <env name="AWS_ROOT" value=""/>
+        <env name="AWS_URL" value=""/>
     </php>
 </phpunit>

@@ -28,11 +28,18 @@ async function waitFor(page, selectorOrFn, timeout = 15_000, label = selectorOrF
 }
 
 async function login(page, username, password) {
-  await page.goto(`${URL}/login`, { waitUntil: 'networkidle0' });
-  await page.type('input[autocomplete="username"]', username);
-  await page.type('input[autocomplete="current-password"]', password);
-  await page.click('button[type="submit"]');
-  await waitFor(page, 'nav a', 15_000, 'room list after login');
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    await page.goto(`${URL}/login`, { waitUntil: 'networkidle0' });
+    await page.type('input[autocomplete="username"]', username);
+    await page.type('input[autocomplete="current-password"]', password);
+    await page.click('button[type="submit"]');
+    // 30s: cold Neon compute can push the first login past 10s; a 5xx blip
+    // from the remote stack is retried up to 3 times
+    const ok = await waitFor(page, 'nav a', 30_000, 'room list after login').catch(() => false);
+    if (ok) return;
+    console.log(`    login ${username} attempt ${attempt} failed — retrying`);
+  }
+  throw new Error(`login failed for ${username}`);
 }
 
 async function roomLink(page, text) {
@@ -62,6 +69,10 @@ async function main() {
   for (const page of [tony, somchai]) {
     page.setDefaultTimeout(20_000);
     page.on('dialog', (dialog) => void dialog.dismiss());
+    page.on('pageerror', (err) => console.log(`    [pageerror] ${err.message.slice(0, 200)}`));
+    page.on('console', (msg) => {
+      if (msg.type() === 'error') console.log(`    [console.error] ${msg.text().slice(0, 200)}`);
+    });
   }
 
   console.log('[1] login tony + somchai');
@@ -103,6 +114,29 @@ async function main() {
   await waitFor(tony, '[data-testid="seen-indicator"]', 15_000, 'Seen indicator for tony');
   console.log('    tony: read receipt visible');
 
+  console.log('[5b] tony uploads an image (presigned → Spaces) and sends it');
+  const fileInput = await tony.$('input[type="file"]');
+  if (fileInput === null) throw new Error('attach file input missing');
+  await fileInput.uploadFile('/tmp/cat.png');
+  await waitFor(tony, '[data-testid="composer-attachment"][data-status="ready"]', 30_000, 'staged attachment ready');
+  await tony.click('[data-testid="send-button"]');
+
+  await waitFor(tony, '[data-testid="attachment-image"]', 15_000, 'tony sees rendered image');
+  const somchaiGotImage = await waitFor(somchai, '[data-testid="attachment-image"]', 20_000, 'somchai receives image via realtime').catch(() => false);
+  if (!somchaiGotImage) {
+    const dump = await somchai.evaluate(() => {
+      const msgs = [...document.querySelectorAll('[data-testid="message"]')];
+      const atts = [...document.querySelectorAll('[data-testid^="attachment-"]')];
+      return {
+        lastMessages: msgs.slice(-4).map((el) => el.textContent?.slice(0, 60)),
+        attachmentNodes: atts.map((el) => `${el.getAttribute('data-testid')}[${el.getAttribute('data-status') ?? ''}]`),
+      };
+    });
+    console.log('    SOMCHAI DUMP:', JSON.stringify(dump, null, 2));
+    throw new Error('somchai never rendered the image');
+  }
+  console.log('    image rendered on both browsers (upload → complete → process → send)');
+
   console.log('[6] tony creates a group with duangjai');
   await tony.bringToFront();
   await tony.evaluate(() => {
@@ -113,7 +147,7 @@ async function main() {
   await tony.waitForSelector('input[placeholder="Group name"]', { timeout: 10_000 });
   await tony.type('input[placeholder="Group name"]', `E2E ${stamp}`);
   await tony.type('input[placeholder="Search people…"]', 'duangjai');
-  await waitFor(tony, async () => ((await tony.$$('ul button'))?.length ?? 0) > 0, 10_000, 'directory results');
+  await waitFor(tony, async () => ((await tony.$$('ul button'))?.length ?? 0) > 0, 30_000, 'directory results');
   await sleep(500);
   await tony.evaluate(() => {
     const items = [...document.querySelectorAll('ul button')];

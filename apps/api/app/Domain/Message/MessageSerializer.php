@@ -2,6 +2,7 @@
 
 namespace App\Domain\Message;
 
+use App\Domain\Media\AttachmentSerializer;
 use App\Models\Message;
 
 /**
@@ -10,6 +11,10 @@ use App\Models\Message;
  */
 class MessageSerializer
 {
+    public function __construct(
+        private readonly AttachmentSerializer $attachments,
+    ) {}
+
     /**
      * @return array<string, mixed>
      */
@@ -54,19 +59,38 @@ class MessageSerializer
             'deleted_at' => $message->deleted_at?->toIso8601String(),
             'delete_reason' => $message->delete_reason,
             'created_at' => $message->created_at?->toIso8601String(),
-            'attachments' => [], // PH2 (FR-MSG-002)
+            'attachments' => $deleted ? [] : $this->serializeAttachments($message),
         ];
     }
 
     /**
-     * Serialize a message with sender/replyTo loaded, no lazy queries.
+     * Serialize a message with sender/replyTo/attachments loaded, no lazy queries.
      *
      * @return array<string, mixed>
      */
     public static function forEvent(Message $message): array
     {
-        $message->loadMissing(['sender' => fn ($q) => $q->select(['id', 'username', 'display_name', 'avatar_attachment_id'])]);
+        $message->loadMissing(
+            ['sender' => fn ($q) => $q->select(['id', 'username', 'display_name', 'avatar_attachment_id'])],
+            'attachments',
+        );
 
         return app(self::class)->toArray($message);
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function serializeAttachments(Message $message): array
+    {
+        if (! $message->relationLoaded('attachments')) {
+            return [];
+        }
+
+        return $message->attachments
+            ->sortBy(fn ($a) => $a->pivot->position ?? 0)
+            ->values()
+            ->map(fn ($a) => $this->attachments->toArray($a))
+            ->all();
     }
 }

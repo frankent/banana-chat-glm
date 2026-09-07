@@ -104,7 +104,16 @@ dev-web: ## Run web dev server on :5173
 build-web: ## Build web app for production
 	pnpm --filter @banana-chat/web build
 
-e2e: ## Headless two-browser E2E (needs dev stack + worker + reverb running)
+flush-limiters: ## Clear login rate-limit keys on whichever redis .env points at
+	@RHOST=$$(grep -E '^REDIS_HOST=' $(API_DIR)/.env | cut -d= -f2); \
+	RPORT=$$(grep -E '^REDIS_PORT=' $(API_DIR)/.env | cut -d= -f2); \
+	RCLI="docker exec banana-chat-redis-1 redis-cli"; \
+	if [ "$$RHOST" = "127.0.0.1" ]; then $$RCLI -n 1 --scan --pattern '*banana*' | while read -r k; do [ -n "$$k" ] && $$RCLI -n 1 del "$$k" >/dev/null; done; \
+	else for i in 1 2 3; do $$RCLI -h $$RHOST -p $$RPORT -n 1 --scan --pattern '*banana_chat*' >/tmp/limiters.txt 2>/dev/null && break; sleep 3; done; \
+	while read -r k; do [ -n "$$k" ] && $$RCLI -h $$RHOST -p $$RPORT -n 1 del "$$k" >/dev/null 2>&1; done </tmp/limiters.txt; fi; \
+	echo "login limiters cleared ($$RHOST)"
+
+e2e: flush-limiters ## Headless two-browser E2E (needs dev stack + worker + reverb running)
 	pnpm --filter @banana-chat/web e2e
 
 test-web: ## Run vitest across packages

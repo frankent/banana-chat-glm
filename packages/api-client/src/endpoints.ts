@@ -1,8 +1,10 @@
 import type {
+  Attachment,
   Message,
   MessagePage,
   ReadStatusEntry,
   RoomListItem,
+  UploadTicket,
   UserStub,
   WorkspaceSummary,
 } from '@banana-chat/shared';
@@ -103,10 +105,48 @@ export class Endpoints {
     return this.api.request<MessagePage>(`/api/v1/rooms/${roomId}/messages${qs !== '' ? `?${qs}` : ''}`, { workspaceSlug: slug });
   }
 
-  sendMessage(roomId: string, slug: string, body: string, clientMessageId: string, replyToMessageId?: string) {
+  sendMessage(
+    roomId: string,
+    slug: string,
+    body: string | null,
+    clientMessageId: string,
+    replyToMessageId?: string,
+    attachmentIds: string[] = [],
+  ) {
     return this.api.request<{ message: Message }>(`/api/v1/rooms/${roomId}/messages`, {
       method: 'POST',
-      body: { client_message_id: clientMessageId, body, reply_to_message_id: replyToMessageId },
+      body: {
+        client_message_id: clientMessageId,
+        body,
+        reply_to_message_id: replyToMessageId,
+        ...(attachmentIds.length > 0 ? { attachment_ids: attachmentIds } : {}),
+      },
+      workspaceSlug: slug,
+    });
+  }
+
+  // -- media (API-060/061/062) --
+
+  createUpload(
+    slug: string,
+    input: { kind: 'image' | 'video' | 'file' | 'avatar'; filename: string; mime_type: string; size_bytes: number; sha256?: string },
+  ) {
+    return this.api.request<UploadTicket>('/api/v1/uploads', {
+      method: 'POST',
+      body: input,
+      workspaceSlug: slug,
+    });
+  }
+
+  completeUpload(attachmentId: string, slug: string) {
+    return this.api.request<{ attachment: Attachment }>(`/api/v1/uploads/${attachmentId}/complete`, {
+      method: 'POST',
+      workspaceSlug: slug,
+    });
+  }
+
+  attachment(attachmentId: string, slug: string) {
+    return this.api.request<{ attachment: Attachment }>(`/api/v1/attachments/${attachmentId}`, {
       workspaceSlug: slug,
     });
   }

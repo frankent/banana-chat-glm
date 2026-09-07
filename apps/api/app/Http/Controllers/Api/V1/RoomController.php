@@ -6,6 +6,7 @@ use App\Domain\Room\Actions\CreateRoomAction;
 use App\Domain\Room\RoomPolicy;
 use App\Domain\Room\SystemMessageWriter;
 use App\Enums\MemberStatus;
+use App\Enums\MessageType;
 use App\Enums\RoomRole;
 use App\Enums\RoomType;
 use App\Enums\UserStatus;
@@ -546,6 +547,7 @@ class RoomController extends Controller
 
         // last messages + dm counterparts + mute settings in three batched queries
         $lastMessages = Message::query()
+            ->with('attachments')
             ->whereIn('id', collect($rows)->map(fn ($row) => $row->last_message_id)->filter()->all())
             ->get()
             ->keyBy('id');
@@ -599,7 +601,7 @@ class RoomController extends Controller
                 'last_message' => $lastMessage !== null ? [
                     'id' => $lastMessage->id,
                     'type' => $lastMessage->type->value,
-                    'body' => $lastMessage->body !== null ? mb_substr($lastMessage->body, 0, 120) : null,
+                    'body' => mb_substr($this->previewText($lastMessage), 0, 120),
                     'sender_id' => $lastMessage->sender_id,
                     'created_at' => $lastMessage->created_at?->toIso8601String(),
                 ] : null,
@@ -618,5 +620,22 @@ class RoomController extends Controller
                 ] : null,
             ];
         })->values()->all();
+    }
+
+    /**
+     * Attachment-only messages preview as 📷/🎬/📎 in lists (FR-MSG-002).
+     */
+    private function previewText(Message $message): string
+    {
+        if ($message->body !== null && $message->body !== '') {
+            return $message->body;
+        }
+
+        return match ($message->type) {
+            MessageType::Image => '📷 รูปภาพ',
+            MessageType::Video => '🎬 วิดีโอ',
+            MessageType::File => '📎 '.($message->attachments->first()?->original_name ?? 'ไฟล์'),
+            default => '',
+        };
     }
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Message } from '@banana-chat/shared';
+import type { Attachment, Message } from '@banana-chat/shared';
 import { endpoints } from '../lib/api';
 import { roomStore } from '../lib/room-stores';
 
@@ -63,14 +63,22 @@ export function useMessagePage(roomId: string | undefined, slug: string | undefi
   return { query, loadOlder, fillGap, refetchStatus };
 }
 
-export function optimisticMessage(roomId: string, workspaceId: string, senderId: string, body: string, clientMessageId: string, seq: number): Message {
+export function optimisticMessage(
+  roomId: string,
+  workspaceId: string,
+  senderId: string,
+  body: string | null,
+  clientMessageId: string,
+  seq: number,
+  attachments: Attachment[] = [],
+): Message {
   return {
     id: `optimistic-${clientMessageId}`,
     room_id: roomId,
     workspace_id: workspaceId,
     sender_id: senderId,
     sender: null,
-    type: 'text',
+    type: attachments.length === 0 ? 'text' : attachments.every((a) => a.kind === 'image') ? 'image' : attachments.every((a) => a.kind === 'video') ? 'video' : 'file',
     body,
     // contiguous with the tail so gap-fill logic doesn't withhold it
     seq,
@@ -82,6 +90,6 @@ export function optimisticMessage(roomId: string, workspaceId: string, senderId:
     deleted_at: null,
     delete_reason: null,
     created_at: new Date().toISOString(),
-    attachments: [],
+    attachments,
   };
 }
