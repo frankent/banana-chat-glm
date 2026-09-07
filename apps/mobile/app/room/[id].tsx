@@ -6,6 +6,7 @@ import { MessageStore, Outbox, type OutboxEntry } from '@banana-chat/chat-core';
 import type { Message } from '@banana-chat/shared';
 import { roomCache, scopedOutbox, useSession } from '../../src/auth/session';
 import { endpoints } from '../../src/lib/api';
+import { parseAroundSeq } from '../../src/lib/search-utils';
 import { createOutboxSender } from '../../src/offline/outbox-flusher';
 import { fileExists, uploadFile } from '../../src/offline/upload';
 import { getLocale, tr } from '../../src/lib/i18n';
@@ -24,8 +25,9 @@ interface Row {
 }
 
 export default function RoomScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, around_seq: aroundSeqParam } = useLocalSearchParams<{ id: string; around_seq?: string }>();
   const roomId = typeof id === 'string' ? id : '';
+  const aroundSeq = parseAroundSeq(typeof aroundSeqParam === 'string' ? aroundSeqParam : undefined);
   const me = useSession((s) => s.me);
   const workspace = useSession((s) => s.currentWorkspace);
 
@@ -77,9 +79,13 @@ export default function RoomScreen() {
         store.replace(cached);
       }
       rebuild();
-      // 2. network sync
+      // 2. network sync — FR-SRCH-001 jump-to-result seeds around the hit
       try {
-        const page = await endpoints.messages(roomId, slug);
+        const page = await endpoints.messages(
+          roomId,
+          slug,
+          aroundSeq !== undefined && Number.isFinite(aroundSeq) ? { around_seq: aroundSeq } : {},
+        );
         if (storeRef.current === store) {
           store.replace(page.messages);
           void roomCache()?.saveMessages(roomId, page.messages);
@@ -105,7 +111,7 @@ export default function RoomScreen() {
       storeRef.current = null;
       outboxRef.current = null;
     };
-  }, [roomId, workspace, me, rebuild]);
+  }, [roomId, workspace, me, rebuild, aroundSeq]);
 
   const send = async () => {
     const body = draft.trim();

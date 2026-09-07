@@ -13,16 +13,16 @@ import { useSession } from '../state/session';
  * TASK-WEB-016 — the newest 50 rows/room persist to IndexedDB and hydrate
  * the store before the network answers (prependCount keeps scroll anchored).
  */
-export function useMessagePage(roomId: string | undefined, slug: string | undefined) {
+export function useMessagePage(roomId: string | undefined, slug: string | undefined, aroundSeq?: number) {
   const queryClient = useQueryClient();
   const seededRoom = useRef<string | undefined>(undefined);
   const me = useSession((s) => s.me);
   const workspace = useSession((s) => s.currentWorkspace);
 
   const query = useQuery({
-    queryKey: ['messages', roomId, 'latest'],
+    queryKey: ['messages', roomId, aroundSeq !== undefined ? 'around' : 'latest', aroundSeq],
     queryFn: async () => {
-      const page = await endpoints.messages(roomId!, slug!);
+      const page = await endpoints.messages(roomId!, slug!, aroundSeq !== undefined ? { around_seq: aroundSeq } : {});
       roomStore(roomId!).replace(page.messages);
       if (me !== null && workspace !== null) {
         void roomCache({ userId: me.id, workspaceId: workspace.workspace.id }).saveMessages(roomId!, page.messages);

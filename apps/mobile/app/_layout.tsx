@@ -164,6 +164,7 @@ export default function RootLayout() {
         <Stack.Screen name="login" options={{ title: 'Banana Chat' }} />
         <Stack.Screen name="rooms" options={{ title: '' }} />
         <Stack.Screen name="room/[id]" options={{ title: '' }} />
+        <Stack.Screen name="search" options={{ title: 'ค้นหา' }} />
         <Stack.Screen name="ai/index" options={{ title: 'AI' }} />
         <Stack.Screen name="ai/[id]" options={{ title: '' }} />
         <Stack.Screen name="ai/memory" options={{ title: '' }} />

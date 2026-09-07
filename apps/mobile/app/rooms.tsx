@@ -50,6 +50,9 @@ export default function RoomsScreen() {
           <Text style={styles.wsButton}>{workspace?.workspace.name ?? ''} ▾</Text>
         </Pressable>
         <View style={{ flexDirection: 'row', gap: 16 }}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Search" onPress={() => router.push('/search')}>
+            <Text style={styles.navButton}>🔍</Text>
+          </Pressable>
           <Pressable onPress={() => router.push('/ai')}>
             <Text style={styles.navButton}>AI</Text>
           </Pressable>

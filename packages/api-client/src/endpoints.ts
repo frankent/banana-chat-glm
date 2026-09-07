@@ -7,10 +7,14 @@ import type {
   AiSendResponse,
   AiStatus,
   Attachment,
+  FileSearchResult,
+  InAppNotification,
   Message,
   MessagePage,
+  MessageSearchResult,
   ReadStatusEntry,
   RoomListItem,
+  SearchPage,
   UploadTicket,
   UserStub,
   WorkspaceSummary,
@@ -108,10 +112,11 @@ export class Endpoints {
 
   // -- messages (API-040/041) --
 
-  messages(roomId: string, slug: string, params: { before_seq?: number; after_seq?: number; limit?: number } = {}) {
+  messages(roomId: string, slug: string, params: { before_seq?: number; after_seq?: number; around_seq?: number; limit?: number } = {}) {
     const query = new URLSearchParams();
     if (params.before_seq !== undefined) query.set('before_seq', String(params.before_seq));
     if (params.after_seq !== undefined) query.set('after_seq', String(params.after_seq));
+    if (params.around_seq !== undefined) query.set('around_seq', String(params.around_seq));
     if (params.limit !== undefined) query.set('limit', String(params.limit));
     const qs = query.toString();
     return this.api.request<MessagePage>(`/api/v1/rooms/${roomId}/messages${qs !== '' ? `?${qs}` : ''}`, { workspaceSlug: slug });
@@ -226,6 +231,56 @@ export class Endpoints {
       body: input,
       workspaceSlug: slug,
     });
+  }
+
+  // -- notification center (API-073) --
+
+  /** FR-NOTI-006 — in-app notification feed, newest first. */
+  myNotifications(slug: string, cursor?: string) {
+    const query = cursor !== undefined && cursor !== '' ? `?cursor=${encodeURIComponent(cursor)}` : '';
+    return this.api.request<{ notifications: InAppNotification[]; next_cursor: string | null }>(
+      `/api/v1/me/notifications${query}`,
+      { workspaceSlug: slug },
+    );
+  }
+
+  /** FR-NOTI-006 — mark read: given ids, or all unread when omitted. */
+  markNotificationsRead(slug: string, ids?: string[]) {
+    return this.api.request<{ ok: boolean }>('/api/v1/me/notifications/read', {
+      method: 'POST',
+      body: ids !== undefined && ids.length > 0 ? { ids } : {},
+      workspaceSlug: slug,
+    });
+  }
+
+  // -- search (API-080/081) --
+
+  /** API-080 — message search (FR-SRCH-001). q >= 2 chars server-side. */
+  searchMessages(
+    slug: string,
+    input: { q: string; room_id?: string; sender_id?: string; from?: string; to?: string; type?: string; cursor?: string },
+  ) {
+    const query = new URLSearchParams();
+    query.set('q', input.q);
+    if (input.room_id) query.set('room_id', input.room_id);
+    if (input.sender_id) query.set('sender_id', input.sender_id);
+    if (input.from) query.set('from', input.from);
+    if (input.to) query.set('to', input.to);
+    if (input.type) query.set('type', input.type);
+    if (input.cursor) query.set('cursor', input.cursor);
+    return this.api.request<SearchPage<MessageSearchResult>>(`/api/v1/search/messages?${query}`, {
+      workspaceSlug: slug,
+    });
+  }
+
+  /** API-081 — file search by original_name (FR-SRCH-002); also backs the room media tab. */
+  searchFiles(slug: string, input: { q: string; kind?: 'image' | 'video' | 'file'; room_id?: string; cursor?: string }) {
+    const query = new URLSearchParams();
+    query.set('q', input.q);
+    if (input.kind) query.set('kind', input.kind);
+    if (input.room_id) query.set('room_id', input.room_id);
+    if (input.cursor) query.set('cursor', input.cursor);
+    return this.api.request<SearchPage<FileSearchResult>>(`/api/v1/search/files?${query}`, { workspaceSlug: slug });
   }
 
   // -- read (API-045/046) --

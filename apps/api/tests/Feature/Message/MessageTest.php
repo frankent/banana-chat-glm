@@ -364,3 +364,34 @@ test('unread badge math: room list unread reflects last_seq − last_read_seq af
 
     expect($entry['unread_count'])->toBe(0);
 });
+
+test('TC-MSG-021 around_seq returns 25 before + 25 after, ascending (API-041)', function () {
+    [$user, $token] = loginAs($this->tony);
+
+    for ($i = 1; $i <= 70; $i++) {
+        Message::query()->create([
+            'room_id' => $this->room->id,
+            'workspace_id' => $this->ws->id,
+            'sender_id' => $this->tony->id,
+            'seq' => $i,
+            'type' => 'text',
+            'body' => "seed {$i}",
+            'client_message_id' => (string) Str::uuid(),
+        ]);
+    }
+    $this->room->fresh()->forceFill(['last_seq' => 70, 'last_user_seq' => 70])->save();
+
+    $response = $this->getJson(
+        "/api/v1/rooms/{$this->room->id}/messages?around_seq=40",
+        wsHeaders($token, 'acme'),
+    )->assertOk();
+
+    $messages = collect($response->json('data.messages'));
+
+    expect($messages)->toHaveCount(50)
+        ->and($messages->first()['seq'])->toBe(16)   # anchor-25 (inclusive)
+        ->and($messages->last()['seq'])->toBe(65)    # anchor+25
+        ->and($messages->firstWhere('seq', 40))->not->toBeNull()
+        ->and($response->json('data.has_more_before'))->toBeTrue()
+        ->and($response->json('data.has_more_after'))->toBeTrue();
+});

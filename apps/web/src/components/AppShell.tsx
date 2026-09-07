@@ -1,12 +1,29 @@
+import { useEffect } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useSession } from '../state/session';
 import { ConnectionBanner } from './ConnectionBanner';
+import { NotificationCenter } from './NotificationCenter';
 import { RoomList } from './RoomList';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 
 export function AppShell() {
   const { status, me, currentWorkspace, logout } = useSession();
   const location = useLocation();
+  const navigate = useNavigate();
+
+  // TASK-WEB-018 — Ctrl/Cmd+K jumps to search
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        navigate('/search');
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [navigate]);
 
   if (status === 'loading') {
     return <div className="flex min-h-full items-center justify-center text-sm text-slate-400">Loading…</div>;
@@ -29,9 +46,25 @@ export function AppShell() {
           <div className="space-y-2 border-b border-slate-100 p-3">
             <div className="flex items-center justify-between">
               <span className="text-lg font-bold">🍌 Banana Chat</span>
-              <button onClick={() => void logout()} className="text-xs text-slate-400 hover:text-slate-600" title="Sign out">
-                ⎋
-              </button>
+              <div className="flex items-center gap-1">
+                <NotificationCenter />
+                <button
+                  onClick={() => navigate('/search')}
+                  aria-label="Search (Ctrl+K)"
+                  title="Search (Ctrl+K)"
+                  className="rounded-lg px-2 py-1 text-base hover:bg-slate-100"
+                  data-testid="open-search"
+                >
+                  🔍
+                </button>
+                <button
+                  onClick={() => void logout()}
+                  aria-label="Sign out"
+                  className="rounded-lg px-2 py-1 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                >
+                  ⎋
+                </button>
+              </div>
             </div>
             <WorkspaceSwitcher />
           </div>

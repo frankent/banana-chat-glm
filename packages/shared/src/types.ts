@@ -111,6 +111,65 @@ export interface MessagePage {
   has_more_after: boolean;
 }
 
+// ---- §5.10 SRCH — search (API-080/081) ----
+
+export interface RoomBrief {
+  id: string;
+  workspace_id: string;
+  type: RoomType;
+  name: string | null;
+}
+
+export interface MessageSearchResult {
+  message: Message;
+  room: RoomBrief | null;
+  /** HTML — the only raw markup is <mark> tags; body is pre-escaped server-side (TC-SRCH-005) */
+  highlight: string;
+}
+
+export interface FileSearchResult {
+  attachment: {
+    id: string;
+    message_id: string;
+    kind: AttachmentKind;
+    original_name: string;
+    mime_type: string;
+    size_bytes: number;
+    width: number | null;
+    height: number | null;
+    created_at: string;
+  };
+  message: {
+    id: string;
+    room_id: string;
+    sender_id: string;
+    seq: number;
+    body: string | null;
+    created_at: string;
+  };
+  room: RoomBrief | null;
+}
+
+export interface SearchPage<T> {
+  results: T[];
+  next_cursor: string | null;
+}
+
+// ---- §5.9 FR-NOTI-006 — in-app notification center (API-073) ----
+
+export type InAppNotificationType = 'mention' | 'added_to_room' | 'session_revoked';
+
+export interface InAppNotification {
+  id: string;
+  type: InAppNotificationType;
+  workspace_id: string | null;
+  room_id: string | null;
+  actor: { id: string; username: string; display_name: string } | null;
+  data: Record<string, unknown>;
+  read_at: string | null;
+  created_at: string;
+}
+
 export interface ReadStatusEntry {
   user_id: string;
   username: string;

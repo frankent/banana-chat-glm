@@ -80,6 +80,14 @@ device on LAN needs the host machine's LAN IP, not `localhost`).
 - [ ] Conversations + messages survive cold start offline (SQLite cache)
 - [ ] Memories screen lists memories; clear-all wipes them
 
+### Search (TASK-MOB-014, FR-SRCH-001/002)
+
+- [ ] 🔍 on the rooms header opens the search screen; typing <2 chars shows the hint
+- [ ] Thai query ("ประชุม") finds messages containing that substring
+- [ ] Files tab: kind chips filter to images/videos/files; names match Thai + English
+- [ ] Tapping a result opens the room seeded around the hit (jumps to that message)
+- [ ] "โหลดเพิ่ม" appends the next page without duplicating rows
+
 ### Workspace switching (TC-MOB-008)
 
 - [ ] Switch workspace: rooms list changes; switch back: previous rooms render

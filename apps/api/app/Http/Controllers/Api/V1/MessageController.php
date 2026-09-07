@@ -42,12 +42,14 @@ class MessageController extends Controller
         $data = $request->validate([
             'before_seq' => ['nullable', 'integer', 'min:1'],
             'after_seq' => ['nullable', 'integer', 'min:0'],
+            'around_seq' => ['nullable', 'integer', 'min:1'], // API-041 (search jump-to)
             'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
         $limit = (int) ($data['limit'] ?? 50);
         $before = isset($data['before_seq']) ? (int) $data['before_seq'] : null;
         $after = isset($data['after_seq']) ? (int) $data['after_seq'] : null;
+        $around = isset($data['around_seq']) ? (int) $data['around_seq'] : null;
 
         $query = Message::query()
             ->where('room_id', $room->id)
@@ -58,7 +60,24 @@ class MessageController extends Controller
                 'mentions:id',
             ]);
 
-        if ($after !== null) {
+        if ($around !== null) {
+            // TC-MSG-021 — 25 before (inclusive) + 25 after, ascending output
+            $half = intdiv($limit, 2);
+            $older = (clone $query)->where('seq', '<=', $around)->orderByDesc('seq')->limit($half + 1)->get();
+            $hasMoreBefore = $older->count() > $half;
+            $older = $older->take($half)->reverse()->values();
+
+            $newerCount = $limit - $half;
+            $newer = collect();
+            $hasMoreAfter = false;
+            if ($newerCount > 0) {
+                $newer = (clone $query)->where('seq', '>', $around)->orderBy('seq')->limit($newerCount + 1)->get();
+                $hasMoreAfter = $newer->count() > $newerCount;
+                $newer = $newer->take($newerCount);
+            }
+
+            $messages = $older->concat($newer)->values();
+        } elseif ($after !== null) {
             // gap-fill / catch-up: ascending from the cursor
             $messages = $query->where('seq', '>', $after)
                 ->orderBy('seq')

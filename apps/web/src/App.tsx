@@ -8,6 +8,7 @@ import { ChatView } from './components/ChatView';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { LoginPage } from './pages/LoginPage';
 import { NoWorkspacePage } from './pages/NoWorkspacePage';
+import { SearchPage } from './pages/SearchPage';
 import { useSession } from './state/session';
 
 const queryClient = new QueryClient({
@@ -38,6 +39,7 @@ export default function App() {
               <Route element={<AppShell />}>
                 <Route index element={<Navigate to="/" replace />} />
                 <Route path="/rooms/:roomId" element={<ChatView />} />
+                <Route path="/search" element={<SearchPage />} />
                 <Route path="/ai" element={<AiAssistantView />} />
                 <Route path="/ai/:conversationId" element={<AiAssistantView />} />
               </Route>
