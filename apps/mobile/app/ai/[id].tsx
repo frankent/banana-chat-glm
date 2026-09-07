@@ -3,6 +3,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { useLocalSearchParams } from 'expo-router';
 import { useSession } from '../../src/auth/session';
 import { useAiStore } from '../../src/ai/store';
+import { Markdown } from '../../src/ai/Markdown';
 import { tr } from '../../src/lib/i18n';
 import { theme } from '../../src/lib/theme';
 
@@ -79,8 +80,15 @@ export default function AiConversationScreen() {
           const body = isStreaming ? (liveText ?? m.content ?? '') : m.content ?? '';
           return (
             <View key={m.id} style={[styles.bubble, styles.theirs]}>
-              <Text style={styles.text}>{body}</Text>
-              {isStreaming && <Text style={styles.cursor}>▋</Text>}
+              {isStreaming ? (
+                <Text style={styles.text}>
+                  {body}
+                  <Text style={styles.cursor}>▋</Text>
+                </Text>
+              ) : (
+                // FR-AI-018 — completed answers render GFM (MarkdownFull)
+                <Markdown content={body} />
+              )}
               {m.status === 'failed' && (
                 <View style={styles.failedRow}>
                   <Text style={styles.errorText}>{m.error_code ?? ''}</Text>

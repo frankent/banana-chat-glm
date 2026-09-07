@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Domain\Media\ClamAvScanner;
+use App\Domain\Media\Ffmpeg;
 use App\Enums\AttachmentKind;
 use App\Enums\AttachmentStatus;
 use App\Events\AttachmentProcessed;
@@ -28,9 +29,11 @@ use Throwable;
  * deleted + audit `media.malware_detected`; clamd unreachable → ready with
  * `scan_result=skipped` + alert log (TC-MEDIA-034).
  *
- * Lite build (DEC-034): no ffmpeg on the worker host → video skips poster/
- * duration/dimensions and goes straight to ready; originals are not re-encoded
- * (EXIF survives on the original; thumbnails are EXIF-free by re-encoding).
+ * Video (closes DEC-034): when ffmpeg/ffprobe are available (full-profile
+ * image) the worker probes dimensions/duration and renders a poster frame
+ * through the same GD webp thumb pipeline (EXIF-free). Host dev without
+ * ffmpeg keeps the lite path — ready immediately, original only; originals
+ * are never re-encoded (EXIF survives; every derived thumb is re-encoded).
  */
 class ProcessAttachment implements ShouldQueue
 {
@@ -59,7 +62,10 @@ class ProcessAttachment implements ShouldQueue
             if (in_array($attachment->kind, [AttachmentKind::Image, AttachmentKind::Avatar], true)) {
                 $this->processImage($attachment);
             }
-            // video: no ffmpeg in this build (DEC-034) — original only, ready now.
+
+            if ($attachment->kind === AttachmentKind::Video) {
+                $this->processVideo($attachment);
+            }
 
             if ($attachment->kind === AttachmentKind::File && $this->scanForMalware($attachment) === 'infected') {
                 $this->quarantineInfected($attachment);
@@ -164,35 +170,106 @@ class ProcessAttachment implements ShouldQueue
 
         try {
             $isGif = $attachment->mime_type === 'image/gif'; // keep animation: never resize the original
-
-            $derived = [];
-            foreach ([['thumb_sm', 400, 80], ['thumb_md', 1280, 85]] as [$name, $maxSide, $quality]) {
-                $thumb = $this->resize($source, $info[0] ?? 0, $info[1] ?? 0, $maxSide, $isGif);
-                if ($thumb === null) {
-                    continue; // smaller than target / gif — use first frame unscaled
-                }
-
-                ob_start();
-                imagewebp($thumb, null, $quality);
-                $webp = ob_get_clean();
-                if ($webp === false || $webp === '') {
-                    continue;
-                }
-
-                $key = sprintf('ws/%s/att/%s/%s', $attachment->workspace_id, $attachment->id, $name);
-                $disk->put($key, $webp, 'private');
-                $derived[$name] = $key;
-
-                if ($thumb !== $source) {
-                    imagedestroy($thumb);
-                }
-            }
-
-            if ($derived !== []) {
-                $attachment->forceFill(['derived' => $derived])->save();
-            }
+            $this->storeThumbs($attachment, $disk, $source, $info[0] ?? 0, $info[1] ?? 0, $isGif);
         } finally {
             imagedestroy($source);
+        }
+    }
+
+    /**
+     * DEC-034 (full profile) — probe dimensions/duration + poster frame via
+     * ffmpeg, then reuse the GD webp thumb pipeline. No ffmpeg on the host
+     * (lite) → silent no-op: the video goes ready, original only.
+     */
+    private function processVideo(Attachment $attachment): void
+    {
+        $ffmpeg = Ffmpeg::fromConfig();
+        if (! $ffmpeg->available()) {
+            return;
+        }
+
+        /** @var FilesystemAdapter $disk */
+        $disk = Storage::disk(config('filesystems.default'));
+
+        $local = tempnam(sys_get_temp_dir(), 'video');
+        if ($local === false) {
+            return;
+        }
+
+        try {
+            $stream = $disk->readStream($attachment->storage_key);
+            if (! is_resource($stream)) {
+                return;
+            }
+            $dst = @fopen($local, 'wb');
+            if ($dst === false) {
+                fclose($stream);
+
+                return;
+            }
+            stream_copy_to_stream($stream, $dst);
+            fclose($stream);
+            fclose($dst);
+
+            $meta = $ffmpeg->probe($local);
+            if ($meta !== null) {
+                $attachment->forceFill([
+                    'width' => $meta['width'] > 0 ? $meta['width'] : null,
+                    'height' => $meta['height'] > 0 ? $meta['height'] : null,
+                    'duration_ms' => $meta['duration_ms'] > 0 ? $meta['duration_ms'] : null,
+                ])->save();
+            }
+
+            $posterBytes = $ffmpeg->posterFrame($local);
+            if ($posterBytes === null) {
+                return; // probe may still have filled dimensions — poster is best-effort
+            }
+
+            $source = @imagecreatefromstring($posterBytes);
+            if ($source === false) {
+                return;
+            }
+
+            try {
+                $this->storeThumbs($attachment, $disk, $source, (int) imagesx($source), (int) imagesy($source), false);
+            } finally {
+                imagedestroy($source);
+            }
+        } finally {
+            @unlink($local);
+        }
+    }
+
+    /**
+     * thumb_sm ≤400px q80 / thumb_md ≤1280px q85 webp (FR-MEDIA-002).
+     */
+    private function storeThumbs(Attachment $attachment, FilesystemAdapter $disk, \GdImage $source, int $w, int $h, bool $isGif): void
+    {
+        $derived = [];
+        foreach ([['thumb_sm', 400, 80], ['thumb_md', 1280, 85]] as [$name, $maxSide, $quality]) {
+            $thumb = $this->resize($source, $w, $h, $maxSide, $isGif);
+            if ($thumb === null) {
+                continue; // smaller than target / gif — use first frame unscaled
+            }
+
+            ob_start();
+            imagewebp($thumb, null, $quality);
+            $webp = ob_get_clean();
+            if ($webp === false || $webp === '') {
+                continue;
+            }
+
+            $key = sprintf('ws/%s/att/%s/%s', $attachment->workspace_id, $attachment->id, $name);
+            $disk->put($key, $webp, 'private');
+            $derived[$name] = $key;
+
+            if ($thumb !== $source) {
+                imagedestroy($thumb);
+            }
+        }
+
+        if ($derived !== []) {
+            $attachment->forceFill(['derived' => $derived])->save();
         }
     }
 

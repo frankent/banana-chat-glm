@@ -6,6 +6,8 @@ export { backoffDelay, planSync } from './sync.js';
 export type { SyncPlan } from './sync.js';
 export { createAiStreamStore } from './ai-stream.js';
 export type { AiStreamState, AiStreamStore } from './ai-stream.js';
+export { parseMarkdown, parseInline } from './markdown.js';
+export type { MdBlock, MdInlineNode } from './markdown.js';
 export {
   CACHE_SCHEMA_VERSION,
   MemoryCacheAdapter,

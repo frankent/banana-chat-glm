@@ -2,6 +2,7 @@
 
 use App\Jobs\PurgeDeletedAiConversations;
 use App\Jobs\PurgeExpiredUploads;
+use App\Jobs\RollupAiUsage;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -12,6 +13,9 @@ Artisan::command('inspire', function () {
 
 // §4.3 AI retention — 03:15 daily; also sweeps stale ai:gen:* buffers
 Schedule::job(new PurgeDeletedAiConversations)->dailyAt('03:15')->onOneServer();
+
+// §4.3 — daily usage → monthly rollup + ws token budget check (FR-AI-010)
+Schedule::job(new RollupAiUsage)->dailyAt('00:10')->onOneServer();
 
 // FR-MEDIA-001 — pending uploads expire after 1h (TC-MEDIA-011)
 Schedule::job(new PurgeExpiredUploads)->hourly()->onOneServer();

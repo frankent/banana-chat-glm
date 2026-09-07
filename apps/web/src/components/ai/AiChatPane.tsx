@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAiStore } from '../../state/ai';
 import { AiConsentDialog } from './AiConsentDialog';
 import { AiShareDialog } from './AiShareDialog';
+import { Markdown } from './Markdown';
 
 /**
  * FR-AI-003/004/018 — streaming chat pane. Deltas render through the shared
@@ -12,25 +13,6 @@ import { AiShareDialog } from './AiShareDialog';
  * superseded answers kept behind a "1/2" version switcher;
  * FR-AI-015 — 📤 share an answer into a room.
  */
-
-/** minimal safe rendering: React escapes everything; fences become <pre> */
-function renderAssistant(content: string): Array<{ kind: 'text' | 'code'; value: string }> {
-  const parts: Array<{ kind: 'text' | 'code'; value: string }> = [];
-  const regex = /```(?:\w*\n)?([\s\S]*?)(?:```|$)/g;
-  let at = 0;
-  for (const match of content.matchAll(regex)) {
-    const start = match.index ?? 0;
-    if (start > at) {
-      parts.push({ kind: 'text', value: content.slice(at, start) });
-    }
-    parts.push({ kind: 'code', value: match[1].replace(/\n$/, '') });
-    at = start + match[0].length;
-  }
-  if (at < content.length) {
-    parts.push({ kind: 'text', value: content.slice(at) });
-  }
-  return parts;
-}
 
 export function AiChatPane({ conversationId, slug }: { conversationId: string; slug: string }) {
   const {
@@ -305,17 +287,7 @@ export function AiChatPane({ conversationId, slug }: { conversationId: string; s
             <div key={m.id} className="group mb-2 flex flex-col items-start">
               {switcher}
               <div className={`max-w-[75%] rounded-2xl rounded-bl-sm bg-white px-3 py-2 text-sm text-slate-800 shadow-sm ${retired ? 'opacity-50' : ''}`}>
-                {renderAssistant(m.content ?? '').map((part, i) =>
-                  part.kind === 'code' ? (
-                    <pre key={i} className="my-1 overflow-x-auto rounded bg-slate-800 p-2 text-xs text-slate-100">
-                      <code>{part.value}</code>
-                    </pre>
-                  ) : (
-                    <p key={i} className="whitespace-pre-wrap">
-                      {part.value}
-                    </p>
-                  ),
-                )}
+                <Markdown content={m.content ?? ''} />
               </div>
               {isLastAnswer && liveStream === null ? (
                 <div className="mt-0.5 flex gap-2 text-[10px] text-slate-400 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">

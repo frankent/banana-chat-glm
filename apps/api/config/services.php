@@ -51,4 +51,12 @@ return [
         'enabled' => env('CLAMAV_ENABLED', true),
     ],
 
+    // FR-MEDIA-004 — video poster/metadata (closes DEC-034). The api image
+    // ships ffmpeg; host dev without it keeps the lite path (no poster).
+    'ffmpeg' => [
+        'binary' => env('FFMPEG_PATH', 'ffmpeg'),
+        'probe_binary' => env('FFPROBE_PATH', 'ffprobe'),
+        'timeout' => (int) env('FFMPEG_TIMEOUT', 120),
+    ],
+
 ];

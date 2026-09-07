@@ -1,8 +1,11 @@
 # Banana Chat API — dev/CI image (spec §3.1: PHP 8.3+; 8.4 used locally)
 FROM php:8.4-cli-alpine
 
+# ffmpeg: full-profile video pipeline (FR-MEDIA-004, closes DEC-034) —
+# poster frames + duration/dimensions in ProcessAttachment. Host dev
+# without ffmpeg keeps the lite path (video ready, original only).
 RUN apk add --no-cache \
-        bash curl git unzip \
+        bash curl git unzip ffmpeg \
         postgresql-dev icu-dev oniguruma-dev libzip-dev zlib-dev \
     && apk add --no-cache --virtual .build-deps $PHPIZE_DEPS \
     && docker-php-ext-install -j$(nproc) pdo_pgsql pgsql intl pcntl zip \
