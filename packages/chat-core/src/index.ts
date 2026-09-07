@@ -17,5 +17,6 @@ export { MemoryAiCacheAdapter } from './ai-cache.js';
 export type { AiCacheAdapter, MemoryAiCacheOptions } from './ai-cache.js';
 export { Outbox } from './outbox.js';
 export type { OutboxDraft, OutboxOptions, OutboxSendFn, OutboxSendResult } from './outbox.js';
-export { runCacheAdapterContractTests, runAiCacheAdapterContractTests } from './cache.contract.js';
-export type { CacheContractOptions } from './cache.contract.js';
+// NOTE: the contract test suites (cache.contract.js) are test-only — they
+// import vitest, so they must never enter the production import graph.
+// Consumers run them via the '@banana-chat/chat-core/contract' subpath.

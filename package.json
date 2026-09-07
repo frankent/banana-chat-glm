@@ -13,5 +13,8 @@
     "test": "pnpm -r --if-present test",
     "typecheck": "pnpm -r --if-present typecheck",
     "lint": "pnpm -r --if-present lint"
+  },
+  "devDependencies": {
+    "node-gyp": "^13.0.2"
   }
 }

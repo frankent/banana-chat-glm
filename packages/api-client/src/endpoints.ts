@@ -190,6 +190,44 @@ export class Endpoints {
     });
   }
 
+  // -- notifications (API-070/071/072) --
+
+  /** API-070 — upsert this device's push token (FR-NOTI-001). */
+  updateDevice(
+    deviceId: string,
+    input: {
+      push_token?: string | null;
+      push_provider?: 'fcm' | 'apns' | null;
+      platform: 'ios' | 'android' | 'web';
+      app_version?: string | null;
+      device_name?: string | null;
+      locale?: string | null;
+    },
+  ) {
+    return this.api.request<{ device: { id: string; push_token: string | null } }>(`/api/v1/me/devices/${deviceId}`, {
+      method: 'PUT',
+      body: input,
+    });
+  }
+
+  /** API-071 — per-room notification mode (FR-NOTI-005). */
+  roomNotificationSettings(roomId: string, slug: string, input: { mode: 'all' | 'mentions' | 'none'; muted_until?: string | null }) {
+    return this.api.request<{ settings: unknown }>(`/api/v1/rooms/${roomId}/notifications`, {
+      method: 'PUT',
+      body: input,
+      workspaceSlug: slug,
+    });
+  }
+
+  /** API-072 — user notification settings (DND, sound, preview). */
+  notificationSettings(slug: string, input: { dnd_start?: string | null; dnd_end?: string | null; dnd_days?: number[]; sound?: boolean; preview_in_push?: boolean }) {
+    return this.api.request<{ settings: unknown }>('/api/v1/me/notification-settings', {
+      method: 'PUT',
+      body: input,
+      workspaceSlug: slug,
+    });
+  }
+
   // -- read (API-045/046) --
 
   markRead(roomId: string, slug: string, seq: number) {

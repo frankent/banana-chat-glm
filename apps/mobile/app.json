@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "Banana Chat",
+    "slug": "banana-chat",
+    "version": "0.1.0",
+    "scheme": "orgchat",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "platforms": ["ios", "android"],
+    "ios": {
+      "bundleIdentifier": "chat.banana.app",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "ถ่ายรูปเพื่อส่งในแชท",
+        "NSPhotoLibraryUsageDescription": "เลือกรูปจากคลังเพื่อส่งในแชท",
+        "NSMicrophoneUsageDescription": "ถ่ายวิดีโอเพื่อส่งในแชท"
+      }
+    },
+    "android": {
+      "package": "chat.banana.app",
+      "permissions": ["POST_NOTIFICATIONS", "CAMERA", "READ_MEDIA_IMAGES", "READ_MEDIA_VIDEO"]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "color": "#facc15"
+        }
+      ]
+    ],
+    "extra": {
+      "apiBaseUrl": "http://localhost:8000"
+    }
+  }
+}

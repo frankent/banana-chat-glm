@@ -18,6 +18,8 @@ export class ApiClient {
     private readonly baseUrl: string,
     private readonly tokens: TokenManager,
     private readonly fetchImpl: typeof fetch = fetch.bind(globalThis),
+    /** extra headers on every request — e.g. mobile X-App-Version (BE-025) */
+    private readonly extraHeaders: () => Record<string, string> = () => ({}),
   ) {}
 
   async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -46,6 +48,9 @@ export class ApiClient {
     }
     if (options.body !== undefined) {
       headers['Content-Type'] = 'application/json';
+    }
+    for (const [key, value] of Object.entries(this.extraHeaders())) {
+      headers[key] = value;
     }
 
     let response: Response;
