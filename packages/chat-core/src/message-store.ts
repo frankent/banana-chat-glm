@@ -13,6 +13,12 @@ export interface MessageStoreState {
   needsFill: GapFillRequest | null;
   /** a fill was requested but nothing arrived within the timeout */
   fillTimedOut: boolean;
+  /**
+   * TC-CORE-023 — rows inserted above the previous head by the last
+   * add()/fillDelivered() (cache hydrate → server sync). The UI anchors
+   * scroll on this count so prepending doesn't jump the viewport.
+   */
+  prependCount: number;
 }
 
 /**
@@ -29,7 +35,7 @@ export interface MessageStoreState {
 export class MessageStore {
   private byId = new Map<string, Message>();
   private seeded = false;
-  private state: MessageStoreState = { messages: [], needsFill: null, fillTimedOut: false };
+  private state: MessageStoreState = { messages: [], needsFill: null, fillTimedOut: false, prependCount: 0 };
   private fillTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
@@ -59,16 +65,23 @@ export class MessageStore {
     }
     this.seeded = true;
     this.clearTimer();
-    this.state = { messages: [...this.byId.values()].sort((a, b) => a.seq - b.seq), needsFill: null, fillTimedOut: false };
+    this.state = {
+      messages: [...this.byId.values()].sort((a, b) => a.seq - b.seq),
+      needsFill: null,
+      fillTimedOut: false,
+      prependCount: 0,
+    };
     this.emit(this.state);
     return this.state;
   }
 
   add(incoming: Message | Message[]): MessageStoreState {
-    for (const message of Array.isArray(incoming) ? incoming : [incoming]) {
-      this.insert(message);
-    }
-    this.recompute();
+    const prepended = this.countPrepended(() => {
+      for (const message of Array.isArray(incoming) ? incoming : [incoming]) {
+        this.insert(message);
+      }
+    });
+    this.recompute(prepended);
     return this.state;
   }
 
@@ -84,10 +97,12 @@ export class MessageStore {
   /** A gap fill arrived — merge, clear flags. */
   fillDelivered(messages: Message[]): void {
     this.clearTimer();
-    for (const message of messages) {
-      this.insert(message);
-    }
-    this.recompute();
+    const prepended = this.countPrepended(() => {
+      for (const message of messages) {
+        this.insert(message);
+      }
+    });
+    this.recompute(prepended);
   }
 
   /**
@@ -122,7 +137,20 @@ export class MessageStore {
     this.byId.set(message.id, message);
   }
 
-  private recompute(): void {
+  /**
+   * TC-CORE-023 — rows that landed above the current head. Cache hydrate
+   * seeds the tail; the server sync then prepends older pages — the UI uses
+   * the delta to keep the viewport anchored.
+   */
+  private countPrepended(merge: () => void): number {
+    const headSeq = Math.max(0, ...[...this.byId.values()].map((m) => m.seq));
+    const before = [...this.byId.values()].filter((m) => m.seq < headSeq).length;
+    merge();
+    const after = [...this.byId.values()].filter((m) => m.seq < headSeq).length;
+    return Math.max(0, after - before);
+  }
+
+  private recompute(prepended = 0): void {
     const sorted = [...this.byId.values()].sort((a, b) => a.seq - b.seq);
 
     if (this.seeded) {
@@ -137,7 +165,7 @@ export class MessageStore {
 
       if (cut < sorted.length) {
         const gap = { roomId: this.roomId, afterSeq: sorted[cut - 1]!.seq, beforeSeq: sorted[cut]!.seq };
-        this.state = { messages: sorted.slice(0, cut), needsFill: gap, fillTimedOut: false };
+        this.state = { messages: sorted.slice(0, cut), needsFill: gap, fillTimedOut: false, prependCount: prepended };
         this.armTimer();
         this.emit(this.state);
         return;
@@ -145,7 +173,7 @@ export class MessageStore {
     }
 
     this.clearTimer();
-    this.state = { messages: sorted, needsFill: null, fillTimedOut: false };
+    this.state = { messages: sorted, needsFill: null, fillTimedOut: false, prependCount: prepended };
     this.emit(this.state);
   }
 
@@ -154,7 +182,7 @@ export class MessageStore {
     this.fillTimer = setTimeout(() => {
       this.clearTimer();
       const all = [...this.byId.values()].sort((a, b) => a.seq - b.seq);
-      this.state = { messages: all, needsFill: null, fillTimedOut: true };
+      this.state = { messages: all, needsFill: null, fillTimedOut: true, prependCount: 0 };
       this.emit(this.state);
     }, this.timeoutMs);
   }

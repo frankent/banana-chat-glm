@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { UserStub, WorkspaceSummary } from '@banana-chat/shared';
 import { endpoints, tokenManager } from '../lib/api';
+import { clearAllCaches } from '../lib/cache';
 
 export interface Me extends UserStub {
   locale: string;
@@ -64,6 +65,8 @@ export const useSession = create<SessionState>((set, get) => ({
       // already unauthenticated — fall through to local clear
     }
     tokenManager.clear();
+    // TC-CORE-021 — wipe rooms/messages/AI cache before the next user logs in
+    void clearAllCaches();
     set({ status: 'anonymous', me: null, workspaces: [], currentWorkspace: null });
   },
 

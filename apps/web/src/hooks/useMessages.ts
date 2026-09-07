@@ -2,21 +2,31 @@ import { useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { Attachment, Message } from '@banana-chat/shared';
 import { endpoints } from '../lib/api';
+import { roomCache } from '../lib/cache';
 import { roomStore } from '../lib/room-stores';
+import { useSession } from '../state/session';
 
 /**
  * TASK-WEB-005 — initial page seeds the store; older pages prepend via add().
  * The store is the only source of truth for rendering (useMessageStore).
+ *
+ * TASK-WEB-016 — the newest 50 rows/room persist to IndexedDB and hydrate
+ * the store before the network answers (prependCount keeps scroll anchored).
  */
 export function useMessagePage(roomId: string | undefined, slug: string | undefined) {
   const queryClient = useQueryClient();
   const seededRoom = useRef<string | undefined>(undefined);
+  const me = useSession((s) => s.me);
+  const workspace = useSession((s) => s.currentWorkspace);
 
   const query = useQuery({
     queryKey: ['messages', roomId, 'latest'],
     queryFn: async () => {
       const page = await endpoints.messages(roomId!, slug!);
       roomStore(roomId!).replace(page.messages);
+      if (me !== null && workspace !== null) {
+        void roomCache({ userId: me.id, workspaceId: workspace.workspace.id }).saveMessages(roomId!, page.messages);
+      }
       return page;
     },
     enabled: roomId !== undefined && slug !== undefined,
@@ -32,6 +42,24 @@ export function useMessagePage(roomId: string | undefined, slug: string | undefi
     }
   }, [roomId, query.data]);
 
+  // hydrate from IndexedDB while the request is in flight (WEB-016)
+  useEffect(() => {
+    if (roomId === undefined || me === null || workspace === null || seededRoom.current === roomId) {
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const cached = await roomCache({ userId: me.id, workspaceId: workspace.workspace.id }).loadMessages(roomId);
+      if (!cancelled && cached !== null && cached.length > 0 && seededRoom.current !== roomId) {
+        roomStore(roomId).replace(cached);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomId, me?.id, workspace?.workspace.id]);
+
   const loadOlder = async (): Promise<boolean> => {
     if (roomId === undefined || slug === undefined) {
       return false;
@@ -43,6 +71,10 @@ export function useMessagePage(roomId: string | undefined, slug: string | undefi
     }
     const page = await endpoints.messages(roomId, slug, { before_seq: oldest, limit: 50 });
     store.add(page.messages);
+    if (me !== null && workspace !== null) {
+      const merged = store.getState().messages;
+      void roomCache({ userId: me.id, workspaceId: workspace.workspace.id }).saveMessages(roomId, merged);
+    }
     return page.has_more_before;
   };
 

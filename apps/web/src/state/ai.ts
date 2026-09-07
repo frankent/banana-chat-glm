@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import type { AiConversationSummary, AiMessage, AiStatus, AiStreamEvent } from '@banana-chat/shared';
-import { createAiStreamStore } from '@banana-chat/chat-core';
+import { createAiStreamStore, type AiCacheAdapter } from '@banana-chat/chat-core';
 import { endpoints } from '../lib/api';
+import { aiCache } from '../lib/cache';
+import { useSession } from './session';
 
 /**
  * FR-AI-018 — client AI state. The per-message delta machine lives in
@@ -10,6 +12,12 @@ import { endpoints } from '../lib/api';
  */
 
 const streamStore = createAiStreamStore();
+
+/** TASK-CORE-010 wiring — AI cache follows the logged-in user, not the ws. */
+function cacheFor(): AiCacheAdapter | null {
+  const me = useSession.getState().me;
+  return me === null ? null : aiCache(me.id);
+}
 
 function uuid(): string {
   return crypto.randomUUID();
@@ -99,9 +107,18 @@ export const useAiStore = create<AiState>((set, get) => ({
 
   async loadConversations(slug) {
     set({ loading: true });
+    // hydrate from cache for an instant list (CORE-010), then refresh
+    const cache = cacheFor();
+    if (cache !== null && get().conversations.length === 0) {
+      const cached = await cache.loadConversations();
+      if (cached !== null && get().conversations.length === 0) {
+        set({ conversations: cached });
+      }
+    }
     try {
       const res = await endpoints.aiConversations(slug);
       set({ conversations: res.conversations, loading: false });
+      void cache?.saveConversations(res.conversations);
     } catch {
       set({ loading: false });
     }
@@ -110,11 +127,17 @@ export const useAiStore = create<AiState>((set, get) => ({
   async open(conversationId, slug) {
     set({ activeId: conversationId });
     if (get().messages[conversationId] === undefined) {
+      const cache = cacheFor();
+      const cached = await cache?.loadMessages(conversationId);
+      if (cached !== null && cached !== undefined && get().messages[conversationId] === undefined) {
+        set((st) => ({ messages: { ...st.messages, [conversationId]: cached } }));
+      }
       const page = await endpoints.aiMessages(conversationId, slug, { limit: 50 });
       set((st) => ({
         messages: { ...st.messages, [conversationId]: page.messages },
         hasMoreBefore: { ...st.hasMoreBefore, [conversationId]: page.has_more_before },
       }));
+      void cache?.saveMessages(conversationId, page.messages);
     }
     // focus ping → suppress ai_completed push while the tab is open (API-118)
     void endpoints.aiFocus(conversationId, slug, true).catch(() => undefined);
@@ -188,6 +211,7 @@ export const useAiStore = create<AiState>((set, get) => ({
         ...(res.assistant_message !== null ? [res.assistant_message] : []),
       ];
       set((s2) => ({ messages: { ...s2.messages, [conversationId]: merged } }));
+      void cacheFor()?.saveMessages(conversationId, merged);
       if (res.assistant_message !== null) {
         streamStore.seed(res.assistant_message);
       }

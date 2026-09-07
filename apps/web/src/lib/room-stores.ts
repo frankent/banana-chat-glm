@@ -38,7 +38,7 @@ export function disposeRoom(roomId: string): void {
   }
 }
 
-const EMPTY_STATE: MessageStoreState = { messages: [], needsFill: null, fillTimedOut: false };
+const EMPTY_STATE: MessageStoreState = { messages: [], needsFill: null, fillTimedOut: false, prependCount: 0 };
 
 /** React binding — one store per room, re-render on every emit. */
 export function useMessageStore(roomId: string | undefined): MessageStoreState {
