@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Domain\Ai\AiBroadcast;
+use App\Domain\Ai\AiCircuitBreaker;
 use App\Domain\Ai\AiProviderException;
 use App\Domain\Ai\ContextBuilder;
 use App\Domain\Ai\OpenAiCompatibleProvider;
@@ -60,6 +61,7 @@ class GenerateAiReply implements ShouldQueue
         try {
             $client = OpenAiCompatibleProvider::make($providerRow);
             $this->generate($message, $conversation, $providerRow, $client, $builder, $estimator, $settings);
+            AiCircuitBreaker::make()->recordSuccess(); // NFR-OPS-011
         } catch (AiProviderException $e) {
             if ($e->errorCode === 'AI_CONTEXT_OVERFLOW') {
                 // FR-AI-005: synchronous compaction, one retry, then give up
@@ -69,6 +71,7 @@ class GenerateAiReply implements ShouldQueue
                 try {
                     $client = OpenAiCompatibleProvider::make($providerRow);
                     $this->generate($message, $conversation, $providerRow, $client, $builder, $estimator, $settings);
+                    AiCircuitBreaker::make()->recordSuccess();
 
                     return;
                 } catch (AiProviderException $retry) {
@@ -76,9 +79,11 @@ class GenerateAiReply implements ShouldQueue
                 }
             }
 
+            AiCircuitBreaker::make()->recordFailure($e->errorCode); // no-op for non-provider codes
             $this->fail($message, $e->errorCode, $e->providerDetail ?? $e->getMessage());
         } catch (Throwable $e) {
             report($e);
+            AiCircuitBreaker::make()->recordFailure('AI_PROVIDER_ERROR');
             $this->fail($message, 'AI_PROVIDER_ERROR', $e->getMessage());
         }
     }

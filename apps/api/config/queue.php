@@ -68,7 +68,9 @@ return [
             'driver' => 'redis',
             'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),
             'queue' => env('REDIS_QUEUE', 'default'),
-            'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 90),
+            // TASK-INF-014 — must exceed the ai supervisor's 660s timeout,
+            // else long generations get retried while still running
+            'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 730),
             'block_for' => null,
             'after_commit' => false,
         ],

@@ -78,8 +78,14 @@ dev-api: ## Run API dev server on :8000 (host)
 dev-reverb: ## Run Reverb on host :8088 (alternative to the container)
 	$(PHP) artisan reverb:start --host=127.0.0.1 --port=8088
 
-dev-worker: ## Run queue worker on host (broadcasts are queued; realtime needs this)
-	$(PHP) artisan queue:work --queue=default --sleep=0.1 --tries=3
+dev-worker: ## Run Horizon on host (supervisors: default/media/push/retention/ai — TASK-INF-014)
+	$(PHP) artisan horizon
+
+dev-worker-plain: ## Plain queue worker (no Horizon) — default queues only
+	$(PHP) artisan queue:work --queue=default,media,push,retention --sleep=0.1 --tries=3
+
+dev-mock-ai: ## Run mock OpenAI-compatible provider on :8787 (no docker; needs node)
+	cd infra/mock-ai && node server.js
 
 test: db-test ## Run API test suite (Pest, Postgres)
 	cd $(API_DIR) && ./vendor/bin/pest
@@ -127,4 +133,4 @@ typecheck: ## TypeScript check across packages
 ci-local: test test-web typecheck build-web ## Local CI approximation
 
 .PHONY: help up up-core up-full down down-full ps logs restart-reverb db-test use-cloud use-local which-env migrate fresh seed tinker \
-        dev-api dev-reverb dev-worker test test-filter pint stan install dev-web build-web e2e test-web typecheck ci-local
+        dev-api dev-reverb dev-worker dev-worker-plain dev-mock-ai test test-filter pint stan install dev-web build-web e2e test-web typecheck ci-local

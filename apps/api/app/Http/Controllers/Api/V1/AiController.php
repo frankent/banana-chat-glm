@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Ai\AiBroadcast;
+use App\Domain\Ai\AiCircuitBreaker;
 use App\Domain\Ai\AiGate;
 use App\Domain\Ai\ContextBuilder;
 use App\Domain\Ai\TokenEstimator;
@@ -290,6 +291,12 @@ class AiController extends Controller
             $resets = now($user->timezone ?? 'UTC')->endOfDay()->utc();
 
             return $this->error(429, 'AI_QUOTA_EXCEEDED', ['resets_at' => $resets->toIso8601String()]);
+        }
+
+        // NFR-OPS-011: circuit open → refuse immediately, don't queue doomed work
+        $breaker = AiCircuitBreaker::make();
+        if ($breaker->isOpen()) {
+            return $this->error(503, 'AI_PROVIDER_ERROR', ['retry_after_seconds' => max(1, $breaker->openRemaining())]);
         }
 
         // FR-AI-003: no in-flight generation in this conversation…
