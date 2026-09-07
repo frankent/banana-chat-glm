@@ -2,16 +2,19 @@
 
 namespace App\Jobs;
 
+use App\Domain\Media\ClamAvScanner;
 use App\Enums\AttachmentKind;
 use App\Enums\AttachmentStatus;
 use App\Events\AttachmentProcessed;
 use App\Models\Attachment;
+use App\Services\AuditLogger;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Throwable;
 
@@ -20,6 +23,10 @@ use Throwable;
  *
  * Images: dimensions + webp thumbnails (thumb_sm ≤400px q80, thumb_md ≤1280px
  * q85, §FR-MEDIA-002). GIF keeps its original (thumb = first frame).
+ *
+ * kind=file gets a ClamAV scan (FR-MEDIA-006): infected → failed + object
+ * deleted + audit `media.malware_detected`; clamd unreachable → ready with
+ * `scan_result=skipped` + alert log (TC-MEDIA-034).
  *
  * Lite build (DEC-034): no ffmpeg on the worker host → video skips poster/
  * duration/dimensions and goes straight to ready; originals are not re-encoded
@@ -53,7 +60,12 @@ class ProcessAttachment implements ShouldQueue
                 $this->processImage($attachment);
             }
             // video: no ffmpeg in this build (DEC-034) — original only, ready now.
-            // file: nothing to derive — ready now.
+
+            if ($attachment->kind === AttachmentKind::File && $this->scanForMalware($attachment) === 'infected') {
+                $this->quarantineInfected($attachment);
+
+                return;
+            }
 
             $attachment->forceFill(['status' => AttachmentStatus::Ready])->save();
         } catch (Throwable $e) {
@@ -66,6 +78,60 @@ class ProcessAttachment implements ShouldQueue
             return;
         }
 
+        broadcast(new AttachmentProcessed($attachment->refresh()));
+    }
+
+    /**
+     * FR-MEDIA-006 — returns the scan outcome and records it on the row.
+     * Never throws on scanner trouble: `skipped` keeps the upload usable.
+     */
+    private function scanForMalware(Attachment $attachment): string
+    {
+        /** @var FilesystemAdapter $disk */
+        $disk = Storage::disk(config('filesystems.default'));
+        $stream = $disk->readStream($attachment->storage_key);
+
+        try {
+            $result = ClamAvScanner::fromConfig()->scanStream($stream);
+        } finally {
+            if (is_resource($stream)) {
+                fclose($stream);
+            }
+        }
+
+        $outcome = $result === null ? 'skipped' : ($result ? 'clean' : 'infected');
+
+        if ($outcome === 'skipped') {
+            Log::warning('media.clamav_scan_skipped', [ // TC-MEDIA-034 alert
+                'attachment_id' => $attachment->id,
+                'workspace_id' => $attachment->workspace_id,
+            ]);
+        }
+
+        $attachment->forceFill(['scan_result' => $outcome])->save();
+
+        return $outcome;
+    }
+
+    private function quarantineInfected(Attachment $attachment): void
+    {
+        Storage::disk(config('filesystems.default'))->delete($attachment->storage_key);
+
+        $attachment->forceFill(['status' => AttachmentStatus::Failed])->save();
+
+        app(AuditLogger::class)->system(
+            'media.malware_detected',
+            $attachment->workspace_id,
+            'attachment',
+            $attachment->id,
+            [
+                'filename' => $attachment->original_name,
+                'uploader_id' => $attachment->uploader_id,
+                'scan_result' => $attachment->scan_result,
+            ],
+        );
+
+        // TC-MEDIA-033 — uploader gets the attachment.failed event (EVT-030)
         broadcast(new AttachmentProcessed($attachment->refresh()));
     }
 

@@ -25,6 +25,11 @@ abstract class TestCase extends BaseTestCase
         // in CI or locally. Broadcast/pusher traffic bypasses the Http
         // factory so realtime tests are unaffected.
         Http::preventStrayRequests();
+
+        // FR-MEDIA-006 — point clamd at a refused port so file-kind uploads
+        // in unrelated tests skip the scan instantly instead of waiting out
+        // DNS for the "clamav" hostname. VirusScanTest overrides per-test.
+        config(['services.clamav.host' => '127.0.0.1', 'services.clamav.port' => 1]);
     }
 
     /**

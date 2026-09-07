@@ -42,4 +42,13 @@ return [
         'server_key' => env('FCM_SERVER_KEY', ''),
     ],
 
+    // FR-MEDIA-006 — clamd (TASK-INF-010 container, or 127.0.0.1 on host dev).
+    // Unreachable daemon ⇒ scans are skipped with an alert, never a failed upload.
+    'clamav' => [
+        'host' => env('CLAMAV_HOST', 'clamav'),
+        'port' => (int) env('CLAMAV_PORT', 3310),
+        'timeout' => (int) env('CLAMAV_TIMEOUT', 30),
+        'enabled' => env('CLAMAV_ENABLED', true),
+    ],
+
 ];

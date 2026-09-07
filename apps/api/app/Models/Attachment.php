@@ -29,6 +29,7 @@ class Attachment extends Model
         'size_bytes',
         'storage_key',
         'checksum_sha256',
+        'scan_result',
         'width',
         'height',
         'duration_ms',

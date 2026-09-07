@@ -128,6 +128,7 @@ services:
       BROADCAST_CONNECTION: reverb
       REVERB_HOST: reverb
       REVERB_PORT: 8080
+      CLAMAV_HOST: clamav
     volumes:
       - ../apps/api:/app
       - api-vendor:/app/vendor
@@ -162,6 +163,7 @@ services:
       REVERB_HOST: reverb
       REVERB_PORT: 8080
       HORIZON_AI_PROCESSES: ${HORIZON_AI_PROCESSES:-2}
+      CLAMAV_HOST: clamav
     volumes:
       - ../apps/api:/app
       - worker-vendor:/app/vendor
@@ -185,6 +187,21 @@ services:
       MOCK_DELTA_MS: ${MOCK_DELTA_MS:-25}
       MOCK_STREAM_TOKENS: ${MOCK_STREAM_TOKENS:-40}
 
+  # TASK-INF-010 — clamd for FR-MEDIA-006 virus scan (kind=file uploads).
+  # First start downloads signature DBs (~2 min); healthcheck flips green after.
+  clamav:
+    image: clamav/clamav:1.4
+    ports:
+      - "127.0.0.1:3310:3310"
+    volumes:
+      - clamav:/var/lib/clamav
+    healthcheck:
+      test: ["CMD-SHELL", "clamdcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 180s
+
   scheduler:
     profiles: ["full"]
     build:
@@ -202,6 +219,7 @@ services:
       REDIS_PORT: 6379
       CACHE_STORE: redis
       QUEUE_CONNECTION: redis
+      CLAMAV_HOST: clamav
     volumes:
       - ../apps/api:/app
       - scheduler-vendor:/app/vendor
@@ -233,6 +251,7 @@ volumes:
   pgdata:
   redisdata:
   miniodata:
+  clamav:
   reverb-vendor:
   api-vendor:
   worker-vendor:
