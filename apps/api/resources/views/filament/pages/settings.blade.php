@@ -1,7 +1,11 @@
 <x-filament-panels::page>
-    {{ $this->form }}
+    <form wire:submit="save">
+        {{ $this->form }}
 
-    <div class="mt-6">
-        {{ $this->saveAction }}
-    </div>
+        <div class="mt-6">
+            <x-filament::button type="submit">
+                บันทึกการตั้งค่า
+            </x-filament::button>
+        </div>
+    </form>
 </x-filament-panels::page>

@@ -173,3 +173,13 @@ test('settings.updated audit row carries changed keys', function () {
         ->and($settings->get('message.max_length'))->toBe(3500)
         ->and($before)->toBe(4000);
 });
+
+test('FR-ADM-009 settings page renders for a system admin', function () {
+    // regression: the blade referenced $saveAction (plain Page has none) and 500'd
+    Livewire::test(Login::class)
+        ->fillForm(['login' => 'sysadmin', 'password' => 'Password123!'])
+        ->call('authenticate')
+        ->assertHasNoErrors();
+
+    $this->get('/admin/settings')->assertOk();
+});
