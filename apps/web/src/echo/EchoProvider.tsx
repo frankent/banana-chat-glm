@@ -96,11 +96,20 @@ export function EchoProvider({ children }: { children: ReactNode }) {
     const channel = instance.private(`user.${me.id}`);
 
     channel.listen('.session.revoked', (envelope: EventEnvelope<{ session_id: string; reason: string }>) => {
-      if (envelope.data?.reason !== 'logout') {
-        // another device's logout must not kill this one; anything else does
-        window.alert('Your session was revoked. Please sign in again.');
-        void logout();
+      if (envelope.data?.reason === 'logout') {
+        // another device's logout must not kill this one
+        return;
       }
+      // EVT-025/TC-AUTH-008 — the event targets ONE session (e.g. LRU cap
+      // eviction). This page may be a different, still-alive session of the
+      // same user: verify with the API before killing the session locally.
+      void endpoints
+        .me()
+        .then(() => undefined)
+        .catch(() => {
+          window.alert('Your session was revoked. Please sign in again.');
+          void logout();
+        });
     });
 
     // EVT-050..056 — AI assistant events (stream deltas, conversation churn)

@@ -5,6 +5,7 @@ import { endpoints } from '../../lib/api';
 import { useSession } from '../../state/session';
 import { useAiStore } from '../../state/ai';
 import { AiChatPane } from './AiChatPane';
+import { AiConsentDialog } from './AiConsentDialog';
 import { AiMemoriesPanel } from './AiMemoriesPanel';
 
 /**
@@ -26,6 +27,9 @@ export function AiAssistantView() {
     newConversation,
     conversations,
     loading,
+    consentOpen,
+    setConsentOpen,
+    giveConsent,
   } = useAiStore();
   const [showMemories, setShowMemories] = useState(false);
   const [search, setSearch] = useState('');
@@ -93,7 +97,16 @@ export function AiAssistantView() {
           <div className="flex items-center justify-between">
             <span className="text-sm font-bold text-slate-700">✨ AI Assistant</span>
             <button
-              onClick={() => void newConversation(slug)}
+              // FR-AI-007 — first conversation on a fresh account 403s with
+              // AI_CONSENT_REQUIRED; surface the consent modal instead of
+              // silently doing nothing (no chat pane exists to show it).
+              onClick={() =>
+                void newConversation(slug)
+                  .then((id) => {
+                    if (id !== null) void navigate(`/ai/${id}`);
+                  })
+                  .catch(() => setConsentOpen(true))
+              }
               className="rounded bg-amber-400 px-2 py-1 text-xs font-semibold text-slate-900 hover:bg-amber-300"
             >
               + แชทใหม่
@@ -170,8 +183,20 @@ export function AiAssistantView() {
         ) : conversationId !== undefined ? (
           <AiChatPane conversationId={conversationId} slug={slug} />
         ) : (
-          <div className="flex h-full items-center justify-center text-sm text-slate-400">
+          <div className="relative flex h-full items-center justify-center text-sm text-slate-400">
             เลือกบทสนทนา หรือเริ่มแชทใหม่
+            {consentOpen ? (
+              <AiConsentDialog
+                onAccept={() =>
+                  giveConsent(slug)
+                    .then(() => newConversation(slug))
+                    .then((id) => {
+                      if (id !== null) void navigate(`/ai/${id}`);
+                    })
+                    .catch(() => undefined)
+                }
+              />
+            ) : null}
           </div>
         )}
       </div>
