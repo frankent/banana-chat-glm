@@ -9,6 +9,12 @@ RUN apk add --no-cache \
     && pecl install redis && docker-php-ext-enable redis \
     && apk del .build-deps
 
+# Expose real process env to $_ENV/$_SERVER (default GPCS hides it) so the
+# compose `environment:` block wins over any bind-mounted .env inside
+# `php artisan serve` / reverb workers. Without this, containerized services
+# silently fall back to the host .env (e.g. cloud DB) for HTTP requests.
+RUN echo 'variables_order = "EGPCS"' > /usr/local/etc/php/conf.d/00-banana-vars.ini
+
 WORKDIR /app
 
 # Bake composer deps first for layer caching; vendor is overlaid by a named

@@ -89,12 +89,52 @@ services:
       DB_DATABASE: orgchat
       DB_USERNAME: orgchat
       DB_PASSWORD: orgchat
+      DB_SSLMODE: disable   # container .env may point at Neon (SSL) — docker postgres has none
       REDIS_HOST: redis
       REDIS_PORT: 6379
       CACHE_STORE: redis
       QUEUE_CONNECTION: redis
       SESSION_DRIVER: redis
       BROADCAST_CONNECTION: reverb
+      # TASK-INF-013 — fan-out via Redis pub/sub so any instance's events
+      # reach sockets connected to every instance (BE-026 horizontal scaling)
+      REVERB_SCALING_ENABLED: "true"
+      REVERB_SCALING_CHANNEL: reverb-scale
+    volumes:
+      - ../apps/api:/app
+      - reverb-vendor:/app/vendor
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # TASK-INF-013 — second Reverb node (make up-scale); identical config, own
+  # port. Events published to either instance arrive on both via Redis.
+  reverb-2:
+    profiles: ["scale"]
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080
+    ports:
+      - "8089:8080"
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: orgchat
+      DB_USERNAME: orgchat
+      DB_PASSWORD: orgchat
+      DB_SSLMODE: disable   # container .env may point at Neon (SSL) — docker postgres has none
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
+      SESSION_DRIVER: redis
+      BROADCAST_CONNECTION: reverb
+      REVERB_SCALING_ENABLED: "true"
+      REVERB_SCALING_CHANNEL: reverb-scale
     volumes:
       - ../apps/api:/app
       - reverb-vendor:/app/vendor
@@ -110,16 +150,22 @@ services:
     build:
       context: ../apps/api
       dockerfile: Dockerfile
-    command: php artisan serve --host=0.0.0.0 --port=8000
+    # Direct php -S (NOT `artisan serve`): ServeCommand strips every env var
+    # outside its passthrough whitelist, so compose environment (DB_HOST etc.)
+    # never reached HTTP workers — they silently used the bind-mounted .env.
+    # The framework router script still serves public/ static files.
+    command: sh -c "cd public && exec php -S 0.0.0.0:8000 /app/vendor/laravel/framework/src/Illuminate/Foundation/resources/server.php"
     ports:
       - "8000:8000"
     environment:
+      PHP_CLI_SERVER_WORKERS: "8"
       DB_CONNECTION: pgsql
       DB_HOST: postgres
       DB_PORT: 5432
       DB_DATABASE: orgchat
       DB_USERNAME: orgchat
       DB_PASSWORD: orgchat
+      DB_SSLMODE: disable   # container .env may point at Neon (SSL) — docker postgres has none
       REDIS_HOST: redis
       REDIS_PORT: 6379
       CACHE_STORE: redis
@@ -155,6 +201,7 @@ services:
       DB_DATABASE: orgchat
       DB_USERNAME: orgchat
       DB_PASSWORD: orgchat
+      DB_SSLMODE: disable   # container .env may point at Neon (SSL) — docker postgres has none
       REDIS_HOST: redis
       REDIS_PORT: 6379
       CACHE_STORE: redis
@@ -215,6 +262,7 @@ services:
       DB_DATABASE: orgchat
       DB_USERNAME: orgchat
       DB_PASSWORD: orgchat
+      DB_SSLMODE: disable   # container .env may point at Neon (SSL) — docker postgres has none
       REDIS_HOST: redis
       REDIS_PORT: 6379
       CACHE_STORE: redis

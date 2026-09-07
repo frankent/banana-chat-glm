@@ -41,10 +41,19 @@ class HealthController extends Controller
         }
 
         try {
-            $reverbHost = config('reverb.host') ?: '127.0.0.1';
-            $reverbPort = (int) (config('reverb.port') ?: 8080);
+            // probe the reverb the broadcaster is actually configured for
+            // (REVERB_HOST/PORT — reverb.php exposes them as hostname/port
+            // under servers.reverb, not as top-level reverb.host keys)
+            $reverbHost = config('reverb.servers.reverb.hostname')
+                ?: config('broadcasting.connections.reverb.options.host')
+                ?: '127.0.0.1';
+            $reverbPort = (int) (
+                config('reverb.servers.reverb.port')
+                ?: config('broadcasting.connections.reverb.options.port')
+                ?: 8080
+            );
             $socket = @fsockopen($reverbHost, $reverbPort, $errorCode, $errorText, 2);
-            $checks['reverb'] = $socket !== false ? 'ok' : "error: {$errorText} ({$errorCode})";
+            $checks['reverb'] = $socket !== false ? 'ok' : "error: {$errorText} ({$errorCode}) [{$reverbHost}:{$reverbPort}]";
             if ($socket !== false) {
                 fclose($socket);
             }

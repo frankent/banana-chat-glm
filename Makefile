@@ -22,11 +22,15 @@ up-core: ## Start only stateful services (no reverb container; run dev-reverb on
 up-full: ## Start everything containerized (api worker scheduler web + services)
 	$(COMPOSE) --profile full up -d --build
 
+up-scale: ## Core services + TWO Reverb nodes (INF-013 Redis scaling demo)
+	$(COMPOSE) up -d --build
+	$(COMPOSE) --profile scale up -d --build reverb-2
+
 down: ## Stop dev services
 	$(COMPOSE) down
 
-down-full: ## Stop everything incl. full profile
-	$(COMPOSE) --profile full down
+down-full: ## Stop everything incl. full/scale profiles
+	$(COMPOSE) --profile full --profile scale down
 
 ps: ## Service status
 	$(COMPOSE) ps
@@ -128,9 +132,17 @@ test-web: ## Run vitest across packages
 typecheck: ## TypeScript check across packages
 	pnpm -r --if-present typecheck
 
+# ---- load testing (TASK-INF-012, NFR-PERF-001/002) ----
+
+load-test: ## k6 load suite (needs api on :8000 + seed data): make load-test [DURATION=2m] [VUS=8]
+	docker run --rm -i \
+		-e TARGET=$${TARGET:-http://host.docker.internal:8000} \
+		-e DURATION=$(DURATION) -e VUS=$(VUS) -e RACE_VUS=$(RACE_VUS) \
+		grafana/k6:1.4.0 run - < infra/k6/chat-load.js
+
 # ---- combined ----
 
 ci-local: test test-web typecheck build-web ## Local CI approximation
 
-.PHONY: help up up-core up-full down down-full ps logs restart-reverb db-test use-cloud use-local which-env migrate fresh seed tinker \
-        dev-api dev-reverb dev-worker dev-worker-plain dev-mock-ai test test-filter pint stan install dev-web build-web e2e test-web typecheck ci-local
+.PHONY: help up up-core up-full up-scale down down-full ps logs restart-reverb db-test use-cloud use-local which-env migrate fresh seed tinker \
+        dev-api dev-reverb dev-worker dev-worker-plain dev-mock-ai test test-filter pint stan install dev-web build-web e2e test-web typecheck load-test ci-local
