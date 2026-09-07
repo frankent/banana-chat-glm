@@ -1,0 +1,5 @@
+data: {"choices":[{"index":0,"delta":{"role":"assistant","content":"บางส่วน"}}]}
+
+data: {"error":{"message":"The server is overloaded","type":"server_error","code":"overloaded_error"}}
+
+data: [DONE]

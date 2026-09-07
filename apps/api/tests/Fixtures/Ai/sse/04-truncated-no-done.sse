@@ -1,0 +1,3 @@
+data: {"choices":[{"index":0,"delta":{"role":"assistant","content":"กำลัง"}}]}
+
+data: {"choices":[{"index":0,"delta":{"content":"พิมพ์"}}]}

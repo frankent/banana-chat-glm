@@ -4,6 +4,7 @@ namespace Tests;
 
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\RateLimiter;
 
 abstract class TestCase extends BaseTestCase
@@ -18,6 +19,12 @@ abstract class TestCase extends BaseTestCase
             RateLimiter::for('login', fn () => Limit::none());
             RateLimiter::for('refresh', fn () => Limit::none());
         }
+
+        // TASK-QA-008 — any test that lets a real HTTP call slip through
+        // (no Http::fake) fails loudly. Tests must never reach the network,
+        // in CI or locally. Broadcast/pusher traffic bypasses the Http
+        // factory so realtime tests are unaffected.
+        Http::preventStrayRequests();
     }
 
     /**

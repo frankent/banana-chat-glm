@@ -1,0 +1,7 @@
+data: {"choices":[{"index":0,"delta":{"content":"```php\necho 'hi';\n```"}}]}
+
+data: {"choices":[],"usage":{"prompt_tokens":100,"completion_tokens":20,"total_tokens":120}}
+
+data: {"choices":[{"index":0,"delta":{},"finish_reason":"length"}]}
+
+data: [DONE]

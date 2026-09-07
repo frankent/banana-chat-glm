@@ -1,0 +1,31 @@
+{
+    "model": "glm-5.2",
+    "messages": [
+        {
+            "role": "system",
+            "content": "คุณคือผู้ช่วยขององค์กร ตอบภาษาไทยกระชับ\n\n## สิ่งที่รู้เกี่ยวกับผู้ใช้ (อาจล้าสมัย ให้ผู้ใช้แก้ไขได้)\n- [preference] ชอบคำตอบสั้น กระชับ\n- [project] ทำงานทีม Platform\n\n## สรุปบทสนทนาก่อนหน้า\nผู้ใช้ทำระบบแชทอยู่ ต้อง deploy วันศุกร์"
+        },
+        {
+            "role": "user",
+            "content": "ช่วยวางแผน deploy วันศุกร์"
+        },
+        {
+            "role": "assistant",
+            "content": "เริ่มจาก migration ก่อนครับ"
+        },
+        {
+            "role": "user",
+            "content": "ok แล้ว staging ต้องทำไรบ้าง"
+        },
+        {
+            "role": "assistant",
+            "content": "รัน migration แล้ว smoke test ครับ"
+        }
+    ],
+    "stream": true,
+    "temperature": 0.7,
+    "max_tokens": 4096,
+    "stream_options": {
+        "include_usage": true
+    }
+}
