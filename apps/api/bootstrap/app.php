@@ -3,6 +3,7 @@
 use App\Exceptions\ApiException;
 use App\Http\Middleware\EnsureAccountActive;
 use App\Http\Middleware\EnsurePasswordFresh;
+use App\Http\Middleware\RequireMinimumAppVersion;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\SetRequestId;
 use App\Http\Middleware\WorkspaceContextMiddleware;
@@ -27,6 +28,9 @@ $app = Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->api(prepend: [SetRequestId::class]);
+
+        // TASK-BE-025 — X-App-Version gate (426 APP_UPDATE_REQUIRED)
+        $middleware->api(RequireMinimumAppVersion::class);
 
         // NFR-SEC-008 — baseline security headers on API + admin responses
         $middleware->prepend(SecurityHeaders::class);

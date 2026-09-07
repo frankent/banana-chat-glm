@@ -37,6 +37,7 @@ class SettingsService
         'typing.ttl_seconds' => 5,
         'push.suppress_if_focused_seconds' => 30,
         'storage.quota_per_workspace_gb' => null,
+        'app.min_supported_version' => '', // TASK-BE-025: '' = gate off
         'ai.enabled' => true,
         'ai.memory.enabled' => true,
         'ai.memory.max_per_user' => 200,
