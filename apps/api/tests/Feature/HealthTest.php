@@ -8,6 +8,16 @@ use Illuminate\Support\Facades\DB;
 test('health returns 200 with db, redis, storage, reverb, queue checks', function () {
     $response = $this->getJson('/api/v1/health');
 
+    if ($response->status() !== 200) {
+        // surface which dependency degraded — the assertion alone says only "503"
+        fwrite(STDERR, 'HEALTH DEBUG disk='.config('filesystems.default')
+            .' env_FILESYSTEM_DISK='.(getenv('FILESYSTEM_DISK') ?: '(unset)')
+            .' redis='.config('database.redis.cache.host').':'.config('database.redis.cache.port')
+            .' reverb='.config('reverb.servers.reverb.hostname').':'.config('reverb.servers.reverb.port')
+            .' queue='.config('queue.default')
+            .' BODY='.$response->getContent()."\n");
+    }
+
     $response->assertOk()
         ->assertJsonPath('status', 'healthy')
         ->assertJsonPath('checks.database', 'ok')
