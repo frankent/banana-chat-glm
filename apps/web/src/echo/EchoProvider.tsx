@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 import type { ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { EventEnvelope } from '@banana-chat/shared';
-import { tokenManager } from '../lib/api';
+import { endpoints, tokenManager } from '../lib/api';
 import { useSession } from '../state/session';
 import { handleAiEvent } from '../state/ai';
 import type { AiStreamEvent } from '@banana-chat/shared';

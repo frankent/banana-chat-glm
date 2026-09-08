@@ -389,8 +389,8 @@ test('TC-MSG-021 around_seq returns 25 before + 25 after, ascending (API-041)', 
     $messages = collect($response->json('data.messages'));
 
     expect($messages)->toHaveCount(50)
-        ->and($messages->first()['seq'])->toBe(16)   # anchor-25 (inclusive)
-        ->and($messages->last()['seq'])->toBe(65)    # anchor+25
+        ->and($messages->first()['seq'])->toBe(16)   // anchor-25 (inclusive)
+        ->and($messages->last()['seq'])->toBe(65)    // anchor+25
         ->and($messages->firstWhere('seq', 40))->not->toBeNull()
         ->and($response->json('data.has_more_before'))->toBeTrue()
         ->and($response->json('data.has_more_after'))->toBeTrue();
