@@ -130,7 +130,8 @@ it('probes redis over a raw socket (TC-SETUP-004, API-122)', function () {
 });
 
 it('installs: writes .env, migrates, creates admin/workspace/room and locks itself (TC-SETUP-005, API-123)', function () {
-    $response = $this->postJson('/api/v1/setup/install', setup_payload());
+    $payload = setup_payload();
+    $response = $this->postJson('/api/v1/setup/install', $payload);
 
     $response->assertStatus(201)
         ->assertJsonPath('data.ok', true)
@@ -138,14 +139,15 @@ it('installs: writes .env, migrates, creates admin/workspace/room and locks itse
         ->assertJsonPath('data.workspace_slug', 'acme')
         ->assertJsonPath('data.redirect', '/admin/login');
 
-    // .env merged: new keys written, existing lines preserved (FR-SETUP-004)
+    // .env merged: new keys written, existing lines preserved (FR-SETUP-004).
+    // Ports come from the payload (CI containers differ from local docker).
     $env = File::get($this->envPath);
     expect($env)->toContain('# existing comment survives')
         ->toContain('APP_NAME=BananaChat')
-        ->toContain('DB_HOST=127.0.0.1')
-        ->toContain('DB_PORT=5433')
-        ->toContain('DB_DATABASE=orgchat_test')
-        ->toContain('REDIS_PORT=6380')
+        ->toContain('DB_HOST='.$payload['database']['host'])
+        ->toContain('DB_PORT='.$payload['database']['port'])
+        ->toContain('DB_DATABASE='.$payload['database']['database'])
+        ->toContain('REDIS_PORT='.$payload['redis']['port'])
         ->toContain('SETUP_COMPLETED=true')
         ->toMatch('/APP_KEY=base64:[A-Za-z0-9+\/=]{44,}/')
         ->toMatch('/REVERB_APP_KEY=[a-f0-9]{32}/');

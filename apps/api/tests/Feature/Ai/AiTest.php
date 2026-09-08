@@ -102,6 +102,11 @@ function makeConversation($test, ?User $user = null, array $override = []): AiCo
 // ---- FR-AI-001 gate + status (TC-AI-001..006) ----
 
 test('TC-AI-001 status reports provider, limits and usage', function () {
+    // bump() keys rows by Postgres CURRENT_DATE (UTC) while reads sum by
+    // user timezone — the factory default (Asia/Bangkok) only matches UTC
+    // after 07:00 ICT. UTC pins write and read to the same day.
+    $this->tony->update(['timezone' => 'UTC']);
+
     AiUsageDaily::bump($this->tony->id, $this->ws->id, messages: 3, tokensIn: 100, tokensOut: 50);
 
     $this->getJson('/api/v1/ai/status', wsHeaders($this->tonyToken, 'acme'))
@@ -299,6 +304,9 @@ test('TC-AI-044 message over half the budget → 422 AI_MESSAGE_TOO_LONG', funct
 });
 
 test('TC-AI-081 daily quota exceeded → 429 with resets_at', function () {
+    // see TC-AI-001 — align the quota read (user tz) with CURRENT_DATE (UTC)
+    $this->tony->update(['timezone' => 'UTC']);
+
     fakeAiProvider();
 
     AiUsageDaily::bump($this->tony->id, $this->ws->id, messages: 200);

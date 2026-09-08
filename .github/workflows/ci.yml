@@ -38,6 +38,9 @@ jobs:
       DB_PASSWORD: orgchat
       REDIS_HOST: 127.0.0.1
       REDIS_PORT: 6379
+      # no MinIO service in this job — .env.example defaults to s3 and the
+      # health storage probe would 503; media tests override the disk anyway
+      FILESYSTEM_DISK: local
     defaults:
       run:
         working-directory: apps/api
