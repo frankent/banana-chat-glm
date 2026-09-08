@@ -26,6 +26,10 @@ class AppServiceProvider extends ServiceProvider
 
         // FR-SETUP — paths from config/setup.php (tests point these at temp files)
         $this->app->bind(SetupState::class, fn () => SetupState::make());
+
+        // FR-SETUP — uninstalled boots (no APP_KEY yet) need a throwaway key
+        // + file cache before EncryptCookies / the setup limiter resolve.
+        SetupState::applyPreInstallDefaults();
     }
 
     public function boot(): void

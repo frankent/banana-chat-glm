@@ -196,6 +196,9 @@ class SetupController extends Controller
         //    migrations + the first entities against them (php artisan
         //    config is NOT cached, but this request booted before the write)
         config([
+            // an empty .env boots with the stock default (sqlite) — the
+            // wizard is postgres-only, so switch the default connection too
+            'database.default' => 'pgsql',
             'database.connections.pgsql.host' => $data['database']['host'],
             'database.connections.pgsql.port' => (int) $data['database']['port'],
             'database.connections.pgsql.database' => $data['database']['database'],

@@ -4,3 +4,7 @@ node_modules
 .env.*
 !.env.example
 .phpunit.cache
+# baked package/service manifests list dev-only providers (e.g. Pail) that
+# --no-dev images don't have — Laravel regenerates them on first boot
+bootstrap/cache/*.php
+storage/logs/*.log

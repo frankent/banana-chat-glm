@@ -1,0 +1,271 @@
+# Banana Chat production stack (TASK-INF-002/003, DEC-044).
+#
+# One nginx edge on ${HTTP_PORT:-80} fronting everything:
+#   nginx → SPA (baked dist) + /api /admin /horizon /setup (php-fpm)
+#           + /app/* (Reverb ws) + /storage/ (MinIO)
+#   api / worker / scheduler / reverb share the fpm image (Dockerfile.prod)
+#
+# First run (FR-SETUP / DEC-043):
+#   touch apps/api/.env        # bind-mounted into every app service — must
+#                              # exist before `up`, or Docker mounts a directory
+#   docker compose -f infra/docker-compose.prod.yml up -d --build
+#   open http://<host>/setup   # wizard fills DB/Redis/mail creds + migrates
+#   docker compose -f infra/docker-compose.prod.yml restart worker scheduler reverb
+#
+# Deploy-specific values (public hostname baked into the web build, ports,
+# worker counts, object-store endpoint) come from the environment or an
+# infra/.env next to this file — see infra/README.md §Production.
+
+name: banana-chat-prod
+
+x-api-image: &api-image
+  build:
+    context: ../apps/api
+    dockerfile: Dockerfile.prod
+
+x-api-env: &api-env
+  # Topology pins. Compose env beats the bind-mounted .env inside the
+  # containers (EGPCS ini + clear_env=no), so the installer owns
+  # DB/Redis/mail/admin in .env while container wiring stays fixed.
+  APP_ENV: production
+  APP_DEBUG: false
+  CACHE_STORE: redis
+  SESSION_DRIVER: redis
+  QUEUE_CONNECTION: redis
+  BROADCAST_CONNECTION: reverb
+  REVERB_APP_ID: banana-chat
+  REVERB_APP_KEY: ${REVERB_APP_KEY:-banana-chat-key}
+  REVERB_APP_SECRET: ${REVERB_APP_SECRET:-banana-chat-secret}
+  REVERB_HOST: reverb          # where the broadcaster POSTs events
+  REVERB_PORT: 8080
+  REVERB_SCHEME: http
+  CLAMAV_HOST: clamav
+  CLAMAV_PORT: 3310
+  FILESYSTEM_DISK: s3
+  AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-orgchat}
+  AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-orgchat123}
+  AWS_DEFAULT_REGION: us-east-1
+  AWS_BUCKET: orgchat
+  AWS_USE_PATH_STYLE_ENDPOINT: true
+  # Container-direct by default (fast uploads). For presigned URLs the
+  # browser can fetch, point this at the edge instead — http://<host>/storage
+  # — the /storage/ route proxies MinIO with Host passthrough (see README).
+  AWS_ENDPOINT: ${AWS_ENDPOINT:-http://minio:9000}
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  nginx:
+    build:
+      context: ..
+      dockerfile: infra/nginx/Dockerfile
+      args:
+        VITE_API_BASE: ${VITE_API_BASE:-/api/v1}
+        VITE_REVERB_HOST: ${VITE_REVERB_HOST:-localhost}
+        VITE_REVERB_PORT: ${VITE_REVERB_PORT:-80}
+        VITE_REVERB_SCHEME: ${VITE_REVERB_SCHEME:-http}
+        VITE_REVERB_APP_KEY: ${REVERB_APP_KEY:-banana-chat-key}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      # TLS terminates upstream (TASK-INF-004: Cloudflare) — or add
+      # "443:443" + a certs mount + a listen 443 block in prod.conf.
+    volumes:
+      - api-public:/var/www/api-public:ro
+    depends_on:
+      api-assets:
+        condition: service_completed_successfully
+      api:
+        condition: service_healthy
+      reverb:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *logging
+
+  # One-shot: copies the api image's public/ (Filament css/js, favicon,
+  # robots) into a shared volume so nginx can serve Laravel statics.
+  api-assets:
+    <<: *api-image
+    entrypoint: ["sh", "-c", "cp -a /app/public/. /shared/ && echo 'api public assets ready'"]
+    volumes:
+      - api-public:/shared
+    restart: "no"
+    logging: *logging
+
+  api:
+    <<: *api-image
+    volumes:
+      - ../apps/api/.env:/app/.env
+      - api-storage:/app/storage
+    environment: *api-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *logging
+
+  # TASK-INF-014 — Horizon supervisors: default/media/push/retention/ai
+  # (ai: timeout 660s, concurrency via HORIZON_AI_PROCESSES, NFR-OPS-011).
+  # Boots before install too; it crash-loops harmlessly (restart policy)
+  # until the wizard writes REDIS_* — restart it after installing.
+  worker:
+    <<: *api-image
+    command: php artisan horizon
+    volumes:
+      - ../apps/api/.env:/app/.env
+      - api-storage:/app/storage
+    environment:
+      <<: *api-env
+      HORIZON_AI_PROCESSES: ${HORIZON_AI_PROCESSES:-4}
+    healthcheck:
+      test: ["CMD-SHELL", "pidof php || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *logging
+
+  scheduler:
+    <<: *api-image
+    command: php artisan schedule:work
+    volumes:
+      - ../apps/api/.env:/app/.env
+      - api-storage:/app/storage
+    environment: *api-env
+    healthcheck:
+      test: ["CMD-SHELL", "pidof php || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *logging
+
+  reverb:
+    <<: *api-image
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080
+    volumes:
+      - ../apps/api/.env:/app/.env
+    environment: *api-env
+    healthcheck:
+      test: ["CMD-SHELL", "php -r 'exit(@fsockopen(\"127.0.0.1\", 8080) ? 0 : 1);'"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *logging
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-orgchat}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-orgchat}
+      POSTGRES_DB: ${POSTGRES_DB:-orgchat}
+    # No published port — internal network only. Change POSTGRES_PASSWORD
+    # for anything internet-adjacent; the installer stores whatever you
+    # type there into .env.
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-orgchat} -d ${POSTGRES_DB:-orgchat}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    logging: *logging
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    logging: *logging
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-orgchat}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-orgchat123}
+    # Console on localhost only (SSH tunnel); objects flow through the edge
+    # /storage/ route or stay container-internal.
+    ports:
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9101}:9001"
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    logging: *logging
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-orgchat} ${MINIO_ROOT_PASSWORD:-orgchat123} &&
+      mc mb --ignore-existing local/orgchat &&
+      echo 'bucket orgchat ready'"
+    restart: "no"
+    logging: *logging
+
+  # TASK-INF-010 — ClamAV for FR-MEDIA-006 (kind=file uploads). First start
+  # downloads signature DBs (~2 min); scan degrades to `skipped` until then
+  # (TC-MEDIA-034 behavior), so nothing hard-depends on it.
+  clamav:
+    image: clamav/clamav:1.4
+    # clamav/clamav publishes amd64 only — the explicit platform is a no-op
+    # on servers and lets Apple Silicon run it under Rosetta.
+    platform: linux/amd64
+    volumes:
+      - clamav:/var/lib/clamav
+    healthcheck:
+      test: ["CMD-SHELL", "clamdcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 180s
+    restart: unless-stopped
+    logging: *logging
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:
+  clamav:
+  api-public:
+  api-storage:

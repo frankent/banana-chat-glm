@@ -1,0 +1,55 @@
+# Banana Chat API — production image (TASK-INF-002): php-fpm, served by the
+# nginx edge (infra/nginx/prod.conf) over fastcgi. Same extension set as the
+# dev/CI image plus opcache tuned for image-baked code. The fpm image also
+# carries php-cli, so worker/scheduler/reverb reuse it with a command override.
+FROM php:8.4-fpm-alpine
+
+# ffmpeg: full-profile video pipeline (FR-MEDIA-004) — poster frames +
+# duration/dimensions in ProcessAttachment.
+RUN apk add --no-cache \
+        bash curl git unzip ffmpeg \
+        postgresql-dev icu-dev oniguruma-dev libzip-dev zlib-dev \
+    && apk add --no-cache --virtual .build-deps $PHPIZE_DEPS \
+    && docker-php-ext-install -j$(nproc) pdo_pgsql pgsql intl pcntl zip opcache \
+    && pecl install redis && docker-php-ext-enable redis \
+    && apk del .build-deps
+
+# EGPCS (same reason as the dev image) so compose `environment:` beats the
+# bind-mounted .env. clear_env=no is the fpm-specific half: php-fpm wipes the
+# process environment from workers by default, which would hide compose env
+# from Laravel in HTTP requests.
+RUN { \
+      echo 'variables_order = "EGPCS"'; \
+      echo 'opcache.enable=1'; \
+      echo 'opcache.validate_timestamps=0'; \
+      echo 'opcache.memory_consumption=192'; \
+      echo 'opcache.max_accelerated_files=20000'; \
+      echo 'realpath_cache_size=4096K'; \
+      echo 'realpath_cache_ttl=600'; \
+    } > /usr/local/etc/php/conf.d/99-banana.ini \
+ && { \
+      echo 'clear_env = no'; \
+      echo 'pm = dynamic'; \
+      echo 'pm.max_children = 16'; \
+      echo 'pm.start_servers = 4'; \
+      echo 'pm.min_spare_servers = 2'; \
+      echo 'pm.max_spare_servers = 8'; \
+      echo 'catch_workers_output = yes'; \
+    } > /usr/local/etc/php-fpm.d/zz-banana.conf
+
+WORKDIR /app
+
+# Prod dependencies only (--no-dev). No config/route cache is baked on
+# purpose: the first-run installer (FR-SETUP) writes .env after boot and
+# every fpm request must pick it up without rebuilding (DEC-043).
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+COPY composer.json composer.lock ./
+RUN COMPOSER_ALLOW_SUPERUSER=1 composer install --no-interaction --prefer-dist --no-scripts --no-dev --optimize-autoloader
+
+COPY . .
+RUN chown -R www-data:www-data storage bootstrap/cache
+
+HEALTHCHECK --interval=15s --timeout=3s --retries=5 CMD pidof php-fpm || exit 1
+
+EXPOSE 9000
+CMD ["php-fpm"]

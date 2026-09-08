@@ -23,6 +23,27 @@ class SetupState
         );
     }
 
+    /**
+     * FR-SETUP — pre-install boots have no APP_KEY (the wizard generates one
+     * during install) and typically no reachable Redis for the cache the
+     * wizard's rate limiter hits. Left alone, EncryptCookies 500s every web
+     * request — including /setup itself. Give uninstalled boots a throwaway
+     * key and file-backed cache/session; all of it dies with the process,
+     * the real values land in .env via the installer.
+     */
+    public static function applyPreInstallDefaults(): void
+    {
+        if (! in_array(config('app.key'), [null, ''], true)) {
+            return;
+        }
+
+        config([
+            'app.key' => 'base64:'.base64_encode(random_bytes(32)),
+            'cache.default' => 'file',
+            'session.driver' => 'file',
+        ]);
+    }
+
     public function isCompleted(): bool
     {
         if (is_file($this->markerPath)) {

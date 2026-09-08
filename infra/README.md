@@ -2,6 +2,60 @@
 
 docker-compose dev/prod services + nginx configs.
 
+## Production stack (TASK-INF-002/003, DEC-044)
+
+`docker-compose.prod.yml` is the self-hosted prod topology — one nginx edge
+(`infra/nginx/Dockerfile` bakes the built web SPA into it) in front of
+php-fpm api, Horizon worker, scheduler, Reverb, plus bundled
+postgres/redis/minio/clamav. Nothing stateful publishes a port; only the
+edge (`${HTTP_PORT:-80}`) and the MinIO console (localhost-only :9101) are
+reachable.
+
+First run — the installer (DEC-043) drives it:
+
+```sh
+touch apps/api/.env                     # bind-mounted into every app service —
+                                        # must exist BEFORE `up` or Docker
+                                        # mounts a directory over /app/.env
+docker compose -f infra/docker-compose.prod.yml up -d --build
+# open http://<host>/setup → fill PostgreSQL/Redis/SMTP creds + admin
+docker compose -f infra/docker-compose.prod.yml restart worker scheduler reverb
+```
+
+The long-running services (worker/scheduler/reverb) boot before `.env`
+exists and crash-loop harmlessly (restart policy) until the wizard writes
+it — that final `restart` makes them pick it up. The api (fpm) needs no
+restart: it re-reads `.env` per request (no config cache is baked, on
+purpose — DEC-044).
+
+### Deploy-specific values (environment or `infra/.env`)
+
+| var | default | what |
+|---|---|---|
+| `VITE_REVERB_HOST` | `localhost` | public hostname — **baked into the web build**; set it, then `build nginx` |
+| `VITE_REVERB_PORT` / `VITE_REVERB_SCHEME` | `80` / `http` | ws port/scheme through the edge |
+| `HTTP_PORT` | `80` | edge listen port |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `orgchat` ×3 | bundled postgres creds (type the same into the installer) |
+| `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` | `orgchat` / `orgchat123` | MinIO (also feeds the api's AWS keys) |
+| `AWS_ENDPOINT` | `http://minio:9000` | container-direct uploads. Set `http://<host>/storage` to make presigned attachment URLs browser-fetchable — the `/storage/` route proxies MinIO with Host passthrough so signatures stay valid |
+| `HORIZON_AI_PROCESSES` | `4` | ai supervisor size (NFR-OPS-011) |
+| `REVERB_APP_KEY` / `REVERB_APP_SECRET` | example values | also baked into the web build (key) — change for real deploys |
+
+### Day-2
+
+- TLS: terminate upstream (TASK-INF-004 Cloudflare) or add a `listen 443`
+  block + cert mount in `infra/nginx/prod.conf`.
+- Filament static (`public/css|js`) is copied into a shared volume by the
+  one-shot `api-assets` service on every `up` — rebuilds of the api image
+  propagate on the next `docker compose up -d`.
+- Scale Reverb: add a second node + `REVERB_SCALING_ENABLED=true` (see the
+  scaling section below; `nginx/reverb-upstream.conf` is a ready-made
+  sticky upstream).
+- Upgrades: `git pull && docker compose -f infra/docker-compose.prod.yml
+  up -d --build` (migrations: the installer already ran them; later ones go
+  `docker compose ... exec api php artisan migrate --force`).
+- Backups: pg_dump cron per TASK-INF-007.
+
 ## Worker topology (TASK-INF-014, NFR-OPS-011)
 
 All queue work runs through **Horizon** (`php artisan horizon`):

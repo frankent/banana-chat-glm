@@ -4,6 +4,7 @@ use App\Models\AuditLog;
 use App\Models\Room;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Services\SetupState;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\File;
 
@@ -200,4 +201,23 @@ it('validates install input with the standard 422 envelope (TC-SETUP-007)', func
     $this->postJson('/api/v1/setup/install', setup_payload([
         'workspace' => ['slug' => 'Not A Slug'],
     ]))->assertStatus(422)->assertJsonPath('error.code', 'VALIDATION_FAILED');
+});
+
+it('keeps web routes alive before any APP_KEY exists (TC-SETUP-008)', function () {
+    // simulate a real first-run container: no key, cache/session pointed at
+    // a redis that is not configured yet — without the guard EncryptCookies
+    // 500s every web request, /setup included (found during prod deploy
+    // verification, where phpunit's pinned APP_KEY always masked it)
+    config(['app.key' => null, 'cache.default' => 'redis', 'session.driver' => 'redis']);
+    SetupState::applyPreInstallDefaults();
+
+    expect(config('app.key'))->not->toBeEmpty()
+        ->and(config('cache.default'))->toBe('file')
+        ->and(config('session.driver'))->toBe('file');
+
+    // an existing key is never overridden (post-install boots are no-ops)
+    config(['app.key' => 'base64:existing']);
+    SetupState::applyPreInstallDefaults();
+    expect(config('app.key'))->toBe('base64:existing')
+        ->and(config('cache.default'))->toBe('file'); // untouched too
 });
