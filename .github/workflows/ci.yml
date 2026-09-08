@@ -56,6 +56,13 @@ jobs:
           php artisan key:generate --force
       - name: Pint
         run: vendor/bin/pint --test
+      # phpunit.xml pins BROADCAST_CONNECTION=reverb + QUEUE_CONNECTION=sync,
+      # so broadcasts fire inline as Pusher HTTP calls to 127.0.0.1:8088 —
+      # the runner needs a live Reverb or 61 tests die with BroadcastException
+      - name: Start Reverb
+        run: |
+          nohup php artisan reverb:start --port=8088 > /tmp/reverb.log 2>&1 &
+          php -r 'for ($i = 0; $i < 30; $i++) { if (@fsockopen("127.0.0.1", 8088, $e, $s, 1)) { exit(0); } sleep(1); } file_put_contents("php://stderr", file_get_contents("/tmp/reverb.log")); exit(1);'
       - name: Pest
         run: vendor/bin/pest
 
@@ -64,9 +71,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # version comes from package.json "packageManager" — specifying it here
+      # too makes action-setup v4 fail with "Multiple versions of pnpm"
       - uses: pnpm/action-setup@v4
-        with:
-          version: 12
       - uses: actions/setup-node@v4
         with:
           node-version: 23
