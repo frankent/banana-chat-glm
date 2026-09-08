@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\RoomController;
 use App\Http\Controllers\Api\V1\SearchController;
 use App\Http\Controllers\Api\V1\UploadController;
 use App\Http\Controllers\Api\V1\WorkspaceController;
+use App\Http\Controllers\SetupController;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
 
@@ -137,4 +138,15 @@ Route::prefix('v1')->group(function (): void {
     });
 
     Route::get('/health', [HealthController::class, 'index']);
+
+    // FR-SETUP — first-run installer (API-120..123). Unauthenticated by
+    // design: the instance has no users yet, and RequireSetupCompleted
+    // locks every endpoint the moment installation finishes. Named
+    // limiters: stacked numeric throttles would share one cache key.
+    Route::prefix('setup')->middleware('throttle:setup')->group(function (): void {
+        Route::get('/status', [SetupController::class, 'status']); // API-120
+        Route::post('/test-database', [SetupController::class, 'testDatabase']); // API-121
+        Route::post('/test-redis', [SetupController::class, 'testRedis']); // API-122
+        Route::post('/install', [SetupController::class, 'install'])->middleware('throttle:setup-install'); // API-123
+    });
 });

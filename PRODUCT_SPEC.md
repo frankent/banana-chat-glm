@@ -1295,6 +1295,45 @@ sequenceDiagram
 - `GET /ai/search?q` ค้น title + content (trgm) เฉพาะของตน; ผลลัพธ์กระโดดไปข้อความ
 - **Refs**: API-116, TC-AI-119..121
 
+### 5.15 First-Run Setup (DEC-043)
+
+WordPress-style ตัวติดตั้งครั้งแรก — operator เปิด instance ใหม่แล้วเดิน wizard กรอกข้อมูลการเชื่อมต่อ ระบบรวบรวมแล้วเขียน `.env` เอง
+
+#### FR-SETUP-001 First-run gate — P0 · PH3
+- "ยังไม่ติดตั้ง" = ไม่มี marker (`storage/app/setup-complete`) **และ** (ไม่มี `.env` หรือ `APP_KEY` ว่าง)
+- ตั้ง `SETUP_COMPLETED=false` ใน `.env` เพื่อบังคับเปิด wizard อีกครั้ง
+- middleware ทุก request: หน้าเว็บ redirect ไป `/setup`, API ตอบ `503 SETUP_REQUIRED`; ยกเว้น `/setup`, `api/v1/setup/*`, `api/v1/health`, `/up`
+- **Refs**: API-120..123, TC-SETUP-001
+
+#### FR-SETUP-002 Wizard UI ที่ `/setup` — P0 · PH3
+- server-rendered blade ธรรมดา ไม่มี build step (ใช้ได้ทันทีแม้ asset ยังไม่ build), vanilla JS เรียก setup API
+- 5 ขั้น: ① ตรวจ requirement (PHP ≥8.2, extensions, storage/.env writable) ② PostgreSQL ③ Redis + SMTP ④ ผู้ดูแล + workspace + ห้องแรก ⑤ ติดตั้ง + แสดงข้อมูลเข้าสู่ระบบ
+- ปุ่ม "ถัดไป" ขั้น DB/Redis ถูกล็อกจนกว่า probe ผ่าน
+- **Refs**: TC-SETUP-001..002
+
+#### FR-SETUP-003 Test connection probes — P0 · PH3
+- `POST /setup/test-database`: เปิด PDO ใหม่ตรงๆ (ไม่แตะ connection ของ app) ถาม `SELECT version()`
+- `POST /setup/test-redis`: RESP `AUTH` (ถ้ามีรหัส) + `PING` ผ่าน raw socket — ไม่ต้องพึ่ง ext-redis
+- error ที่ส่งกลับต้อง strip รหัสผ่านออกก่อนเสมอ; อนุญาต private host ได้ (ฟอร์ม operator-only ต่างจาก FR-AI-019)
+- **Refs**: API-121/122, TC-SETUP-003..004
+
+#### FR-SETUP-004 เขียน `.env` แบบ merge — P0 · PH3
+- install ผ่าน probe ทั้งคู่ก่อน แล้วค่อยเขียน `.env` (merge — คอมเมนต์/key อื่นที่มีอยู่คงเดิม)
+- key ที่เขียน: `APP_URL` (จาก request), `APP_KEY` (สุ่ม), `DB_*`, `REDIS_*`, `SESSION_DRIVER/QUEUE_CONNECTION/CACHE_STORE=redis`, `BROADCAST_CONNECTION=reverb` + `REVERB_APP_KEY` (สุ่ม), `MAIL_*`, `SETUP_COMPLETED=true`; รหัสผ่านว่างเขียนเป็น `null`
+- probe ไม่ผ่าน = ห้ามเขียน `.env` (ตอบ `422 SETUP_DB_UNREACHABLE` / `SETUP_REDIS_UNREACHABLE`)
+- **Refs**: API-123, TC-SETUP-005..006
+
+#### FR-SETUP-005 ติดตั้ง + สร้างข้อมูลเริ่มต้น — P0 · PH3
+- หลังเขียน `.env`: reload config ใน process, `artisan migrate --force`
+- สร้าง system admin แรก + workspace (owner membership) + ห้องแรก (system message `room_created`) ตามแบบ seeder; audit `setup.completed`
+- ตอบ 201 `{ok, admin_username, workspace_slug, redirect:/admin/login}`
+- **Refs**: API-123, TC-SETUP-005
+
+#### FR-SETUP-006 ล็อกหลังติดตั้งเสร็จ — P0 · PH3
+- ตอนจบเขียน marker `storage/app/setup-complete`
+- หลังนั้น: `GET /setup` redirect กลับ `/`, setup API ทุกตัวตอบ `403 SETUP_ALREADY_COMPLETED`
+- **Refs**: TC-SETUP-005
+
 ---
 
 ## 6. Permission Matrix
@@ -1519,6 +1558,12 @@ NOT_FOUND, VALIDATION_FAILED, RATE_LIMITED, APP_UPDATE_REQUIRED, INTERNAL_ERROR
 | API-116 | GET | `/ai/search` | auth ai | `?q&cursor` | `{data:[{message, conversation}]}` | AI-020 (P1) |
 | API-118 | POST | `/ai/conversations/{id}/focus` | owner | `{focused: bool}` | 204 (Redis TTL 30s สำหรับ push suppression) | AI-003 |
 | API-119 | POST | `/ai/messages/{id}/share` | owner ws | `{room_id}` | 201 `{message}` (room message) | AI-015 (P1) |
+| API-120 | GET | `/setup/status` | public* | — | `{completed, requirements, defaults}` | SETUP (P0) |
+| API-121 | POST | `/setup/test-database` | public* | `{host, port, database, username, password}` | `{ok, server_version?}` | SETUP-003 (P0) |
+| API-122 | POST | `/setup/test-redis` | public* | `{host, port, password?}` | `{ok}` | SETUP-003 (P0) |
+| API-123 | POST | `/setup/install` | public* | `{database, redis, mail, admin, workspace, room_name}` | 201 `{ok, admin_username, workspace_slug, redirect}` | SETUP-004/005 (P0) |
+
+\* public เฉพาะก่อนติดตั้งเสร็จ (throttle `setup` 10/min, `setup-install` 3/min) — หลัง marker วางแล้วตอบ 403 `SETUP_ALREADY_COMPLETED` (FR-SETUP-006)
 
 ```jsonc
 // ai_conversation_summary
@@ -2204,6 +2249,17 @@ NOT_FOUND, VALIDATION_FAILED, RATE_LIMITED, APP_UPDATE_REQUIRED, INTERNAL_ERROR
 | TC-AI-123 | rollup idempotent — รันซ้ำไม่ double count | Feature |
 | TC-AI-124 | ws token budget ≥80% → audit `ai.token_budget_warning`, ≥100% → `ai.token_budget_exceeded` (dedup ต่อเดือน) | Feature |
 
+#### SETUP (first-run installer)
+| TC | ทดสอบ | ชนิด |
+|---|---|---|
+| TC-SETUP-001 | ยังไม่ติดตั้ง → ทุกหน้า redirect `/setup`, API 503 `SETUP_REQUIRED`; `/setup` + `/api/v1/health` ยังเข้าได้ | Feature |
+| TC-SETUP-002 | `GET /setup/status` ตอบ requirements + defaults ครบ | Feature |
+| TC-SETUP-003 | test-database: รหัสผิด → `ok:false`; ข้อมูลถูก → `ok:true` + server_version | Feature |
+| TC-SETUP-004 | test-redis: port ไม่มีใครฟัง → `ok:false`; redis จริง → `ok:true` | Feature |
+| TC-SETUP-005 | install happy path: เขียน `.env` (merge คอมเมนต์เดิม, APP_KEY/REVERB_APP_KEY สุ่ม, SETUP_COMPLETED=true), marker วาง, admin/workspace/room + owner membership, audit `setup.completed`; หลังจบ gate เปิด + wizard ล็อก (redirect / และ 403 `SETUP_ALREADY_COMPLETED`) | Feature |
+| TC-SETUP-006 | install DB probe ไม่ผ่าน → 422 `SETUP_DB_UNREACHABLE` และไม่เขียน `.env`/marker | Feature |
+| TC-SETUP-007 | install ขาด field / slug ไม่ผ่าน regex → 422 `VALIDATION_FAILED` (envelope §7) | Feature |
+
 #### PERM (table-driven policy tests)
 | TC | ทดสอบ |
 |---|---|
@@ -2633,6 +2689,7 @@ Size: S ≤ 1 วัน · M 2–3 วัน · L 4–5 วัน · XL > 1 ส�
 | DEC-040 | **PH2 AI (usage rollup)**: `RollupAiUsage` (FR-AI-014 monthly rollup) เลื่อนออก — §4.2 ไม่มีตาราง monthly และแบบสอบถาม usage อ่าน `ai_usage_daily` ตรง ๆ | ขนาดข้อมูลรายวันยังเล็ก (ต่อ user 365 แถว/ปี); สร้าง rollup เมื่อมีตาราง monthly + หน้ารายงาน SA จริงใน PH3 | 2026-09-07 |
 | DEC-041 | **PH2 AI (web markdown)**: TC-CORE-047 ทำแบบ minimal — code fence ``` → `<pre>` เท่านั้น (React escape ทุกอย่าง → XSS-safe), ไม่ render table/link/bold ของ markdown เต็ม | ลด dependency; `MarkdownFull` renderer (tables/links noopener) เลื่อนไป PH3 เมื่อมีความต้องการจริง | 2026-09-07 |
 | DEC-042 | **PH4 AI (superseded wire field)**: §8.9 `ai_message` เพิ่ม field `superseded_at` (nullable, additive) ใน `AiBroadcast::message` | FR-AI-009 "ดูสลับ 1/2" ต้องรู้ว่าแถวไหนถูกแทนที่เมื่อ `?include_superseded=1` (TC-AI-030) — ไม่มี field นี้ client แยกเวอร์ชันไม่ได้; ใส่ทุกที่ที่ใช้ serializer เดียวกัน (API-106/107/114/115/116/117) | 2026-09-07 |
+| DEC-043 | **First-run installer (WordPress-style)**: เพิ่ม §5.15 FR-SETUP-001..006 + API-120..123 — ก่อนติดตั้ง (ไม่มี marker และ APP_KEY ว่าง) ทุก request ถูก gate ไป `/setup`; wizard blade เซิร์ฟตรงจาก API ไม่มี build step; probe ผ่านแล้วเขียน `.env` แบบ merge + `migrate --force` + สร้าง system admin/workspace/ห้องแรก + marker `storage/app/setup-complete` แล้วล็อกตัวเอง | ลด friction ตอน deploy ใหม่ให้เท่า WordPress ("กรอก 5 นาทีได้ระบบ") — operator ไม่ต้อง copy `.env.example` และ artisan key/migrate มือ; การ lock ด้วย marker + `SETUP_COMPLETED=false` override ทำให้ re-run ได้แบบมีสติ | 2026-09-08 |
 
 ---
 
@@ -2640,6 +2697,7 @@ Size: S ≤ 1 วัน · M 2–3 วัน · L 4–5 วัน · XL > 1 ส�
 
 | Version | Date | By | Change |
 |---|---|---|---|
+| 1.4.9 | 2026-09-08 | Claude (setup wizard) | **First-run setup wizard (DEC-043, FR-SETUP-001..006, API-120..123, TC-SETUP-001..007)**: WordPress-style ตัวติดตั้ง — `RequireSetupCompleted` middleware (prepend ทั้ง app): ก่อนติดตั้ง หน้าเว็บ redirect `/setup`, API 503 `SETUP_REQUIRED` (ยกเว้น setup/health/up); `/setup` = blade wizard 5 ขั้น (requirements → PostgreSQL → Redis+SMTP → admin+workspace+ห้องแรก → ติดตั้ง) ไม่มี build step, ปุ่มถัดไปล็อกจน probe ผ่าน; probe = raw PDO `SELECT version()` + RESP PING raw socket (error strip รหัสผ่าน); `POST /setup/install` ผ่าน probe ก่อน → เขียน `.env` merge (APP_KEY/REVERB_APP_KEY สุ่ม, รหัสว่าง → `null`) → reload config + `migrate --force` → สร้าง system admin + workspace (owner) + ห้องแรก (`room_created`) + audit `setup.completed` → marker ล็อก wizard (403 `SETUP_ALREADY_COMPLETED`); named limiter `setup` 10/min / `setup-install` 3/min (numeric throttle ซ้อนกันแชร์ cache key — เจอจริงตอน TC-SETUP-007); สถานะ: Pest 302 passed/2 skipped (TC-SETUP-001..007 ใหม่) |
 | 1.4.8 | 2026-09-07 | Claude (PH4 build) | **ปิด DEC ที่เลื่อนทั้ง 3 ตัว (DEC-034/040/041)**: **DEC-034 (ffmpeg full profile)** — `Ffmpeg` domain service (config `services.ffmpeg.*` FFMPEG_PATH/FFPROBE_PATH) + `ProcessAttachment::processVideo`: มี ffmpeg → ffprobe duration/dimensions + poster frame 1s เข้า GD webp thumb pipeline เดิม (thumb_sm/thumb_md, EXIF-free); ไม่มี (host dev) → lite path เดิม; apk ffmpeg ใน Docker image; TC-MEDIA-036..038 (fake ffmpeg/ffprobe scripts); **DEC-040 (usage rollup)** — ตาราง `ai_usage_monthly` (PK expression index เหมือน daily) + job `RollupAiUsage` 00:10 ทุกวัน: upsert ทุก (user, ws, month) idempotent + ตรวจ `workspaces.settings.ai_monthly_token_budget` (FR-AI-010): ≥80% → audit `ai.token_budget_warning`, ≥100% → audit `ai.token_budget_exceeded` + Log::warning (dedup 1 แถว/ws/เดือน; อ่าน live จาก daily ไม่รอ rollup) — TC-AI-122..124; **หน้า admin "AI Usage" (FR-AI-014/TC-ADM-066)** — Filament page `/admin/ai-usage`: month picker, การ์ด messages/tokens in/out/memory/failed + ต้นทุนประมาณการ (default provider price_per_1k), ตารางต่อ ws, top-20 users, สุขภาพ model (error rate + first-token p50/p95) — อ่านจาก `ai_usage_daily` ตรง ๆ ตาม TC-ADM-066; **DEC-041 (MarkdownFull)** — `parseMarkdown`/`parseInline` ใน chat-core (typed block/inline AST, React escape ทุก string → XSS-safe by construction; link เฉพาะ http(s) — javascript:/data: เป็น text; รองรับ heading/list/table/code fence พร้อมชื่อภาษา/blockquote/hr + unclosed fence สำหรับ streaming) — web `Markdown.tsx` (code copy ปุ่ม, link rel noopener noreferrer) + mobile `src/ai/Markdown.tsx` (RN Text nesting, ตาราง monospace) — TC-CORE-047 suite 8 tests ใน chat-core — สถานะ: Pest 291 passed/2 skipped, chat-core 65, mobile 39, web tsc ผ่าน |
 | 1.4.7 | 2026-09-07 | Claude (PH4 build) | **Load test + Reverb scale (TASK-INF-012/INF-013/BE-026; NFR-PERF-001/002, FR-MSG-001)**: **k6 suite** (`infra/k6/chat-load.js`) — 3 scenarios: steady (VUs สลับ send API-040/read API-041 pacing ~≤160 req/min/user ใต้ limiter 300/min), race (50 concurrent send ตาม AC FR-MSG-001), audit (teardown อ่าน 100 แถวล่าสุด ตรวจ marker ประจำ run — ต้องได้ 50 แถว seq ไม่ซ้ำไม่ข้าม); thresholds: write p95<300ms, read p95<200ms, seq_anomalies==0, http_req_failed<1%, checks>99% — **ผลจริงบน docker stack: write p95 145.76ms, read p95 85.52ms, seq_anomalies 0, 0% failed, checks 100%**; สำคัญ: race marker ต้อง mint ใน `setup()` (k6 init context รันต่อ VU — ค่า module-level ไม่แชร์) และ race เริ่ม DURATION+45s ให้ steady ramp-down จบก่อน (ไม่งั้น steady เขียนทับหน้าต่าง audit); token ทุก user login ใน setup ครั้งเดียว (FR-AUTH-006 limiter 5/min/IP); **make load-test** (k6 docker, TARGET=host.docker.internal) + **nightly workflow** `.github/workflows/load-test.yml` (cron 01:23 ICT + workflow_dispatch, migrate+seed, `PHP_CLI_SERVER_WORKERS=16 php artisan serve`, probe login แทน /health เพราะ job ไม่มี reverb); **Reverb scale (INF-013/BE-026)**: `reverb.servers.reverb.scaling {enabled, channel}` อ่านจาก `REVERB_SCALING_ENABLED/REVERB_SCALING_CHANNEL` — ทุก instance subscribe Redis pub/sub `reverb-scale` (ยืนยัน `PUBSUB NUMSUB` = 2), compose `reverb-2` (profile `scale`, :8089) + `make up-scale`, nginx upstream `infra/nginx/reverb-upstream.conf` (ip_hash 2 nodes); **ข้อแก้ที่เจอตอน verify**: (1) `php artisan serve` ตัด env ทุกตัวที่ไม่อยู่ใน ServeCommand passthrough → container API ใช้ `php -S` ตรง + framework router script, (2) PHP default `variables_order=GPCS` ซ่อน process env → compose environment แพ้ให้ bind-mounted .env (ครั้งนั้น API ชน cloud DB จริง) → ini `EGPCS` ใน Dockerfile, (3) HealthController probe reverb ผิด key (`reverb.host` ไม่มีใน reverb.php) → อ่าน `servers.reverb.hostname/port` + fallback broadcasting options; DB_SSLMODE=disable ทุก service (กัน host .env Neon SSL หลุดเข้า container) — สถานะ: Pest 284 passed, k6 thresholds เขียวทั้งหมด |
 | 1.0.0-draft | 2026-09-06 | Tony + Claude | Initial full spec |

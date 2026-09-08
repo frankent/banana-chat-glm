@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Auth\SystemAdminUserProvider;
 use App\Domain\Media\MediaUrls;
 use App\Services\SettingsService;
+use App\Services\SetupState;
 use App\Support\WorkspaceContext;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Filesystem\FilesystemAdapter;
@@ -22,6 +23,9 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(SettingsService::class);
 
         Auth::provider('system-admin', fn ($app, array $config) => new SystemAdminUserProvider($app['hash'], $config['model']));
+
+        // FR-SETUP — paths from config/setup.php (tests point these at temp files)
+        $this->app->bind(SetupState::class, fn () => SetupState::make());
     }
 
     public function boot(): void
@@ -55,5 +59,9 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('ai-send', function (Request $request) {
             return Limit::perMinute(20)->by('ai:'.$request->user()?->id);
         });
+
+        // FR-SETUP — wizard endpoints: 10/min, install itself 3/min
+        RateLimiter::for('setup', fn (Request $request) => Limit::perMinute(10)->by('setup-ip:'.$request->ip()));
+        RateLimiter::for('setup-install', fn (Request $request) => Limit::perMinute(3)->by('setup-install-ip:'.$request->ip()));
     }
 }

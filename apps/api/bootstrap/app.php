@@ -4,6 +4,7 @@ use App\Exceptions\ApiException;
 use App\Http\Middleware\EnsureAccountActive;
 use App\Http\Middleware\EnsurePasswordFresh;
 use App\Http\Middleware\RequireMinimumAppVersion;
+use App\Http\Middleware\RequireSetupCompleted;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\SetRequestId;
 use App\Http\Middleware\WorkspaceContextMiddleware;
@@ -34,6 +35,10 @@ $app = Application::configure(basePath: dirname(__DIR__))
 
         // NFR-SEC-008 — baseline security headers on API + admin responses
         $middleware->prepend(SecurityHeaders::class);
+
+        // FR-SETUP-001 — first-run gate: everything redirects to /setup
+        // (503 SETUP_REQUIRED on API) until the installer has run
+        $middleware->prepend(RequireSetupCompleted::class);
 
         // No guest redirects — unauthenticated API calls get the 401 envelope
         $middleware->redirectGuestsTo(fn () => null);

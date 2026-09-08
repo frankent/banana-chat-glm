@@ -24,6 +24,10 @@ make dev-web          # terminal 3 — http://localhost:5173
 
 The dev topology is hybrid (plan D1): PHP/Vite run on the host, stateful services + Reverb in Docker. An all-container `full` profile exists (`make up-full`).
 
+### First-run installer (fresh deployments)
+
+On a fresh instance with no `.env` (or an empty `APP_KEY`), every page redirects to `/setup` — a WordPress-style wizard (FR-SETUP, DEC-043) that checks requirements, tests PostgreSQL/Redis connections, collects SMTP + first admin + workspace + first room, then writes `.env` itself, runs migrations and locks itself out. No `make migrate`/`key:generate` needed. Dev flow above bypasses it (host `.env` already has `APP_KEY`); set `SETUP_COMPLETED=false` in `.env` to force the wizard open again.
+
 ### Cloud infra (Neon + DigitalOcean Spaces + remote Redis)
 
 The data layer can run on managed services instead of local Docker. Credentials live in `apps/api/.env.cloud.local` (gitignored). Switch with:
