@@ -35,19 +35,25 @@ afterEach(function () {
 /** Start the mock clamd; returns the port it listens on. */
 function startMockClamd($test, string $infectedMarker = 'EICAR'): int
 {
-    $port = random_int(33200, 33999);
-    $process = new Process([PHP_BINARY, base_path('tests/Support/mock-clamd.php'), "--port={$port}", "--infected-marker={$infectedMarker}"]);
+    // --port=0 lets the OS assign a free port — a fixed random pick inside
+    // the ephemeral range can collide with a stray TIME_WAIT socket on a
+    // busy CI runner ("Address already in use"). The server prints the
+    // port it actually got once it is listening.
+    $process = new Process([PHP_BINARY, base_path('tests/Support/mock-clamd.php'), '--port=0', "--infected-marker={$infectedMarker}"]);
     $process->start();
     $test->clamdProcesses[] = $process;
 
     for ($i = 0; $i < 50; $i++) {
-        if (@fsockopen('127.0.0.1', $port, $errno, $errstr, 0.2) !== false) {
-            return $port;
+        if (preg_match('/listening on (\d+)/', $process->getOutput(), $m) === 1) {
+            return (int) $m[1];
+        }
+        if (! $process->isRunning()) {
+            break; // died — surface its output below
         }
         usleep(50_000);
     }
 
-    throw new RuntimeException('mock clamd did not start: '.$process->getErrorOutput());
+    throw new RuntimeException('mock clamd did not start: '.$process->getErrorOutput().' / '.$process->getOutput());
 }
 
 function makeFileAttachment($test, string $bytes, AttachmentKind $kind = AttachmentKind::File): Attachment

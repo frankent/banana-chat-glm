@@ -26,6 +26,8 @@ if ($server === false) {
     fwrite(STDERR, "mock-clamd: cannot listen on {$port}: {$errstr}\n");
     exit(1);
 }
+// port 0 → the OS assigned one; report the real port so the test can dial it
+$port = (int) substr(strrchr(stream_socket_get_name($server, false), ':'), 1);
 fwrite(STDOUT, "mock-clamd: listening on {$port}\n");
 
 while ($conn = @stream_socket_accept($server, 300)) {
