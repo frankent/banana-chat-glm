@@ -42,14 +42,17 @@ class HealthController extends Controller
 
         try {
             // probe the reverb the broadcaster is actually configured for
-            // (REVERB_HOST/PORT — reverb.php exposes them as hostname/port
-            // under servers.reverb, not as top-level reverb.host keys)
-            $reverbHost = config('reverb.servers.reverb.hostname')
-                ?: config('broadcasting.connections.reverb.options.host')
+            // (broadcasting options read REVERB_HOST/REVERB_PORT — the port
+            // the app POSTs events to). reverb.servers.reverb.port is the
+            // server's own listen port (REVERB_SERVER_PORT, default 8080)
+            // and only matches when nothing remaps it, so it is the
+            // fallback, not the primary.
+            $reverbHost = config('broadcasting.connections.reverb.options.host')
+                ?: config('reverb.servers.reverb.hostname')
                 ?: '127.0.0.1';
             $reverbPort = (int) (
-                config('reverb.servers.reverb.port')
-                ?: config('broadcasting.connections.reverb.options.port')
+                config('broadcasting.connections.reverb.options.port')
+                ?: config('reverb.servers.reverb.port')
                 ?: 8080
             );
             $socket = @fsockopen($reverbHost, $reverbPort, $errorCode, $errorText, 2);
