@@ -3,20 +3,14 @@
 namespace App\Filament\Resources\UserResource\Pages;
 
 use App\Filament\Resources\UserResource;
-use Filament\Actions;
 use Filament\Resources\Pages\ListRecords;
 
 class ListUsers extends ListRecords
 {
     protected static string $resource = UserResource::class;
 
-    // Filament v4 ListRecords registers no default header actions — without
-    // this the list renders with no create entry point (found on prod:
-    // /admin/ai-providers showed an empty state and no button).
-    protected function getHeaderActions(): array
-    {
-        return [
-            Actions\CreateAction::make(),
-        ];
-    }
+    // No page-level CreateAction here on purpose: this resource has no
+    // create page — creation is the table header action (createUser →
+    // AdminUserService temp password). A page-level create raw-inserts
+    // and 500s on the NOT NULL password_hash (found on prod).
 }

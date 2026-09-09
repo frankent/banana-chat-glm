@@ -27,7 +27,7 @@ class AdminUserService
      * @param  array{workspaces?: array<int, array{workspace_id: string, role: string}>}  $workspaces
      * @return array{0: User, 1: string} [user, temp_password]
      */
-    public function createUser(User $actor, string $username, string $displayName, ?string $locale = 'th', array $workspaces = []): array
+    public function createUser(User $actor, string $username, string $displayName, ?string $locale = 'th', array $workspaces = [], bool $systemAdmin = false): array
     {
         $tempPassword = 'Tmp-'.Str::random(12);
 
@@ -38,6 +38,7 @@ class AdminUserService
             'locale' => $locale ?? 'th',
             'status' => UserStatus::Active,
             'must_change_password' => true,
+            'is_system_admin' => $systemAdmin,
             'created_by' => $actor->id,
         ]);
 

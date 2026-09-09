@@ -229,8 +229,17 @@ test('TC-ADM-048 settings page save persists values and audits changed keys', fu
 
 test('TC-ADM-012 resource list pages expose a create action (v4 ListRecords has none by default)', function () {
     // found on prod: /admin/ai-providers rendered the empty state with NO
-    // create button — Filament v4 ListRegisters no default header actions
-    foreach ([ListAiProviders::class, ListUsers::class, ListWorkspaces::class] as $pageClass) {
+    // create button — Filament v4 registers no default header actions.
+    // Users is EXCLUDED on purpose: no create page exists there — creation
+    // is the table header action (createUser), see the test below.
+    // (Session-guard login, not actingAs: the session doesn't persist across
+    // full HTTP GETs with actingAs, so /admin/users would 302 to login.)
+    Livewire::test(Login::class)
+        ->fillForm(['login' => 'sysadmin', 'password' => 'Password123!'])
+        ->call('authenticate')
+        ->assertHasNoErrors();
+
+    foreach ([ListAiProviders::class, ListWorkspaces::class] as $pageClass) {
         $component = Livewire::test($pageClass)->instance();
         $method = new ReflectionMethod($pageClass, 'getHeaderActions');
         $actions = $method->invoke($component);
@@ -238,4 +247,28 @@ test('TC-ADM-012 resource list pages expose a create action (v4 ListRecords has 
         expect($actions)->toHaveCount(1)
             ->and($actions[0])->toBeInstanceOf(CreateAction::class);
     }
+
+    $this->get('/admin/users')->assertOk()->assertSee('สร้างผู้ใช้');
+});
+
+test('TC-ADM-005b users table createUser action creates via the service (regression: page-level create 500)', function () {
+    // found on prod: a page-level CreateAction mounted the default 'create'
+    // action, which raw-inserted the form data → NOT NULL password_hash
+    // violation. Creation must go through the table header action.
+    $this->actingAs($this->admin, 'admin');
+
+    Livewire::test(ListUsers::class)
+        ->call('mountTableAction', 'createUser')
+        ->set('mountedTableActionsData.0.username', 'webuser')
+        ->set('mountedTableActionsData.0.display_name', 'Web User')
+        ->set('mountedTableActionsData.0.is_system_admin', true)
+        ->call('callMountedTableAction')
+        ->assertHasNoErrors();
+
+    $user = User::query()->where('username', 'webuser')->first();
+    expect($user)->not->toBeNull()
+        ->and($user->must_change_password)->toBeTrue()
+        ->and($user->is_system_admin)->toBeTrue()
+        ->and($user->password_hash)->not->toBe('set-by-service')
+        ->and(AuditLog::query()->where('action', 'user.created')->where('target_id', $user->id)->exists())->toBeTrue();
 });

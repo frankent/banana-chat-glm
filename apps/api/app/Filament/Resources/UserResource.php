@@ -96,38 +96,35 @@ class UserResource extends Resource
                 SelectFilter::make('is_system_admin')
                     ->options([true => 'ใช่', false => 'ไม่ใช่']),
             ])
-            ->actions([
-                EditAction::make(),
-
-                // FR-ADM-002: temp password generated on create, shown exactly once
+            ->headerActions([
+                // FR-ADM-002: temp password generated on create, shown exactly once.
+                // Must be a TABLE header action — UserResource has no create page,
+                // so a page-level CreateAction would raw-insert and 500 on the
+                // NOT NULL password_hash (found on prod via /livewire/update).
                 CreateAction::make('createUser')
                     ->label('สร้างผู้ใช้')
-                    ->mutateFormDataUsing(function (array $data): array {
-                        // hash happens in AdminUserService; placeholder satisfies the NOT NULL
-                        $data['password_hash'] = 'set-by-service';
-
-                        return $data;
-                    })
-                    ->using(function (array $data, User $record, CreateAction $action) use ($service): User {
+                    ->using(function (array $data) use ($service): User {
                         [$user, $tempPassword] = $service->createUser(
-                            actor: auth('admin')->user() ?? auth()->user(),
+                            actor: auth('admin')->user(),
                             username: $data['username'],
                             displayName: $data['display_name'],
                             locale: $data['locale'] ?? 'th',
+                            systemAdmin: (bool) ($data['is_system_admin'] ?? false),
                         );
 
-                        $action
-                            ->successNotificationTitle('สร้างผู้ใช้สำเร็จ')
-                            ->success(
-                                Notification::make('temp')
-                                    ->title('รหัสผ่านชั่วคราว (แสดงครั้งเดียว)')
-                                    ->body($tempPassword)
-                                    ->persistent()
-                                    ->success()
-                            );
+                        Notification::make('temp')
+                            ->title('สร้างผู้ใช้สำเร็จ — รหัสผ่านชั่วคราว (แสดงครั้งเดียว)')
+                            ->body($tempPassword)
+                            ->persistent()
+                            ->success()
+                            ->send();
 
                         return $user;
-                    }),
+                    })
+                    ->successNotification(null), // replaced by the temp-password one
+            ])
+            ->actions([
+                EditAction::make(),
 
                 // FR-ADM-003: suspend / unsuspend
                 Action::make('suspend')
