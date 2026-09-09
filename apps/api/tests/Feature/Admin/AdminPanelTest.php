@@ -3,6 +3,9 @@
 use App\Domain\Admin\AdminUserService;
 use App\Filament\Pages\Auth\Login;
 use App\Filament\Pages\Settings;
+use App\Filament\Resources\AiProviderResource\Pages\ListAiProviders;
+use App\Filament\Resources\UserResource\Pages\ListUsers;
+use App\Filament\Resources\WorkspaceResource\Pages\ListWorkspaces;
 use App\Models\AuditLog;
 use App\Models\ChatSession;
 use App\Models\User;
@@ -10,6 +13,7 @@ use App\Models\Workspace;
 use App\Models\WorkspaceMember;
 use App\Services\AuditLogger;
 use App\Services\SettingsService;
+use Filament\Actions\CreateAction;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
@@ -214,4 +218,24 @@ test('TC-ADM-048 settings page save persists values and audits changed keys', fu
     expect($row->context['changed'])->toContain('message.max_length')
         ->and($row->context['changed'])->toContain('ai.daily_message_limit_per_user')
         ->and($row->context['changed'])->not->toContain('room.group.max_members');
+
+    // out-of-range values are rejected by the form validation, never persisted
+    Livewire::test(Settings::class)
+        ->fillForm(['message.max_length' => 99999]) // max 32000
+        ->call('save')
+        ->assertHasErrors(['data.message.max_length']);
+    expect($settings->get('message.max_length'))->toBe(3500);
+});
+
+test('TC-ADM-012 resource list pages expose a create action (v4 ListRecords has none by default)', function () {
+    // found on prod: /admin/ai-providers rendered the empty state with NO
+    // create button — Filament v4 ListRegisters no default header actions
+    foreach ([ListAiProviders::class, ListUsers::class, ListWorkspaces::class] as $pageClass) {
+        $component = Livewire::test($pageClass)->instance();
+        $method = new ReflectionMethod($pageClass, 'getHeaderActions');
+        $actions = $method->invoke($component);
+
+        expect($actions)->toHaveCount(1)
+            ->and($actions[0])->toBeInstanceOf(CreateAction::class);
+    }
 });
