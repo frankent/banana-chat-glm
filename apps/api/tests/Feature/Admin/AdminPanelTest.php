@@ -2,6 +2,7 @@
 
 use App\Domain\Admin\AdminUserService;
 use App\Filament\Pages\Auth\Login;
+use App\Filament\Pages\Settings;
 use App\Models\AuditLog;
 use App\Models\ChatSession;
 use App\Models\User;
@@ -196,7 +197,7 @@ test('TC-ADM-048 settings page save persists values and audits changed keys', fu
     expect($settings->get('message.max_length'))->toBe(4000)
         ->and($settings->get('ai.daily_message_limit_per_user'))->toBe(200);
 
-    Livewire::test(\App\Filament\Pages\Settings::class)
+    Livewire::test(Settings::class)
         ->fillForm([
             'message.max_length' => 3500,
             'ai.daily_message_limit_per_user' => 500,
