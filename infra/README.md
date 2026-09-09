@@ -56,7 +56,7 @@ automatically when it exists.
 | `HTTP_PORT` | `80` | edge listen port |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `orgchat` ×3 | bundled postgres creds (type the same into the installer) |
 | `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` | `orgchat` / `orgchat123` | MinIO (also feeds the api's AWS keys) |
-| `AWS_ENDPOINT` | `http://minio:9000` | container-direct uploads. Set `http://<host>/storage` to make presigned attachment URLs browser-fetchable — the `/storage/` route proxies MinIO with Host passthrough so signatures stay valid |
+| `AWS_ENDPOINT` | `http://minio:9000` | container-direct uploads. For browser-fetchable presigned URLs set the **host root** (`https://<host>`, no path) — the bucket rides the URL path (`/orgchat/…`), which the edge forwards verbatim to MinIO so SigV4 signatures match (DEC-046). Do NOT use a `/storage` sub-path endpoint: the SDK signs the endpoint path, MinIO validates the path it receives — they diverge and every signed request 403s. |
 | `HORIZON_AI_PROCESSES` | `4` | ai supervisor size (NFR-OPS-011) |
 | `REVERB_APP_KEY` / `REVERB_APP_SECRET` | example values | also baked into the web build (key) — change for real deploys |
 
