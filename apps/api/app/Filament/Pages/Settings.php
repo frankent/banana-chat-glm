@@ -32,8 +32,12 @@ class Settings extends Page
     public function mount(): void
     {
         $settings = app(SettingsService::class);
+        // undot(): fields bind nested state paths (message.max_length →
+        // message[max_length]) — filling with the flat dotted map leaves
+        // every field empty and save() fails validation (found on prod).
         $this->form->fill(collect($settings->all())
             ->only(array_keys($this->editable()))
+            ->undot()
             ->all());
     }
 
@@ -78,22 +82,29 @@ class Settings extends Page
         $settings = app(SettingsService::class);
         $editable = $this->editable();
 
+        // getState() hands back Filament's NESTED state (message => [...]).
+        // Iterating $data's keys against the dotted $editable map blew up
+        // with "Undefined array key message" (found on prod, FR-ADM-009):
+        // drive the loop off $editable and read values by dotted path —
+        // the flat-key fallback covers the shape Livewire snapshots carry.
         $old = [];
-        foreach ($data as $key => $value) {
-            $cast = $editable[$key];
+        $new = [];
+        foreach ($editable as $key => $cast) {
+            $value = $data[$key] ?? data_get($data, $key);
             $normalized = $cast === 'int' ? (int) $value : (bool) $value;
             $old[$key] = $settings->get($key);
+            $new[$key] = $normalized;
             $settings->set($key, $normalized);
         }
 
-        $changes = collect($old)->filter(fn ($v, $k) => $old[$k] !== ($data[$k] ?? null) && (string) $old[$k] !== (string) ($data[$k] ?? ''))->all();
+        $changes = collect($old)->filter(fn ($v, $k) => (string) $v !== (string) $new[$k])->keys()->all();
 
         app(AuditLogger::class)->log(
             'settings.updated',
             auth('admin')->user(),
             'settings',
             null,
-            $changes !== [] ? ['changed' => array_keys($changes)] : ['changed' => []],
+            ['changed' => $changes],
         );
 
         Notification::make()

@@ -183,3 +183,34 @@ test('FR-ADM-009 settings page renders for a system admin', function () {
 
     $this->get('/admin/settings')->assertOk();
 });
+
+test('TC-ADM-048 settings page save persists values and audits changed keys', function () {
+    // regression (found on prod): getState() returns Filament's NESTED state,
+    // the old save() iterated it against the dotted editable map → 500
+    Livewire::test(Login::class)
+        ->fillForm(['login' => 'sysadmin', 'password' => 'Password123!'])
+        ->call('authenticate')
+        ->assertHasNoErrors();
+
+    $settings = app(SettingsService::class);
+    expect($settings->get('message.max_length'))->toBe(4000)
+        ->and($settings->get('ai.daily_message_limit_per_user'))->toBe(200);
+
+    Livewire::test(\App\Filament\Pages\Settings::class)
+        ->fillForm([
+            'message.max_length' => 3500,
+            'ai.daily_message_limit_per_user' => 500,
+            'ai.enabled' => true,
+        ])
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect($settings->get('message.max_length'))->toBe(3500)
+        ->and($settings->get('ai.daily_message_limit_per_user'))->toBe(500)
+        ->and($settings->get('ai.enabled'))->toBeTrue();
+
+    $row = AuditLog::query()->where('action', 'settings.updated')->latest('created_at')->first();
+    expect($row->context['changed'])->toContain('message.max_length')
+        ->and($row->context['changed'])->toContain('ai.daily_message_limit_per_user')
+        ->and($row->context['changed'])->not->toContain('room.group.max_members');
+});
