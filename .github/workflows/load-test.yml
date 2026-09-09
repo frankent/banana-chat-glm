@@ -84,12 +84,19 @@ jobs:
           PHP_CLI_SERVER_WORKERS=16 php artisan serve --host=0.0.0.0 --port=8000 > serve.log 2>&1 &
           # /health reports 503 while degraded (no reverb in this job) — probe
           # login instead: it exercises DB+cache and returns 200 when serving.
+          # `|| true`: curl exit 7 (port not bound yet — artisan serve is still
+          # booting) propagates through the assignment under bash -e and killed
+          # the step on the FIRST probe; that race failed every nightly since
+          # the workflow existed.
           for i in $(seq 1 30); do
             code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8000/api/v1/auth/login \
-              -H 'Content-Type: application/json' -d '{"username":"tony","password":"Tony12345!"}')
+              -H 'Content-Type: application/json' -d '{"username":"tony","password":"Tony12345!"}' || true)
             [ "$code" = "200" ] && break
             sleep 1
           done
+          # Exhausted loop used to "pass" (sleep's 0) and push the failure
+          # into k6 with no serve.log context — fail here instead.
+          if [ "$code" != "200" ]; then tail -100 serve.log; exit 1; fi
       - name: Run k6
         uses: grafana/setup-k6-action@v1
       - run: k6 run ../../infra/k6/chat-load.js
