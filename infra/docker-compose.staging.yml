@@ -1,0 +1,54 @@
+# Banana Chat staging stack (DEC-045) — a thin OVERLAY, never used alone:
+#
+#   docker compose -f infra/docker-compose.prod.yml -f infra/docker-compose.staging.yml up -d --build
+#
+# Same images, same topology as prod (that is staging's job: mirror prod).
+# Differences only where co-existence on one host demands it:
+#   · project name banana-chat-staging → own volumes/networks (no shared state)
+#   · edge on ${HTTP_PORT:-8081} instead of 80 (8080 is docker-desktop's
+#     on this machine), MinIO console on 9201
+#   · apps/api/.env.staging bind-mounted instead of .env — running dev (whose
+#     .env points at Neon/remote Redis) must never leak into staging, and
+#     vice versa. `touch apps/api/.env.staging` before the first `up`.
+#   · APP_NAME tagged "(Staging)" so admin panels / mails are distinguishable
+#
+# First run mirrors prod (FR-SETUP / DEC-043): create the env file, up -d
+# --build, open http://<host>:8081/setup, then restart worker scheduler reverb.
+
+name: banana-chat-staging
+
+services:
+  nginx:
+    ports: !override
+      - "${HTTP_PORT:-8081}:80"
+
+  minio:
+    ports: !override
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9201}:9001"
+
+  api:
+    volumes: !override
+      - ../apps/api/.env.staging:/app/.env
+      - api-storage:/app/storage
+    environment:
+      APP_NAME: "Banana Chat (Staging)"
+
+  worker:
+    volumes: !override
+      - ../apps/api/.env.staging:/app/.env
+      - api-storage:/app/storage
+    environment:
+      APP_NAME: "Banana Chat (Staging)"
+
+  scheduler:
+    volumes: !override
+      - ../apps/api/.env.staging:/app/.env
+      - api-storage:/app/storage
+    environment:
+      APP_NAME: "Banana Chat (Staging)"
+
+  reverb:
+    volumes: !override
+      - ../apps/api/.env.staging:/app/.env
+    environment:
+      APP_NAME: "Banana Chat (Staging)"

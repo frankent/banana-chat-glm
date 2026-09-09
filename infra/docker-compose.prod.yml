@@ -14,7 +14,8 @@
 #
 # Deploy-specific values (public hostname baked into the web build, ports,
 # worker counts, object-store endpoint) come from the environment or an
-# infra/.env next to this file — see infra/README.md §Production.
+# infra/.env (infra/.env.example documents them; `make up-prod` passes it via
+# --env-file) — see infra/README.md §Production.
 
 name: banana-chat-prod
 

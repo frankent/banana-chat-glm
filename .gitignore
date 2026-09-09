@@ -6,6 +6,8 @@ vendor/
 .env
 .env.*.local
 apps/api/.env
+apps/api/.env.staging
+infra/.env
 apps/web/.env.local
 *.pem
 *.key

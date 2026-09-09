@@ -1,6 +1,6 @@
 # infra/
 
-docker-compose dev/prod services + nginx configs.
+docker-compose dev/staging/prod services + nginx configs.
 
 ## Production stack (TASK-INF-002/003, DEC-044)
 
@@ -30,6 +30,10 @@ purpose — DEC-044).
 
 ### Deploy-specific values (environment or `infra/.env`)
 
+`cp infra/.env.example infra/.env` documents every knob below with its
+default; `make up-prod` / `make up-staging` pass it via `--env-file`
+automatically when it exists.
+
 | var | default | what |
 |---|---|---|
 | `VITE_REVERB_HOST` | `localhost` | public hostname — **baked into the web build**; set it, then `build nginx` |
@@ -55,6 +59,32 @@ purpose — DEC-044).
   up -d --build` (migrations: the installer already ran them; later ones go
   `docker compose ... exec api php artisan migrate --force`).
 - Backups: pg_dump cron per TASK-INF-007.
+
+## Staging stack (DEC-045)
+
+`docker-compose.staging.yml` is a thin **overlay** on the prod file — never
+used alone — so staging mirrors prod exactly (same images, topology,
+first-run installer) while co-existing with dev and prod on one host:
+
+| | prod | staging |
+|---|---|---|
+| compose project / volumes | `banana-chat-prod` | `banana-chat-staging` (own state, networks) |
+| edge port | `${HTTP_PORT:-80}` | `${HTTP_PORT:-8081}` (8080 is docker-desktop's on Macs) |
+| MinIO console (localhost-only) | 9101 | 9201 |
+| api env file | `apps/api/.env` | `apps/api/.env.staging` — dev's `.env` (Neon/remote Redis) never leaks in |
+
+`APP_NAME` is tagged "(Staging)" so admin panels and mails are tellable
+apart. Everything else — creds, Reverb keys, topology — is inherited from
+the prod file.
+
+```sh
+touch apps/api/.env.staging      # must exist before `up` (bind mount)
+make up-staging                  # = compose -f prod.yml -f staging.yml [+ --env-file infra/.env]
+# open http://<host>:8081/setup → wizard, then restart the long-runners:
+docker compose -f infra/docker-compose.prod.yml -f infra/docker-compose.staging.yml \
+  restart worker scheduler reverb
+make down-staging
+```
 
 ## Worker topology (TASK-INF-014, NFR-OPS-011)
 

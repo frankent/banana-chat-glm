@@ -6,6 +6,11 @@ COMPOSE        := docker compose -f infra/docker-compose.yml
 API_DIR        := apps/api
 PHP            := cd $(API_DIR) && php
 
+# deploy stacks — infra/.env optional (see infra/.env.example; DEC-045)
+ENV_FILE       := $(shell test -f infra/.env && echo --env-file infra/.env)
+COMPOSE_PROD   := docker compose $(ENV_FILE) -f infra/docker-compose.prod.yml
+COMPOSE_STAGING := docker compose $(ENV_FILE) -f infra/docker-compose.prod.yml -f infra/docker-compose.staging.yml
+
 .DEFAULT_GOAL := help
 
 help: ## Show available targets
@@ -37,6 +42,26 @@ ps: ## Service status
 
 logs: ## Tail service logs
 	$(COMPOSE) logs -f --tail=50
+
+# ---- deploy stacks (prod / staging — DEC-045) ----
+
+up-prod: ## Build+start prod stack (first run: touch apps/api/.env, open http://<host>/setup)
+	$(COMPOSE_PROD) up -d --build
+
+down-prod: ## Stop the prod stack
+	$(COMPOSE_PROD) down
+
+logs-prod: ## Tail prod service logs
+	$(COMPOSE_PROD) logs -f --tail=50
+
+up-staging: ## Build+start staging overlay (first run: touch apps/api/.env.staging, open http://<host>:8081/setup)
+	$(COMPOSE_STAGING) up -d --build
+
+down-staging: ## Stop the staging stack
+	$(COMPOSE_STAGING) down
+
+logs-staging: ## Tail staging service logs
+	$(COMPOSE_STAGING) logs -f --tail=50
 
 restart-reverb: ## Restart reverb container (after channel/policy changes)
 	$(COMPOSE) restart reverb
@@ -145,4 +170,5 @@ load-test: ## k6 load suite (needs api on :8000 + seed data): make load-test [DU
 ci-local: test test-web typecheck build-web ## Local CI approximation
 
 .PHONY: help up up-core up-full up-scale down down-full ps logs restart-reverb db-test use-cloud use-local which-env migrate fresh seed tinker \
-        dev-api dev-reverb dev-worker dev-worker-plain dev-mock-ai test test-filter pint stan install dev-web build-web e2e test-web typecheck load-test ci-local
+        dev-api dev-reverb dev-worker dev-worker-plain dev-mock-ai test test-filter pint stan install dev-web build-web e2e test-web typecheck load-test ci-local \
+        up-prod down-prod logs-prod up-staging down-staging logs-staging
