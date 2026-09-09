@@ -28,6 +28,21 @@ it — that final `restart` makes them pick it up. The api (fpm) needs no
 restart: it re-reads `.env` per request (no config cache is baked, on
 purpose — DEC-044).
 
+### Linux host notes (from the first real deploy)
+
+- `touch apps/api/.env` creates a **root-owned** file — php-fpm runs as
+  www-data (uid 82 in alpine), so the installer's `.env` write 500s with
+  nothing in the log (the logging failure masks it). After touching:
+  `chown 82:82 apps/api/.env`.
+- worker/scheduler/reverb run artisan as **root** while fpm runs as
+  www-data: root creates `storage/logs/laravel.log` first and www-data can
+  no longer append. After the first boot, once:
+  `docker compose -f infra/docker-compose.prod.yml exec api sh -c 'chown -R 82:82 /app/storage'`.
+- Cloud droplets generally **cannot reach their own public IP** (no
+  hairpin NAT): keep `AWS_ENDPOINT` container-direct (default) until the
+  edge hostname actually serves TLS, then flip it to
+  `https://<host>/storage` for browser-fetchable presigned URLs.
+
 ### Deploy-specific values (environment or `infra/.env`)
 
 `cp infra/.env.example infra/.env` documents every knob below with its
