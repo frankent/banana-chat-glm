@@ -24,6 +24,7 @@ use App\Models\Workspace;
 use App\Services\AuditLogger;
 use App\Services\SettingsService;
 use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Validation\ValidationException;
 use Livewire\Livewire;
@@ -148,4 +149,11 @@ test('TC-ADM-042 room JSON export returns a download', function () {
     $this->be(User::factory()->systemAdmin()->create(), 'admin');
     $room = Room::factory()->create(['workspace_id' => Workspace::factory()->create()->id]);
     Livewire::test(ListRoom::class)->callTableAction('export', $room)->assertFileDownloaded('room-'.$room->id.'.json');
+});
+
+test('TC-ADM-079 admin login rehashes older passwords into password_hash', function () {
+    $hash = password_hash('Password123!', PASSWORD_ARGON2ID, ['memory_cost' => 1024, 'time_cost' => 1, 'threads' => 1]);
+    $admin = User::factory()->systemAdmin()->create(['password_hash' => $hash]);
+    Livewire::test(Login::class)->fillForm(['login' => $admin->username, 'password' => 'Password123!'])->call('authenticate')->assertHasNoErrors();
+    expect($admin->fresh()->password_hash)->not->toBe($hash)->and(Hash::check('Password123!', $admin->fresh()->password_hash))->toBeTrue();
 });

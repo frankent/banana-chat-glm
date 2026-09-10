@@ -79,6 +79,12 @@ class User extends Authenticatable implements FilamentHasNameContract, FilamentU
         ];
     }
 
+    // TC-ADM-079: Laravel's automatic rehash must write the actual column.
+    public function getAuthPasswordName(): string
+    {
+        return 'password_hash';
+    }
+
     public function getAuthPassword(): string
     {
         return $this->password_hash; // column is password_hash, not password

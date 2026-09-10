@@ -1090,7 +1090,7 @@ Index: `(user_id, importance desc, last_used_at desc)`, GIN trgm `content`
 #### FR-ADM-014 API feature directory — TASK-ADM-015
 - Admin navigation covers API domains through moderation, settings, operations and an inventory derived from registered routes. User-owned send/typing/search/profile/notification preferences/AI consent-memory-generation actions remain in the member application under normal permissions; no admin impersonation or consent bypass.
 - Room Notes may be inspected and removed by system admins (audited); shared pins may be removed; failed attachment processing may be retried. AI content review remains gated by `ai.admin_review_enabled` and audited.
-- TC-ADM-070..078: populated resources and actions, settings coverage/types, moderation guard, mobile layout, device revoke, membership ownership transfer, and AI privacy.
+- TC-ADM-070..079: populated resources and actions, settings coverage/types, moderation guard, mobile layout, device revoke, membership ownership transfer, and AI privacy.
 
 ### 5.12 OFF — Offline & Cache (Mobile เป็นหลัก, Web บางส่วน)
 
@@ -2733,7 +2733,8 @@ Size: S ≤ 1 วัน · M 2–3 วัน · L 4–5 วัน · XL > 1 ส�
 
 | Version | Date | By | Change |
 |---|---|---|---|
-| 1.6.0 | 2026-09-11 | Codex | TASK-ADM-015, FR-ADM-007..014, DEC-049; admin overview/theme, rooms/messages/notes/media/session/device/operations/AI review resources, full runtime settings and API feature directory. Fix unread after delayed image sizing (FR-READ-001, TC-WEB-041), audit export, membership management and Horizon guard. TC-ADM-070..078. |
+| 1.6.1 | 2026-09-11 | Codex | FR-ADM-001, FR-AUTH-005, TC-ADM-079: declare password_hash as the authentication password column so Laravel admin-login rehash does not update the nonexistent password column. Reproduced during production validation. |
+| 1.6.0 | 2026-09-11 | Codex | TASK-ADM-015, FR-ADM-007..014, DEC-049; admin overview/theme, rooms/messages/notes/media/session/device/operations/AI review resources, full runtime settings and API feature directory. Fix unread after delayed image sizing (FR-READ-001, TC-WEB-041), audit export, membership management and Horizon guard. TC-ADM-070..079. |
 | 1.5.1 | 2026-09-11 | Codex | FR-MEDIA-001/004, TC-MEDIA-021: install GD with PNG/JPEG/GIF/WebP support in dev and production images. Enforce codec encode/decode during image build; fixes image processing failure caused by missing imagecreatefromstring. TC-MEDIA-022 converts palette GIF/PNG thumbnails to true-color before WebP encoding without altering originals. |
 | 1.5.0 | 2026-09-11 | Codex | TASK-BE/CORE/WEB-040, DEC-048: workspace directory, room Notes, shared Pins/jumps, persisted replies with media, Markdown/viewers, named typing, explicit-mention group AI and compact chat. Fix Conversations rail navigation. API-130..138 and EVT-060..062. |
 | 1.4.16 | 2026-09-11 | Codex | **Web visual refresh (TASK-WEB-002/006/018)**: adapt the sibling banana-chat design: forest-green navigation, cream sidebar, yellow accents, avatars, login/welcome screens and responsive drawers. Preserve existing API, realtime, outbox, read receipts, search, media and session logic. Browser regression evidence in docs/reviews/2026-09-11/ui-redesign. No specified behavior changes. |
