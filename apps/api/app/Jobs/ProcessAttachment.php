@@ -252,6 +252,12 @@ class ProcessAttachment implements ShouldQueue
                 continue; // smaller than target / gif — use first frame unscaled
             }
 
+            // TC-MEDIA-022: GIF/indexed PNG decode to palette images.
+            // WebP only accepts true-color; convert the in-memory thumbnail,
+            // never the stored original (animated GIF remains untouched).
+            if (!imageistruecolor($thumb) && !imagepalettetotruecolor($thumb)) {
+                throw new \RuntimeException('Unable to convert palette thumbnail to true-color');
+            }
             ob_start();
             imagewebp($thumb, null, $quality);
             $webp = ob_get_clean();

@@ -86,7 +86,7 @@ try {
   });
   console.log(JSON.stringify({multipartBytes:60*1024*1024,parts:ticket.data.multipart.part_urls.length,completed:true}));
  });
- for (const format of ['png','jpeg','gif','webp']) await check('TC-MEDIA-021-real-upload-'+format,async()=>{
+ for (const format of ['png','jpeg','gif','webp','indexed.png']) await check('TC-MEDIA-021-real-upload-'+format,async()=>{
   const path='/tmp/banana-qa-image.'+format;
   await sender.page.locator('input[type=file]').setInputFiles(path);
   const chip=sender.page.getByTestId('composer-attachment').filter({hasText:'banana-qa-image.'+format});
