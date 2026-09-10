@@ -7,10 +7,15 @@ FROM php:8.4-cli-alpine
 RUN apk add --no-cache \
         bash curl git unzip ffmpeg \
         postgresql-dev icu-dev oniguruma-dev libzip-dev zlib-dev \
+        libpng-dev libjpeg-turbo-dev libwebp-dev freetype-dev \
     && apk add --no-cache --virtual .build-deps $PHPIZE_DEPS \
-    && docker-php-ext-install -j$(nproc) pdo_pgsql pgsql intl pcntl zip \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
+    && docker-php-ext-install -j$(nproc) gd pdo_pgsql pgsql intl pcntl zip \
     && pecl install redis && docker-php-ext-enable redis \
     && apk del .build-deps
+
+COPY docker/check-media-runtime.php /usr/local/bin/check-media-runtime.php
+RUN php /usr/local/bin/check-media-runtime.php
 
 # Expose real process env to $_ENV/$_SERVER (default GPCS hides it) so the
 # compose `environment:` block wins over any bind-mounted .env inside

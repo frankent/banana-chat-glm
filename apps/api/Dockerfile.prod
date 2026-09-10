@@ -9,10 +9,15 @@ FROM php:8.4-fpm-alpine
 RUN apk add --no-cache \
         bash curl git unzip ffmpeg \
         postgresql-dev icu-dev oniguruma-dev libzip-dev zlib-dev \
+        libpng-dev libjpeg-turbo-dev libwebp-dev freetype-dev \
     && apk add --no-cache --virtual .build-deps $PHPIZE_DEPS \
-    && docker-php-ext-install -j$(nproc) pdo_pgsql pgsql intl pcntl zip opcache \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
+    && docker-php-ext-install -j$(nproc) gd pdo_pgsql pgsql intl pcntl zip opcache \
     && pecl install redis && docker-php-ext-enable redis \
     && apk del .build-deps
+
+COPY docker/check-media-runtime.php /usr/local/bin/check-media-runtime.php
+RUN php /usr/local/bin/check-media-runtime.php
 
 # EGPCS (same reason as the dev image) so compose `environment:` beats the
 # bind-mounted .env. clear_env=no is the fpm-specific half: php-fpm wipes the
