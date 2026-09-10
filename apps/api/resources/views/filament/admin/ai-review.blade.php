@@ -1,0 +1,1 @@
+<div class="bc-admin-stack"><p>Most recent 100 messages. This review is audited.</p>@foreach($messages as $message)<div class="bc-admin-row"><strong>{{ $message->role }} · {{ $message->created_at }}</strong><p class="bc-admin-body">{{ $message->content }}</p></div>@endforeach</div>

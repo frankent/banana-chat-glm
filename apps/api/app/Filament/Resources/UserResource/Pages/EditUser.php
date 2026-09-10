@@ -4,7 +4,6 @@ namespace App\Filament\Resources\UserResource\Pages;
 
 use App\Filament\Resources\UserResource;
 use App\Services\AuditLogger;
-use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
 
 class EditUser extends EditRecord
@@ -14,7 +13,7 @@ class EditUser extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            Actions\DeleteAction::make(),
+            // Accounts are deactivated through the audited user service; never hard-deleted.
         ];
     }
 

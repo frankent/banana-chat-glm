@@ -21,6 +21,8 @@ use Illuminate\Support\Facades\Response;
  */
 class AuditLogResource extends Resource
 {
+    protected static ?string $navigationGroup = 'System';
+
     protected static ?string $model = AuditLog::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-clock';
@@ -69,6 +71,8 @@ class AuditLogResource extends Resource
                     ->placeholder('—'),
             ])
             ->filters([
+                SelectFilter::make('actor_id')->label('Actor')->relationship('actor', 'username')->searchable(),
+                SelectFilter::make('target_type')->options(fn () => AuditLog::distinct()->whereNotNull('target_type')->pluck('target_type', 'target_type')->all()),
                 SelectFilter::make('action')
                     ->options(fn (): array => AuditLog::query()->distinct()->orderBy('action')->pluck('action', 'action')->all()),
                 SelectFilter::make('workspace_id')
@@ -91,15 +95,15 @@ class AuditLogResource extends Resource
                 Tables\Actions\Action::make('exportCsv')
                     ->label('Export CSV')
                     ->icon('heroicon-o-arrow-down-tray')
-                    ->action(function (Table $table): void {
-                        $rows = $table->getQuery()->limit(50000)->get(['created_at', 'actor_id', 'actor_type', 'action', 'target_type', 'target_id', 'workspace_id', 'context', 'ip']);
+                    ->action(function ($livewire) {
+                        $rows = $livewire->getFilteredTableQuery()->limit(50000)->get(['created_at', 'actor_id', 'actor_type', 'action', 'target_type', 'target_id', 'workspace_id', 'context', 'ip']);
 
                         $csv = implode("\n", $rows->map(fn (AuditLog $r) => implode(',', array_map(
                             fn ($v) => '"'.str_replace('"', '""', (string) ($v ?? '')).'"',
                             [$r->created_at?->toIso8601String(), $r->actor_id, $r->actor_type?->value, $r->action, $r->target_type, $r->target_id, $r->workspace_id, json_encode($r->context, JSON_UNESCAPED_UNICODE), $r->ip]
                         )))->all());
 
-                        Response::streamDownload(
+                        return Response::streamDownload(
                             fn () => print ($csv),
                             'audit-log-'.now()->format('Ymd-His').'.csv',
                             ['Content-Type' => 'text/csv'],

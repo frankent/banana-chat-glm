@@ -18,6 +18,8 @@ use Filament\Pages\Page;
  */
 class TwoFactor extends Page
 {
+    protected static ?string $navigationGroup = 'People & access';
+
     protected static ?string $navigationIcon = 'heroicon-o-shield-check';
 
     protected static ?string $navigationLabel = '2FA (TOTP)';

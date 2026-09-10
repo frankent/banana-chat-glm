@@ -2,28 +2,26 @@
 
 namespace App\Filament\Pages;
 
+use App\Domain\Admin\ModerationService;
 use App\Services\AuditLogger;
 use App\Services\SettingsService;
 use Filament\Forms\Components\Section;
+use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Forms\Form;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Illuminate\Support\Facades\DB;
 
-/**
- * FR-ADM-009 — system settings editor (§4.4). Old/new values audited,
- * changes take effect within the 60s cache window (SettingsService).
- */
+/** FR-ADM-009 / TC-ADM-071: every runtime key, typed and range-validated. */
 class Settings extends Page
 {
     protected static ?string $navigationIcon = 'heroicon-o-cog-6-tooth';
 
-    protected static ?string $navigationLabel = 'ตั้งค่าระบบ';
+    protected static ?string $navigationGroup = 'System';
 
-    protected static ?string $title = 'System Settings';
-
-    protected static ?int $navigationSort = 5;
+    protected static ?string $title = 'System settings';
 
     protected static string $view = 'filament.pages.settings';
 
@@ -31,121 +29,82 @@ class Settings extends Page
 
     public function mount(): void
     {
-        $settings = app(SettingsService::class);
-        // undot(): fields bind nested state paths (message.max_length →
-        // message[max_length]) — filling with the flat dotted map leaves
-        // every field empty and save() fails validation (found on prod).
-        $this->form->fill(collect($settings->all())
-            ->only(array_keys($this->editable()))
-            ->undot()
-            ->all());
+        $this->form->fill(collect(app(SettingsService::class)->all())->undot()->all());
+    }
+
+    public static function ranges(): array
+    {
+        return [
+            'message.max_length' => [1, 32000], 'message.edit_window_minutes' => [0, 525600], 'message.max_attachments' => [1, 20],
+            'room.group.max_members' => [2, 10000], 'room.deleted_purge_days' => [1, 365],
+            'auth.password.min_length' => [8, 128], 'auth.lockout.threshold' => [3, 100], 'auth.lockout.minutes' => [1, 1440],
+            'auth.access_token_ttl_minutes' => [5, 1440], 'auth.refresh_token_ttl_days' => [1, 90], 'auth.max_sessions_per_user' => [1, 100],
+            'upload.image.max_bytes' => [1024, 1073741824], 'upload.video.max_bytes' => [1024, 2147483647], 'upload.file.max_bytes' => [1024, 2147483647],
+            'upload.multipart_threshold_bytes' => [5242880, 1073741824], 'upload.multipart_part_bytes' => [5242880, 1073741824],
+            'presence.offline_after_seconds' => [10, 3600], 'typing.ttl_seconds' => [1, 30], 'push.suppress_if_focused_seconds' => [0, 600],
+            'storage.quota_per_workspace_gb' => [0.01, 1000000],
+            'ai.memory.max_per_user' => [0, 10000], 'ai.memory.inject_max' => [0, 1000], 'ai.memory.inject_max_tokens' => [0, 32000],
+            'ai.daily_message_limit_per_user' => [0, 100000], 'ai.max_message_chars' => [1, 128000], 'ai.max_concurrent_per_user' => [1, 20],
+            'ai.compaction.trigger_ratio' => [0.1, 0.95], 'ai.stream.flush_interval_ms' => [20, 5000], 'ai.deleted_purge_days' => [1, 365],
+            'ai.push_suppress_if_focused_seconds' => [0, 600],
+        ];
     }
 
     public function form(Form $form): Form
     {
-        return $form
-            ->schema([
-                Section::make('ข้อความ')
-                    ->schema($this->numericFields([
-                        'message.max_length' => [1, 32000],
-                        'message.max_attachments' => [1, 20],
-                    ])),
-                Section::make('ห้อง')
-                    ->schema($this->numericFields([
-                        'room.group.max_members' => [2, 10000],
-                        'room.deleted_purge_days' => [1, 365],
-                    ])),
-                Section::make('การเข้าสู่ระบบ')
-                    ->schema($this->numericFields([
-                        'auth.password.min_length' => [8, 128],
-                        'auth.lockout.threshold' => [3, 100],
-                        'auth.lockout.minutes' => [1, 1440],
-                        'auth.access_token_ttl_minutes' => [5, 1440],
-                        'auth.refresh_token_ttl_days' => [1, 90],
-                        'auth.max_sessions_per_user' => [1, 100],
-                    ])),
-                Section::make('AI')
-                    ->schema([
-                        Toggle::make('ai.enabled')->label('เปิดใช้ AI'),
-                        Toggle::make('ai.admin_review_enabled')->label('Admin review AI conversations'),
-                        ...$this->numericFields([
-                            'ai.daily_message_limit_per_user' => [0, 10000],
-                        ]),
-                    ]),
-            ])
-            ->statePath('data');
+        $groups = [];
+        foreach (SettingsService::DEFAULTS as $key => $default) {
+            $label = ucwords(str_replace(['.', '_'], ' ', $key));
+            if (is_bool($default)) {
+                $field = Toggle::make($key);
+            } elseif (is_array($default)) {
+                $field = TagsInput::make($key)->nestedRecursiveRules(['string', 'max:40', 'regex:/^[a-zA-Z0-9.+_-]+$/']);
+            } elseif (is_string($default)) {
+                $field = TextInput::make($key)->maxLength(40)->regex('/^(?:[0-9]+\.[0-9]+\.[0-9]+(?:[-+][A-Za-z0-9.-]+)?)?$/')->helperText('Leave empty to disable the minimum-version gate.');
+            } else {
+                [$min,$max] = self::ranges()[$key];
+                $field = TextInput::make($key)->numeric()->minValue($min)->maxValue($max);
+                if (is_int($default)) {
+                    $field->integer();
+                }if ($default !== null) {
+                    $field->required();
+                } else {
+                    $field->nullable()->helperText('Leave empty for unlimited storage.');
+                }
+            }
+            $groups[explode('.', $key)[0]][] = $field->label($label);
+        }
+        $sections = [];
+        foreach ($groups as $name => $fields) {
+            $sections[] = Section::make(ucfirst($name))->schema($fields)->columns(2)->collapsible();
+        }
+
+        return $form->schema($sections)->statePath('data');
     }
 
     public function save(): void
     {
+        app(ModerationService::class)->authorize(auth('admin')->user());
         $data = $this->form->getState();
         $settings = app(SettingsService::class);
-        $editable = $this->editable();
-
-        // getState() hands back Filament's NESTED state (message => [...]).
-        // Iterating $data's keys against the dotted $editable map blew up
-        // with "Undefined array key message" (found on prod, FR-ADM-009):
-        // drive the loop off $editable and read values by dotted path —
-        // the flat-key fallback covers the shape Livewire snapshots carry.
         $old = [];
         $new = [];
-        foreach ($editable as $key => $cast) {
-            $value = $data[$key] ?? data_get($data, $key);
-            $normalized = $cast === 'int' ? (int) $value : (bool) $value;
-            $old[$key] = $settings->get($key);
-            $new[$key] = $normalized;
-            $settings->set($key, $normalized);
+        foreach (SettingsService::DEFAULTS as $key => $default) {
+            $v = data_get($data, $key);
+            $value = match (true) {
+                is_bool($default) => (bool) $v,is_int($default) => (int) $v,is_float($default) => (float) $v,is_array($default) => array_values($v ?? []),$default === null => $v === null || $v === '' ? null : (float) $v,default => (string) ($v ?? '')
+            };
+            if ($settings->get($key) !== $value) {
+                $old[$key] = $settings->get($key);
+                $new[$key] = $value;
+            }
         }
-
-        $changes = collect($old)->filter(fn ($v, $k) => (string) $v !== (string) $new[$k])->keys()->all();
-
-        app(AuditLogger::class)->log(
-            'settings.updated',
-            auth('admin')->user(),
-            'settings',
-            null,
-            ['changed' => $changes],
-        );
-
-        Notification::make()
-            ->title('บันทึกแล้ว — มีผลภายใน 60 วินาที (cache)')
-            ->success()
-            ->send();
-    }
-
-    /**
-     * @return array<string, string> key => 'int'|'bool'
-     */
-    private function editable(): array
-    {
-        return [
-            'message.max_length' => 'int',
-            'message.max_attachments' => 'int',
-            'room.group.max_members' => 'int',
-            'room.deleted_purge_days' => 'int',
-            'auth.password.min_length' => 'int',
-            'auth.lockout.threshold' => 'int',
-            'auth.lockout.minutes' => 'int',
-            'auth.access_token_ttl_minutes' => 'int',
-            'auth.refresh_token_ttl_days' => 'int',
-            'auth.max_sessions_per_user' => 'int',
-            'ai.enabled' => 'bool',
-            'ai.admin_review_enabled' => 'bool',
-            'ai.daily_message_limit_per_user' => 'int',
-        ];
-    }
-
-    /**
-     * @param  array<string, array{0: int, 1: int}>  $fields
-     * @return array<int, TextInput>
-     */
-    private function numericFields(array $fields): array
-    {
-        return collect($fields)->map(fn (array $range, string $key): TextInput => TextInput::make($key)
-            ->label($key)
-            ->numeric()
-            ->minValue($range[0])
-            ->maxValue($range[1])
-            ->required())->values()->all();
+        DB::transaction(function () use ($settings, $old, $new) {
+            foreach ($new as $key => $value) {
+                $settings->set($key, $value, auth('admin')->id());
+            }app(AuditLogger::class)->log('settings.updated', auth('admin')->user(), 'settings', null, ['changed' => array_keys($new), 'old' => $old, 'new' => $new]);
+        });
+        $settings->flush();
+        Notification::make()->title('Settings saved')->success()->send();
     }
 }

@@ -1,0 +1,1 @@
+<div class="bc-admin-stack"><h3>Room note</h3><p class="bc-admin-body">{{ $note->body }}</p>@foreach($note->attachments as $attachment)<p>{{ $attachment->original_name }} · {{ $attachment->mime_type }}</p>@endforeach</div>

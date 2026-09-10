@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\WorkspaceResource\RelationManagers;
 
+use App\Domain\Admin\WorkspaceMembershipService;
 use App\Enums\MemberStatus;
 use App\Enums\WorkspaceRole;
 use App\Models\User;
@@ -55,13 +56,7 @@ class MembersRelationManager extends RelationManager
                             ->required(),
                     ])
                     ->action(function (RelationManager $livewire, array $data): void {
-                        WorkspaceMember::query()->create([
-                            'workspace_id' => $livewire->getOwnerRecord()->id,
-                            'user_id' => $data['user_id'],
-                            'role' => $data['role'],
-                            'status' => 'active',
-                        ]);
-                        app(AuditLogger::class)->log('workspace.member_added', auth('admin')->user(), 'workspace', $livewire->getOwnerRecord()->id, ['user_id' => $data['user_id'], 'role' => $data['role']]);
+                        app(WorkspaceMembershipService::class)->assign(auth('admin')->user(), $livewire->getOwnerRecord(), User::findOrFail($data['user_id']), $data['role']);
                     }),
             ])
             ->actions([
@@ -83,8 +78,7 @@ class MembersRelationManager extends RelationManager
                     ->requiresConfirmation()
                     ->visible(fn (WorkspaceMember $record): bool => $record->status instanceof MemberStatus ? $record->status === MemberStatus::Active : $record->status === 'active')
                     ->action(function (WorkspaceMember $record): void {
-                        $record->update(['status' => 'removed', 'removed_at' => now()]);
-                        app(AuditLogger::class)->log('workspace.member_removed', auth('admin')->user(), 'workspace', $record->workspace_id, ['user_id' => $record->user_id]);
+                        app(WorkspaceMembershipService::class)->remove(auth('admin')->user(), $record);
                     }),
             ])
             ->bulkActions([]);

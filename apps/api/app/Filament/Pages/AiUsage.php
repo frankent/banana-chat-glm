@@ -14,6 +14,8 @@ use Illuminate\Support\Facades\DB;
  */
 class AiUsage extends Page
 {
+    protected static ?string $navigationGroup = 'AI';
+
     protected static ?string $navigationIcon = 'heroicon-o-chart-bar';
 
     protected static ?string $navigationLabel = 'AI Usage';

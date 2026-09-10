@@ -17,6 +17,13 @@ class HorizonServiceProvider extends HorizonApplicationServiceProvider
     {
         parent::boot();
 
+        // FR-ADM-013: use the same guard as /admin in every environment.
+        Horizon::auth(function ($request) {
+            $user = auth('admin')->user();
+
+            return $user instanceof User && $user->is_system_admin && $user->status === UserStatus::Active;
+        });
+
         // NFR-OPS-011 / TASK-INF-014 — queue lag alerts flow through the
         // ops channel once configured; log-based alerting covers the rest.
         // Horizon::routeSlackNotificationsTo(env('OPS_SLACK_WEBHOOK'), '#alerts');

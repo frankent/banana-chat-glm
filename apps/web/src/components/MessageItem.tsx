@@ -61,6 +61,9 @@ export function AttachmentView({ attachment }: { attachment: Attachment }) {
         <img
           src={thumb}
           alt={attachment.original_name}
+          width={attachment.width ?? undefined}
+          height={attachment.height ?? undefined}
+          style={attachment.width && attachment.height ? { width: Math.min(attachment.width, 288 * attachment.width / attachment.height), height: 'auto', aspectRatio: `${attachment.width}/${attachment.height}` } : undefined}
           data-testid="attachment-image"
           className="max-h-72 max-w-full rounded-lg object-contain"
         />
@@ -75,6 +78,9 @@ export function AttachmentView({ attachment }: { attachment: Attachment }) {
         preload="metadata"
         src={attachment.urls.original}
         poster={attachment.urls.poster ?? undefined}
+        width={attachment.width ?? undefined}
+        height={attachment.height ?? undefined}
+        style={attachment.width && attachment.height ? { width: Math.min(attachment.width, 288 * attachment.width / attachment.height), height: 'auto', aspectRatio: `${attachment.width}/${attachment.height}` } : undefined}
         data-testid="attachment-video"
         className="max-h-72 max-w-full rounded-lg"
       /><button onClick={() => setViewing(true)}>Open video viewer</button>{viewer}</>

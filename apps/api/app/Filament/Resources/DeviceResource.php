@@ -1,0 +1,33 @@
+<?php
+
+namespace App\Filament\Resources;
+
+use App\Domain\Admin\ModerationService;
+use App\Models\Device;
+use Filament\Tables\Actions\Action;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
+
+class DeviceResource extends BrowseResource
+{
+    protected static ?string $model = Device::class;
+
+    protected static ?string $navigationIcon = 'heroicon-o-device-phone-mobile';
+
+    protected static ?string $navigationGroup = 'People & access';
+
+    public static function table(Table $table): Table
+    {
+        return $table->defaultSort('created_at', 'desc')->columns([
+            TextColumn::make('user.username')->searchable(), TextColumn::make('device_name')->searchable(), TextColumn::make('platform')->badge(), TextColumn::make('app_version'), TextColumn::make('last_active_at')->dateTime(), TextColumn::make('push_provider')->placeholder('Not registered'), TextColumn::make('push_disabled_at')->dateTime()->placeholder('Enabled if registered'),
+        ])->filters([SelectFilter::make('user_id')->relationship('user', 'username')->searchable()])->actions([
+            Action::make('revoke')->label('Revoke sessions & push')->requiresConfirmation()->color('danger')->action(fn (Device $record) => app(ModerationService::class)->revokeDevice(auth('admin')->user(), $record)),
+        ])->bulkActions([]);
+    }
+
+    public static function getPages(): array
+    {
+        return ['index' => DeviceResource\Pages\ListDevice::route('/')];
+    }
+}

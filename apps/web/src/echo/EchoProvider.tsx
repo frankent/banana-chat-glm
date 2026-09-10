@@ -179,6 +179,13 @@ export function EchoProvider({ children }: { children: ReactNode }) {
     // Shares the throttle: the server fans this out alongside room.activity
     // for every message, so it bursts the same way.
     channel.listen('.workspace.unread_changed', throttledRoomRefresh);
+    const refreshMemberships = () => {
+      void queryClient.invalidateQueries({ queryKey: ['workspaces'] });
+      void queryClient.invalidateQueries({ queryKey: ['rooms'] });
+      void queryClient.invalidateQueries({ queryKey: ['members'] });
+    };
+    channel.listen('.workspace.member_added', refreshMemberships);
+    channel.listen('.workspace.member_removed', refreshMemberships);
 
     return () => {
       if (timer !== null) {
@@ -191,6 +198,8 @@ export function EchoProvider({ children }: { children: ReactNode }) {
       channel.stopListening('.room.created');
       channel.stopListening('.room.activity');
       channel.stopListening('.workspace.unread_changed');
+      channel.stopListening('.workspace.member_added');
+      channel.stopListening('.workspace.member_removed');
     };
   }, [instance, me, logout, queryClient]);
 

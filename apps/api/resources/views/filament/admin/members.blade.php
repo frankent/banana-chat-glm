@@ -1,0 +1,1 @@
+<div class="bc-admin-stack">@foreach($members as $member)<div class="bc-admin-row"><strong>{{ $member->display_name }}</strong><span>{{ $member->username }} · {{ $member->pivot->role->value ?? $member->pivot->role }}</span></div>@endforeach</div>

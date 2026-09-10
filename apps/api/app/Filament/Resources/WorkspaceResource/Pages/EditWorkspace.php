@@ -4,7 +4,6 @@ namespace App\Filament\Resources\WorkspaceResource\Pages;
 
 use App\Filament\Resources\WorkspaceResource;
 use App\Services\AuditLogger;
-use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
 
 class EditWorkspace extends EditRecord
@@ -14,7 +13,7 @@ class EditWorkspace extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            Actions\DeleteAction::make(),
+            // Archive preserves conversations and membership history.
         ];
     }
 

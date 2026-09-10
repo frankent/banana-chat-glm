@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\UserResource\RelationManagers;
 
+use App\Domain\Admin\WorkspaceMembershipService;
 use App\Enums\MemberStatus;
 use App\Enums\WorkspaceRole;
 use App\Models\Workspace;
@@ -11,7 +12,6 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Form;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
-use Filament\Tables\Actions\AttachAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
@@ -57,24 +57,12 @@ class WorkspaceMembershipRelationManager extends RelationManager
             ])
             ->filters([])
             ->headerActions([
-                AttachAction::make()
-                    ->label('เพิ่มเข้า workspace')
-                    ->form(fn (AttachAction $action): array => [
-                        $action->getRecordSelect(),
-                        Select::make('role')
-                            ->options(['owner' => 'Owner', 'admin' => 'Admin', 'member' => 'Member'])
-                            ->default('member')
-                            ->required(),
-                    ])
-                    ->using(function (RelationManager $livewire, array $data): void {
-                        WorkspaceMember::query()->create([
-                            'workspace_id' => $data['recordId'],
-                            'user_id' => $livewire->getOwnerRecord()->id,
-                            'role' => $data['role'],
-                            'status' => 'active',
-                        ]);
-                        app(AuditLogger::class)->log('workspace.member_added', auth('admin')->user(), 'workspace', $data['recordId'], ['user_id' => $livewire->getOwnerRecord()->id]);
-                    }),
+                Tables\Actions\Action::make('assign')->label('เพิ่มเข้า workspace')->form([
+                    Select::make('workspace_id')->label('Workspace')->options(fn () => Workspace::where('status', 'active')->pluck('name', 'id'))->searchable()->required(),
+                    Select::make('role')->options(['owner' => 'Owner', 'admin' => 'Admin', 'member' => 'Member'])->default('member')->required(),
+                ])->action(function (RelationManager $livewire, array $data): void {
+                    app(WorkspaceMembershipService::class)->assign(auth('admin')->user(), Workspace::findOrFail($data['workspace_id']), $livewire->getOwnerRecord(), $data['role']);
+                }),
             ])
             ->actions([
                 Tables\Actions\Action::make('changeRole')
@@ -97,8 +85,7 @@ class WorkspaceMembershipRelationManager extends RelationManager
                     ->requiresConfirmation()
                     ->visible(fn (WorkspaceMember $record): bool => $record->status instanceof MemberStatus ? $record->status === MemberStatus::Active : $record->status === 'active')
                     ->action(function (WorkspaceMember $record): void {
-                        $record->update(['status' => 'removed', 'removed_at' => now()]);
-                        app(AuditLogger::class)->log('workspace.member_removed', auth('admin')->user(), 'workspace', $record->workspace_id, ['user_id' => $record->user_id]);
+                        app(WorkspaceMembershipService::class)->remove(auth('admin')->user(), $record);
                     }),
             ])
             ->bulkActions([]);

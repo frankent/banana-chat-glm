@@ -36,6 +36,8 @@ use Illuminate\Support\HtmlString;
  */
 class AiProviderResource extends Resource
 {
+    protected static ?string $navigationGroup = 'AI';
+
     protected static ?string $model = AiProvider::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-sparkles';
