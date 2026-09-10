@@ -12,7 +12,7 @@ Only web presentation and drawer state changed. Existing API contracts, authenti
 - Desktop login/chat/welcome and mobile screenshots inspected.
 - Tests use a separate `orgchat_review_20260911` database, API port 18000 and temporary users/workspace. They do not run against production.
 
-The UI refresh does not constitute a new end-to-end certification of every feature: external AI generation and every attachment format were not re-exercised in this presentation-only pass. Production deployment is not part of this change.
+The UI refresh does not constitute a new end-to-end certification of every feature: external AI generation and every attachment format were not re-exercised in this presentation-only pass. 
 
 ## Local reproduction
 
@@ -23,3 +23,9 @@ node docs/reviews/2026-09-11/ui-redesign/verify.mjs
 ```
 
 The runner creates and deletes its own fixture users/workspace. Keep development and production databases separate from this fixture database.
+
+## Production deployment — 2026-09-11
+
+Deployed the web changes from commit `141aea6` to https://chat.gamecoms.net after explicit approval. Applied the UI patch on top of the existing production fixes, built nginx on the server with its production environment, and recreated only nginx. No migrations or database changes. Previous image retained as `banana-chat-prod-nginx:before-ui-141aea6`; backup patch and build log are in `/root/banana-chat-backups/ui-141aea6/`. All services healthy after deployment.
+
+Live checks with the authorized test accounts passed: login and WebSocket connection; existing DM listing (fresh-room creation was not re-tested on production); background delivery/unread; workspace badge; open-room receipt; redesigned desktop/mobile navigation and no horizontal overflow; no browser runtime errors. Six checks passed; see `production-results.json`.
