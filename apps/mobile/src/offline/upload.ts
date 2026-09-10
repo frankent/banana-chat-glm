@@ -27,3 +27,10 @@ export async function uploadFile(
   }
   return result.body.length;
 }
+
+/** FR-MEDIA-001: upload only this part, not the whole original file. */
+export async function uploadPart(path: string, url: string, headers: Record<string, string>, start: number, end: number): Promise<string | null> {
+  const response = await fetch(url, { method: 'PUT', headers, body: new File(path).slice(start, end) });
+  if (!response.ok) throw new Error(`upload failed (${response.status})`);
+  return response.headers.get('ETag');
+}

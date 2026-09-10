@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { EchoProvider } from './echo/EchoProvider';
 import { AiAssistantView } from './components/ai/AiAssistantView';
 import { AppShell } from './components/AppShell';
@@ -11,12 +11,7 @@ import { NoWorkspacePage } from './pages/NoWorkspacePage';
 import { SearchPage } from './pages/SearchPage';
 import { useSession } from './state/session';
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: { retry: false, refetchOnWindowFocus: true },
-    mutations: { retry: false },
-  },
-});
+import { queryClient } from './lib/query-client';
 
 function SessionGate({ children }: { children: React.ReactNode }) {
   const { bootstrap } = useSession();

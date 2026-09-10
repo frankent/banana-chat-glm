@@ -106,3 +106,15 @@ describe('TC-CORE-013 refresh single-flight', () => {
     expect(tokens.isLoggedIn()).toBe(false);
   });
 });
+
+it('TC-AUTH-013 ignores an in-flight response after logout/account change', async () => {
+  const tokens = new TokenManager('/refresh', memoryStore());
+  tokens.setTokens('old', 'old-refresh');
+  let finish!: (r: Response) => void;
+  const api = new ApiClient('', tokens, (() => new Promise<Response>(resolve => { finish = resolve; })) as typeof fetch);
+  const pending = api.request('/me');
+  tokens.clear();
+  tokens.setTokens('new', 'new-refresh');
+  finish(jsonResponse(200, { data: { private: 'old account' } }));
+  await expect(pending).rejects.toThrow('Session changed');
+});

@@ -23,13 +23,21 @@ export class ApiClient {
   ) {}
 
   async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+    const epoch = this.tokens.sessionEpoch;
+    const current = () => { if (epoch !== this.tokens.sessionEpoch) throw new Error('Session changed'); };
     try {
-      return await this.doRequest<T>(path, options);
+      const result = await this.doRequest<T>(path, options);
+      current();
+      return result;
     } catch (e) {
+      current();
       if (e instanceof ApiError && e.status === 401 && !options._isRetry) {
         const refreshed = await this.tokens.refresh();
         if (refreshed !== null) {
-          return this.doRequest<T>(path, { ...options, _isRetry: true });
+          current();
+          const result = await this.doRequest<T>(path, { ...options, _isRetry: true });
+          current();
+          return result;
         }
       }
       throw e;

@@ -209,3 +209,52 @@ describe('Outbox', () => {
     expect(outbox.get(entry.id)?.last_error).toBe('connection reset');
   });
 });
+
+it('TC-CORE-032 restores interrupted sending entries as pending', async () => {
+  const { outbox, cache } = makeOutbox();
+  const entry = await outbox.enqueue({ roomId: 'room-1', workspaceId: 'ws-1', body: 'survive crash' });
+  await cache.saveOutbox([{ ...entry, status: 'sending' }]);
+  const restarted = new Outbox(cache);
+  await restarted.restore();
+  expect(restarted.get(entry.id)?.status).toBe('pending');
+});
+
+it('TC-CORE-026 a retry blocks later messages in the same room, not other rooms', async () => {
+  const calls: string[] = [];
+  const { outbox } = makeOutbox({ sender: async entry => {
+    calls.push(entry.body!);
+    return entry.body === 'first' ? { ok: false, retryable: true, error: 'offline' } : { ok: true, message: confirmed(entry.client_message_id, 1) };
+  } });
+  await outbox.enqueue({ roomId: 'room-1', workspaceId: 'ws-1', body: 'first' });
+  await outbox.enqueue({ roomId: 'room-1', workspaceId: 'ws-1', body: 'second' });
+  await outbox.enqueue({ roomId: 'room-2', workspaceId: 'ws-1', body: 'other' });
+  outbox.setOnline(true);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(calls).toEqual(['first', 'other']);
+  outbox.dispose();
+});
+
+it('TC-CORE-031 removing a failed room head releases its next pending message', async () => {
+  const sent: string[] = [];
+  const { outbox } = makeOutbox({ sender: async e => {
+    sent.push(e.body!);
+    return e.body === 'first' ? { ok: false, retryable: false, error: 'forbidden' } : { ok: true, message: confirmed(e.client_message_id, 1) };
+  } });
+  const first = await outbox.enqueue({ roomId: 'r', workspaceId: 'w', body: 'first' });
+  await outbox.enqueue({ roomId: 'r', workspaceId: 'w', body: 'second' });
+  outbox.setOnline(true);
+  await vi.waitFor(() => expect(outbox.get(first.id)?.status).toBe('failed'));
+  expect(sent).toEqual(['first']);
+  await outbox.remove(first.id);
+  await vi.waitFor(() => expect(sent).toEqual(['first', 'second']));
+  await outbox.dispose();
+});
+it('TC-CORE-021 disposing while persistence is pending prevents a new network send', async () => {
+  const sender = vi.fn();
+  const { outbox } = makeOutbox({ sender });
+  await outbox.enqueue({ roomId: 'r', workspaceId: 'w', body: 'private' });
+  outbox.setOnline(true);
+  await outbox.dispose();
+  expect(sender).not.toHaveBeenCalled();
+  await expect(outbox.enqueue({ roomId: 'r', workspaceId: 'w', body: 'late' })).rejects.toThrow('disposed');
+});

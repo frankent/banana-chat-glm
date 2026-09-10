@@ -54,6 +54,8 @@ type HeldEntry = OutboxEntry & { hold?: boolean };
 export class Outbox {
   private entries: HeldEntry[] = [];
   private online = false;
+  private disposed = false;
+  private writes: Promise<void> = Promise.resolve();
   private flushing = false;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private listeners = new Set<() => void>();
@@ -77,7 +79,9 @@ export class Outbox {
   /** TC-CORE-032 — hydrate the queue persisted by a previous session. */
   async restore(): Promise<void> {
     const loaded = await this.cache.loadOutbox();
-    this.entries = (loaded ?? []).map((e) => ({ ...e }));
+    if (this.disposed) return;
+    const existing = new Set(this.entries.map(e => e.id));
+    this.entries = [...(loaded ?? []).filter(e => !existing.has(e.id)).map((e) => ({ ...e, status: e.status === 'sending' ? 'pending' as const : e.status })), ...this.entries];
     this.nextOrder = this.entries.reduce((max, e) => Math.max(max, e.order), 0) + 1;
     this.emit();
     if (this.online) {
@@ -94,6 +98,7 @@ export class Outbox {
 
   /** going online triggers a flush (TC-CORE-026). */
   setOnline(online: boolean): void {
+    if (this.disposed) return;
     this.online = online;
     if (online) {
       void this.flush();
@@ -106,6 +111,7 @@ export class Outbox {
 
   /** TC-CORE-025 — queued with status pending, no seq, ordered at the tail. */
   async enqueue(draft: OutboxDraft): Promise<OutboxEntry> {
+    if (this.disposed) throw new Error('Outbox disposed');
     const entry: HeldEntry = {
       id: `ob-${randomId()}`,
       order: this.nextOrder++,
@@ -120,7 +126,11 @@ export class Outbox {
       created_local_at: new Date().toISOString(),
     };
     this.entries.push(entry);
-    await this.persist();
+    try { await this.persist(); }
+    catch (error) {
+      this.entries = this.entries.filter(e => e.id !== entry.id);
+      throw error;
+    }
     this.emit();
     if (this.online) {
       void this.flush();
@@ -162,6 +172,7 @@ export class Outbox {
     this.entries = this.entries.filter((e) => e.id !== id);
     await this.persist();
     this.emit();
+    if (this.online) void this.flush();
   }
 
   subscribe(listener: () => void): () => void {
@@ -171,12 +182,16 @@ export class Outbox {
     };
   }
 
-  dispose(): void {
+  dispose(): Promise<void> {
+    this.disposed = true;
+    this.online = false;
+    this.onDelivered = null;
     if (this.retryTimer !== null) {
       clearTimeout(this.retryTimer);
       this.retryTimer = null;
     }
     this.listeners.clear();
+    return this.writes.catch(() => undefined);
   }
 
   /**
@@ -184,17 +199,20 @@ export class Outbox {
    * Entries enqueued mid-flush are picked up by the follow-up pass.
    */
   async flush(): Promise<void> {
-    if (this.sender === null || !this.online || this.flushing) {
+    if (this.disposed || this.sender === null || !this.online || this.flushing) {
       return;
     }
     this.flushing = true;
     try {
       let queue = this.pendingQueue();
       while (queue.length > 0 && this.online && this.sender !== null) {
-        for (const entry of queue) {
+        for (const entry of queue.slice(0, 1)) {
+          if (this.disposed || !this.online) break;
+          if (!this.pendingQueue().some(e => e.id === entry.id)) continue;
           entry.status = 'sending';
           await this.persist();
           this.emit();
+          if (this.disposed) return;
 
           let result: OutboxSendResult;
           try {
@@ -203,6 +221,7 @@ export class Outbox {
             result = { ok: false, retryable: true, error: error instanceof Error ? error.message : String(error) };
           }
 
+          if (this.disposed) return;
           if (result.ok) {
             // TC-CORE-027 — optimistic row is replaced by the confirmed message
             this.entries = this.entries.filter((e) => e.id !== entry.id);
@@ -233,7 +252,12 @@ export class Outbox {
   }
 
   private pendingQueue(): HeldEntry[] {
-    return this.entries.filter((e) => e.status === 'pending' && e.hold !== true).sort(byOrder);
+    const blocked = new Set<string>();
+    return [...this.entries].sort(byOrder).filter(e => {
+      if (blocked.has(e.room_id)) return false;
+      blocked.add(e.room_id);
+      return e.status === 'pending' && e.hold !== true;
+    });
   }
 
   private scheduleRetry(attempt: number): void {
@@ -252,7 +276,10 @@ export class Outbox {
 
   private async persist(): Promise<void> {
     // `hold` is transient — strip it before writing through the adapter
-    await this.cache.saveOutbox(this.entries.map(({ hold: _hold, ...entry }) => entry));
+    if (this.disposed) return;
+    const snapshot = this.entries.map(({ hold: _hold, ...entry }) => ({ ...entry }));
+    this.writes = this.writes.catch(() => undefined).then(() => this.cache.saveOutbox(snapshot));
+    await this.writes;
   }
 
   private emit(): void {

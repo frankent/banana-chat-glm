@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { AppState, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { useLocalSearchParams } from 'expo-router';
-import { MessageStore, Outbox, type OutboxEntry } from '@banana-chat/chat-core';
+import { MessageStore, Outbox, RoomSync, ReadReceiptReporter, applyRoomEvent, type OutboxEntry } from '@banana-chat/chat-core';
 import type { Message } from '@banana-chat/shared';
 import { roomCache, scopedOutbox, useSession } from '../../src/auth/session';
 import { endpoints } from '../../src/lib/api';
 import { parseAroundSeq } from '../../src/lib/search-utils';
 import { createOutboxSender } from '../../src/offline/outbox-flusher';
-import { fileExists, uploadFile } from '../../src/offline/upload';
+import { fileExists, uploadFile, uploadPart } from '../../src/offline/upload';
 import { getLocale, tr } from '../../src/lib/i18n';
 import { formatTime, theme } from '../../src/lib/theme';
+import { watchRoom } from '../../src/realtime/echo';
 import { setCurrentRoom } from '../../src/push/current-room';
 
 /**
@@ -34,6 +35,8 @@ export default function RoomScreen() {
   const storeRef = useRef<MessageStore | null>(null);
   const outboxRef = useRef<Outbox | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
+  const atLatest = useRef(true);
+  const receiptRef = useRef<ReadReceiptReporter | null>(null);
   const [draft, setDraft] = useState('');
   const [online, setOnline] = useState(true);
   const t = tr();
@@ -50,7 +53,8 @@ export default function RoomScreen() {
       message: null,
       outbox: e,
     }));
-    setRows([...messages, ...pending]);
+    const confirmedIds = new Set(messages.map(row => row.message?.client_message_id));
+    setRows([...messages, ...pending.filter(row => !confirmedIds.has(row.outbox?.client_message_id))].reverse());
   }, [roomId]);
 
   useEffect(() => {
@@ -60,23 +64,54 @@ export default function RoomScreen() {
     // TC-MOB-031 — foreground pushes for this room are suppressed while open
     setCurrentRoom(roomId);
     const slug = workspace.workspace.slug;
-    const store = new MessageStore(roomId, 10_000, () => rebuild());
+    let active = true;
+    const cache = roomCache();
+    let ready = false;
+    const store = new MessageStore(roomId, 10_000, () => {
+      rebuild();
+      if (active) {
+        void cache?.saveMessages(roomId, store.getState().messages);
+        receiptRef.current?.observe(store.newestSeq);
+        if (store.getState().needsFill) void sync.refresh().catch(() => undefined);
+      }
+    });
+    const sync = new RoomSync(store, options => endpoints.messages(roomId, slug, options), () => active);
+    const reporter = new ReadReceiptReporter(seq => endpoints.markRead(roomId, slug, seq), () => active && atLatest.current && AppState.currentState === 'active' && aroundSeq === undefined);
+    receiptRef.current = reporter;
     storeRef.current = store;
     const outbox = scopedOutbox() ?? new Outbox({ loadOutbox: async () => null, saveOutbox: async () => undefined });
     outboxRef.current = outbox;
     const unsub = outbox.subscribe(() => rebuild());
-    outbox.setSender(createOutboxSender({ endpoints, uploadFile, fileExists }));
+    outbox.setSender(createOutboxSender({ endpoints, uploadFile, uploadPart, fileExists }));
     // TC-CORE-027 — confirmed server message replaces the optimistic row
     outbox.onDelivered = (_entry, message) => {
+      if (!active || message.room_id !== roomId) return;
       store.add(message);
-      void roomCache()?.saveMessages(roomId, store.getState().messages);
+      void cache?.saveMessages(roomId, store.getState().messages);
     };
 
+    const unwatch = watchRoom(roomId, (name, data) => {
+      if (!active) return;
+      applyRoomEvent(store, name, data);
+    }, connected => {
+      if (!active) return;
+      setOnline(connected);
+      if (ready) outbox.setOnline(connected);
+      if (connected && ready) void sync.refresh().catch(() => undefined);
+    });
+    const appState = AppState.addEventListener('change', state => {
+      if (state === 'active' && ready) {
+        void sync.refresh().then(() => { if (active) { setOnline(true); outbox.setOnline(true); reporter.observe(store.newestSeq); } }).catch(() => { if (active) { setOnline(false); outbox.setOnline(false); } });
+      }
+    });
     void (async () => {
+      await outbox.restore();
+      if (!active) return;
+      ready = true;
       // 1. cache first — instant paint (TC-MOB-001)
-      const cached = await roomCache()?.loadMessages(roomId);
+      const cached = await cache?.loadMessages(roomId);
       if (cached != null && storeRef.current === store) {
-        store.replace(cached);
+        if (store.getState().messages.length === 0) store.mergePage(cached);
       }
       rebuild();
       // 2. network sync — FR-SRCH-001 jump-to-result seeds around the hit
@@ -87,23 +122,28 @@ export default function RoomScreen() {
           aroundSeq !== undefined && Number.isFinite(aroundSeq) ? { around_seq: aroundSeq } : {},
         );
         if (storeRef.current === store) {
-          store.replace(page.messages);
-          void roomCache()?.saveMessages(roomId, page.messages);
+          store.mergePage(page.messages);
+          void cache?.saveMessages(roomId, store.getState().messages);
           const last = page.messages.at(-1);
           if (last !== undefined && me !== null && last.seq > 0) {
-            void endpoints.markRead(roomId, slug, last.seq).catch(() => undefined);
+            reporter.observe(last.seq);
           }
         }
+        if (!active) return;
         setOnline(true);
         outbox.setOnline(true);
       } catch {
+        if (!active) return;
         setOnline(false);
         rebuild();
       }
-      await outbox.restore();
     })();
 
     return () => {
+      active = false;
+      unwatch();
+      appState.remove();
+      reporter.dispose();
       setCurrentRoom(null);
       unsub();
       outbox.dispose();
@@ -130,6 +170,15 @@ export default function RoomScreen() {
         data={rows}
         keyExtractor={(item: Row) => item.key}
         inverted
+        onViewableItemsChanged={({ viewableItems }) => {
+          atLatest.current = viewableItems.some(item => item.index === 0);
+          receiptRef.current?.observe(storeRef.current?.newestSeq ?? 0);
+        }}
+        onEndReached={() => {
+          const store = storeRef.current;
+          const oldest = store?.getState().messages.at(0)?.seq;
+          if (store && workspace && oldest && oldest > 1) void endpoints.messages(roomId, workspace.workspace.slug, { before_seq: oldest }).then(page => { if (storeRef.current === store) store.add(page.messages); }).catch(() => undefined);
+        }}
         renderItem={({ item }) => {
           if (item.outbox !== null) {
             const failed = item.outbox.status === 'failed';
@@ -159,7 +208,7 @@ export default function RoomScreen() {
           return (
             <View style={[styles.bubble, mine ? styles.mine : styles.theirs]}>
               {!mine && <Text style={styles.sender}>{m.sender?.display_name ?? m.sender_id}</Text>}
-              <Text style={styles.bubbleText}>{m.body ?? ''}</Text>
+              <Text style={styles.bubbleText}>{m.deleted_at ? 'ข้อความถูกลบ' : m.body ?? ''}</Text>
               <Text style={styles.time}>{formatTime(m.created_at, getLocale())}</Text>
             </View>
           );

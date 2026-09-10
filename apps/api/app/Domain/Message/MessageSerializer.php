@@ -73,11 +73,12 @@ class MessageSerializer
      */
     public static function forEvent(Message $message): array
     {
-        $message->loadMissing(
-            ['sender' => fn ($q) => $q->select(['id', 'username', 'display_name', 'avatar_attachment_id'])],
+        $message->loadMissing([
+            'sender:id,username,display_name,avatar_attachment_id',
+            'replyTo:id,room_id,sender_id,body,deleted_at',
             'attachments',
             'mentions:id',
-        );
+        ]);
 
         return app(self::class)->toArray($message);
     }

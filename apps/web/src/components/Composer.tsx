@@ -2,11 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { DEFAULT_SETTINGS } from '@banana-chat/shared';
 import type { UserStub } from '@banana-chat/shared';
-import { useQueryClient } from '@tanstack/react-query';
-import { endpoints } from '../lib/api';
-import { roomStore } from '../lib/room-stores';
-import { optimisticMessage } from '../hooks/useMessages';
-import { optimisticAttachment, useUploader } from '../hooks/useUploader';
+import { sessionOutbox } from '../lib/outbox';
+import { useUploader } from '../hooks/useUploader';
 
 interface ComposerProps {
   roomId: string;
@@ -29,26 +26,19 @@ const MENTION_AT_CARET = /(?:^|\s)@([a-zA-Z0-9][a-zA-Z0-9_.]*)$/;
 /** TASK-WEB-006 — Enter sends, Shift+Enter newlines, optimistic insert, one draft per room. */
 export function Composer({ roomId, workspaceId, slug, senderId, members = [] }: ComposerProps) {
   const [body, setBody] = useState('');
+  const submitting = useRef(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const queryClient = useQueryClient();
-  const draftKey = `orgchat.draft.${roomId}`;
+  const draftKey = `orgchat.draft.${senderId}.${workspaceId}.${roomId}`;
   const maxLength = DEFAULT_SETTINGS['message.max_length'];
   const { staged, addFiles, remove, clear } = useUploader(slug);
 
   useEffect(() => {
     setBody(window.sessionStorage.getItem(draftKey) ?? '');
     textareaRef.current?.focus();
-    return () => {
-      const current = textareaRef.current?.value ?? '';
-      if (current.trim() !== '') {
-        window.sessionStorage.setItem(draftKey, current);
-      } else {
-        window.sessionStorage.removeItem(draftKey);
-      }
-    };
   }, [draftKey]);
 
   const sendable = staged.some((s) => s.status === 'ready' || s.status === 'processing')
@@ -57,34 +47,28 @@ export function Composer({ roomId, workspaceId, slug, senderId, members = [] }: 
   const canSend = body.trim() !== '' || sendable;
 
   const send = async () => {
+    if (submitting.current) return;
     const trimmed = body.trim() === '' ? null : body;
     if (trimmed === null && !sendable) {
       return;
     }
-    const attachments = staged
-      .filter((s) => s.status === 'ready' || s.status === 'processing')
-      .map((s) => optimisticAttachment(s));
-    const attachmentIds = staged
-      .filter((s) => s.status === 'ready' || s.status === 'processing')
-      .map((s) => s.attachmentId)
-      .filter((id): id is string => id !== null);
-
-    const clientMessageId = crypto.randomUUID();
-    const store = roomStore(roomId);
-    store.add(optimisticMessage(roomId, workspaceId, senderId, trimmed, clientMessageId, store.newestSeq + 1, attachments));
-    setBody('');
-    clear();
-
+    const attachments = staged.filter(s => s.status === 'ready' || s.status === 'processing').map(s => ({
+      local_path: '', attachment_id: s.attachmentId!, kind: s.kind,
+      mime_type: 'application/octet-stream', original_name: s.filename, size_bytes: s.size,
+    }));
+    submitting.current = true;
+    setSendError(null);
     try {
-      const { message } = await endpoints.sendMessage(roomId, slug, trimmed, clientMessageId, undefined, attachmentIds);
-      store.confirmClientMessage(clientMessageId, message);
-      void endpoints.markRead(roomId, slug, message.seq).then(() => {
-        void queryClient.invalidateQueries({ queryKey: ['rooms', slug] });
-        void queryClient.invalidateQueries({ queryKey: ['workspaces'] });
-      });
-    } catch {
-      // leave the optimistic bubble; a page reload resyncs from the server
-      setBody(trimmed ?? '');
+      const { outbox, ready } = sessionOutbox();
+      await ready;
+      await outbox.enqueue({ roomId, workspaceId: slug, body: trimmed, attachments });
+      setBody('');
+      window.sessionStorage.removeItem(draftKey);
+      clear();
+    } catch (error) {
+      setSendError(error instanceof Error ? error.message : 'Unable to queue message');
+    } finally {
+      submitting.current = false;
     }
   };
 
@@ -156,6 +140,7 @@ export function Composer({ roomId, workspaceId, slug, senderId, members = [] }: 
 
   const onBodyChange = (value: string) => {
     setBody(value.slice(0, maxLength));
+    window.sessionStorage.setItem(draftKey, value.slice(0, maxLength));
     const textarea = textareaRef.current;
     const caret = textarea?.selectionStart ?? value.length;
     const match = MENTION_AT_CARET.exec(value.slice(0, caret));
@@ -164,6 +149,7 @@ export function Composer({ roomId, workspaceId, slug, senderId, members = [] }: 
 
   return (
     <div className="relative border-t border-slate-200 bg-white p-3">
+      {sendError && <p role="alert" className="text-sm text-red-600">{sendError}</p>}
       {staged.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-2" data-testid="composer-attachments">
           {staged.map((s) => (

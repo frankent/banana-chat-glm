@@ -24,6 +24,8 @@ export type OutboxStatus = 'pending' | 'sending' | 'failed';
 export interface OutboxAttachmentDraft {
   /** local file path/uri — uploaded when back online (FR-OFF-002) */
   local_path: string;
+  /** Already uploaded; retained across retry/restart. */
+  attachment_id?: string;
   kind: AttachmentKind;
   mime_type: string;
   original_name: string;

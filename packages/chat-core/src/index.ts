@@ -22,3 +22,7 @@ export type { OutboxDraft, OutboxOptions, OutboxSendFn, OutboxSendResult } from 
 // NOTE: the contract test suites (cache.contract.js) are test-only — they
 // import vitest, so they must never enter the production import graph.
 // Consumers run them via the '@banana-chat/chat-core/contract' subpath.
+export { RoomSync, ReadReceiptReporter } from './room-sync.js';
+export { uploadTicket } from './upload.js';
+export type { CompletedPart } from './upload.js';
+export { applyRoomEvent } from './room-sync.js';

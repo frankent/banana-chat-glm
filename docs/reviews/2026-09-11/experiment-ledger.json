@@ -1,0 +1,6 @@
+[
+  {"run": 1, "revisit": "server contains message, DOM count 0; reload restores", "reconnect": "socket connected, server contains message, DOM count 0", "failedSend": "sending bubble, no server message, outbox null", "accountSwitch": "API denied, previous user's private message visible", "cleanup": "API login rate-limited; exact owner-only test room later soft-deleted via local DB"},
+  {"run": 2, "revisit": "same failure", "reconnect": "DOM count 1; inconsistent with run 1; cannot certify due queued delivery/HMR", "failedSend": "same failure", "accountSwitch": "same failure", "cleanup": "owner-only test room soft-deleted through API"},
+  {"check": "counter-evidence", "observation": "API message persists and reload restores it, ruling out server message loss for revisit. API denies other account while DOM shows content, locating isolation failure in client state. Failed POST is absent from server and persistent outbox, distinguishing pending UI from durable offline delivery."},
+  {"check": "shared-workspace drift", "observation": "EchoProvider changed by another task during review; initial typecheck passed, intermediate failed, final web typecheck passed. Reviewer did not modify application source."}
+]

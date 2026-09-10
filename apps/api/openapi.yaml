@@ -24,6 +24,34 @@ components:
       schema: { type: string }
       description: slug of the active workspace
   schemas:
+    UploadTicket:
+      description: API-060 / FR-MEDIA-001; multipart is returned for S3 uploads above the configured threshold.
+      type: object
+      required: [attachment_id, put_url, headers, expires_at]
+      properties:
+        attachment_id: { type: string }
+        put_url: { type: [string, 'null'] }
+        headers: { type: object, additionalProperties: { type: string } }
+        expires_at: { type: string, format: date-time }
+        multipart:
+          type: [object, 'null']
+          required: [upload_id, part_size, part_urls]
+          properties:
+            upload_id: { type: string }
+            part_size: { type: integer, minimum: 1 }
+            part_urls: { type: array, items: { type: string } }
+    CompleteUpload:
+      description: API-061; omit the body for single PUT, provide ordered S3 ETags for multipart.
+      type: object
+      properties:
+        parts:
+          type: array
+          items:
+            type: object
+            required: [part_number, etag]
+            properties:
+              part_number: { type: integer, minimum: 1 }
+              etag: { type: string }
     Error:
       type: object
       properties:
@@ -105,6 +133,47 @@ security:
   - bearerAuth: []
 
 paths:
+  /uploads:
+    post:
+      summary: API-060 Create upload ticket (single PUT or multipart)
+      security: [{ bearerAuth: [] }]
+      parameters: [{ $ref: '#/components/parameters/workspaceSlug' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, filename, mime_type, size_bytes]
+              properties:
+                kind: { type: string, enum: [image, video, file, avatar] }
+                filename: { type: string }
+                mime_type: { type: string }
+                size_bytes: { type: integer, minimum: 1 }
+                sha256: { type: string }
+      responses:
+        '201':
+          description: Upload ticket
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/UploadTicket' }
+  /uploads/{id}/complete:
+    post:
+      summary: API-061 Verify upload and complete multipart when applicable
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/workspaceSlug' }
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CompleteUpload' }
+      responses:
+        '200':
+          description: Attachment accepted for processing; returns data.attachment
   /auth/login:
     post:
       summary: API-001 login

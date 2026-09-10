@@ -1,3 +1,5 @@
+import { useSession } from '../state/session';
+import { registerSessionCleanup } from './session-resources';
 import { MessageStore } from '@banana-chat/chat-core';
 import type { MessageStoreState } from '@banana-chat/chat-core';
 import { useEffect, useSyncExternalStore } from 'react';
@@ -11,7 +13,9 @@ interface RoomEntry {
 const entries = new Map<string, RoomEntry>();
 
 function entryFor(roomId: string): RoomEntry {
-  let entry = entries.get(roomId);
+  const { me, currentWorkspace } = useSession.getState();
+  const key = `${me?.id ?? 'anonymous'}:${currentWorkspace?.workspace.id ?? ''}:${roomId}`;
+  let entry = entries.get(key);
   if (entry === undefined) {
     const listeners = new Set<() => void>();
     const store = new MessageStore(roomId, 10_000, (state) => {
@@ -21,7 +25,7 @@ function entryFor(roomId: string): RoomEntry {
       }
     });
     entry = { store, listeners, snapshot: store.getState() };
-    entries.set(roomId, entry);
+    entries.set(key, entry);
   }
   return entry;
 }
@@ -30,13 +34,10 @@ export function roomStore(roomId: string): MessageStore {
   return entryFor(roomId).store;
 }
 
-export function disposeRoom(roomId: string): void {
-  const entry = entries.get(roomId);
-  if (entry !== undefined) {
-    entry.store.dispose();
-    entries.delete(roomId);
-  }
-}
+registerSessionCleanup(() => {
+  for (const entry of entries.values()) entry.store.dispose();
+  entries.clear();
+});
 
 const EMPTY_STATE: MessageStoreState = { messages: [], needsFill: null, fillTimedOut: false, prependCount: 0 };
 

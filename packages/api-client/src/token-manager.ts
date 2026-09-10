@@ -8,6 +8,10 @@ export interface TokenStore {
 }
 
 export class TokenManager {
+  private epoch = 0;
+
+  get sessionEpoch(): number { return this.epoch; }
+
   private accessToken: string | null = null;
   private refreshInFlight: Promise<string | null> | null = null;
 
@@ -29,6 +33,8 @@ export class TokenManager {
   }
 
   clear(): void {
+    this.epoch += 1;
+    this.refreshInFlight = null;
     this.accessToken = null;
     this.store.setRefreshToken(null);
   }
@@ -42,13 +48,17 @@ export class TokenManager {
    * clears state and returns null (caller treats as logged out).
    */
   refresh(): Promise<string | null> {
-    this.refreshInFlight ??= this.doRefresh().finally(() => {
-      this.refreshInFlight = null;
-    });
+    if (!this.refreshInFlight) {
+      const request = this.doRefresh().finally(() => {
+        if (this.refreshInFlight === request) this.refreshInFlight = null;
+      });
+      this.refreshInFlight = request;
+    }
     return this.refreshInFlight;
   }
 
   private async doRefresh(): Promise<string | null> {
+    const epoch = this.epoch;
     const refreshToken = this.store.getRefreshToken();
     if (refreshToken === null) {
       return null;
@@ -61,12 +71,14 @@ export class TokenManager {
         body: JSON.stringify({ refresh_token: refreshToken }),
       });
 
+      if (epoch !== this.epoch) return null;
       if (!response.ok) {
         this.clear();
         return null;
       }
 
       const body = (await response.json()) as { access_token: string; refresh_token: string };
+      if (epoch !== this.epoch) return null;
       this.setTokens(body.access_token, body.refresh_token);
       return body.access_token;
     } catch {

@@ -1,0 +1,54 @@
+{
+  "negativeControl": true,
+  "commit": "537fed43d4cd4594a9a7fff0592e67506eeeebc0",
+  "results": [
+    {
+      "id": "TC-ROOM-006-new-dm",
+      "passed": false,
+      "ms": 10281,
+      "error": "expect(locator).toBeVisible() failed\n\nLocator: locator('aside a[href=\"/rooms/01m269606s727a8vbxnv0c3h47\"]')\nExpected: visible\nTimeout: 10000ms\nError: element(s) not found\n\nCall log:\n  - Expect \"toBeVisible\" locator('aside a[href=\"/rooms/01m269606s727a8vbxnv0c3h47\"]') with timeout 10000ms\n  - waiting for locator('aside a[href=\"/rooms/01m269606s727a8vbxnv0c3h47\"]')\n"
+    },
+    {
+      "id": "TC-READ-011-background-first-message",
+      "passed": false,
+      "ms": 10147,
+      "error": "expect(locator).toContainText(expected) failed\n\nLocator: locator('aside a[href=\"/rooms/01m269606s727a8vbxnv0c3h47\"]')\nExpected substring: \"DM verification first message\"\nReceived string:    \"· Review sender\"\nTimeout: 10000ms\n\nCall log:\n  - Expect \"toContainText\" locator('aside a[href=\"/rooms/01m269606s727a8vbxnv0c3h47\"]') with timeout 10000ms\n  - waiting for locator('aside a[href=\"/rooms/01m269606s727a8vbxnv0c3h47\"]')\n    24 × locator resolved to <a data-discover=\"true\" href=\"/rooms/01m269606s727a8vbxnv0c3h47\" class=\"flex items-center justify-between rounded-lg px-3 py-2 text-sm hover:bg-slate-100\">…</a>\n       - unexpected value \"· Review sender\"\n"
+    }
+  ],
+  "events": [
+    {
+      "receiver": true,
+      "event": "room.created"
+    },
+    {
+      "receiver": true,
+      "event": "room.created"
+    },
+    {
+      "receiver": false,
+      "event": "room.created"
+    },
+    {
+      "receiver": false,
+      "event": "message.created"
+    },
+    {
+      "receiver": true,
+      "event": "room.activity"
+    },
+    {
+      "receiver": true,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": false,
+      "event": "room.activity"
+    },
+    {
+      "receiver": false,
+      "event": "workspace.unread_changed"
+    }
+  ],
+  "errors": [],
+  "cleanup": "isolated fixture cleanup complete"
+}

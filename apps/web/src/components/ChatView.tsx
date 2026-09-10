@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { EventEnvelope, Message } from '@banana-chat/shared';
+import { RoomSync, ReadReceiptReporter, type OutboxEntry } from '@banana-chat/chat-core';
+import { sessionOutbox } from '../lib/outbox';
 import { endpoints } from '../lib/api';
 import { useMessageStore, roomStore } from '../lib/room-stores';
 import { useMessagePage } from '../hooks/useMessages';
@@ -18,7 +20,7 @@ function dayLabel(iso: string): string {
 export function ChatView() {
   const { roomId } = useParams<{ roomId: string }>();
   const { me, currentWorkspace } = useSession();
-  const { echo } = useEcho();
+  const { echo, connected } = useEcho();
   const queryClient = useQueryClient();
   const slug = currentWorkspace?.workspace.slug;
   const [searchParams, setSearchParams] = useSearchParams();
@@ -30,9 +32,36 @@ export function ChatView() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const jumpedRef = useRef<string | undefined>(undefined);
   const [mediaOpen, setMediaOpen] = useState(false);
+  const listRef = useRef<HTMLDivElement>(null);
+  const atBottom = useRef(true);
+  const scrollHeight = useRef(0);
+  const scrollTop = useRef(0);
+  const previousHead = useRef<number | undefined>(undefined);
+  const visible = useRef(false);
+  const receipts = useRef<ReadReceiptReporter | null>(null);
+  const [pending, setPending] = useState<OutboxEntry[]>([]);
+  const [olderRemaining, setOlderRemaining] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!me || !currentWorkspace || !roomId) return;
+    const { outbox, ready } = sessionOutbox();
+    const update = () => setPending(outbox.entriesForRoom(roomId));
+    const unsubscribe = outbox.subscribe(update);
+    void ready.then(update);
+    update();
+    return unsubscribe;
+  }, [me?.id, currentWorkspace?.workspace.id, roomId]);
+  useEffect(() => {
+    if (!roomId || !slug) return;
+    let active = true;
+    const store = roomStore(roomId);
+    const sync = new RoomSync(store, options => endpoints.messages(roomId, slug, options), () => active);
+    // Reconnect is transport state, not a guarantee that old events will replay.
+    if (connected && aroundSeq === undefined) void sync.refresh().catch(() => undefined);
+    return () => { active = false; };
+  }, [connected, roomId, slug, aroundSeq]);
 
   const roomQuery = useQuery({
-    queryKey: ['room', roomId],
+    queryKey: ['room', roomId, me?.id, currentWorkspace?.workspace.id],
     queryFn: () => endpoints.room(roomId!, slug!),
     enabled: roomId !== undefined && slug !== undefined,
     staleTime: 60_000,
@@ -40,14 +69,14 @@ export function ChatView() {
 
   // roster for @mention autocomplete (FR-MSG-008)
   const membersQuery = useQuery({
-    queryKey: ['room-members', roomId],
+    queryKey: ['room-members', roomId, me?.id, currentWorkspace?.workspace.id],
     queryFn: () => endpoints.roomMembers(roomId!, slug!),
     enabled: roomId !== undefined && slug !== undefined,
     staleTime: 60_000,
   });
 
   const readStatusQuery = useQuery({
-    queryKey: ['read-status', roomId],
+    queryKey: ['read-status', roomId, me?.id, currentWorkspace?.workspace.id],
     queryFn: () => endpoints.readStatus(roomId!, slug!),
     enabled: roomId !== undefined && slug !== undefined && roomQuery.data?.room.type === 'dm',
   });
@@ -56,7 +85,7 @@ export function ChatView() {
     if (roomId === undefined || slug === undefined || seq <= 0) {
       return;
     }
-    void endpoints.markRead(roomId, slug, seq).then(() => {
+    return endpoints.markRead(roomId, slug, seq).then(() => {
       void queryClient.invalidateQueries({ queryKey: ['rooms', slug] });
       void queryClient.invalidateQueries({ queryKey: ['workspaces'] });
     });
@@ -76,15 +105,13 @@ export function ChatView() {
         return;
       }
       store.add(message);
-      if (message.sender_id !== me.id && document.visibilityState === 'visible') {
-        markRead(message.seq);
-      } else if (message.sender_id === me.id) {
+      if (message.sender_id === me.id) {
         void queryClient.invalidateQueries({ queryKey: ['rooms', slug] });
       }
     };
 
     const onRead = () => {
-      void queryClient.invalidateQueries({ queryKey: ['read-status', roomId] });
+      void queryClient.invalidateQueries({ queryKey: ['read-status', roomId, me?.id, currentWorkspace?.workspace.id] });
       void queryClient.invalidateQueries({ queryKey: ['rooms', slug] });
     };
 
@@ -120,28 +147,47 @@ export function ChatView() {
   // gap-fill whenever the store flags a hole (TC-CORE-004)
   useEffect(() => {
     if (state.needsFill !== null) {
-      void fillGap(state.needsFill.afterSeq, state.needsFill.beforeSeq);
+      void fillGap(state.needsFill.afterSeq, state.needsFill.beforeSeq).catch(() => undefined);
     }
   }, [state.needsFill, fillGap]);
 
-  // clear unread on open
   useEffect(() => {
-    if (!query.isLoading && state.messages.length > 0 && roomId !== undefined) {
-      markRead(state.messages[state.messages.length - 1]!.seq);
-    }
-    // run on room open and initial seed only
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query.isLoading, roomId, query.data]);
+    atBottom.current = true;
+    previousHead.current = undefined;
+    scrollHeight.current = 0;
+    scrollTop.current = 0;
+    setOlderRemaining(null);
+  }, [roomId]);
 
-  // stick to bottom — unless a search jump target is pending
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const head = state.messages[0]?.seq;
+    const prepended = head !== undefined && previousHead.current !== undefined && head < previousHead.current;
+    if (prepended) list.scrollTop = scrollTop.current + list.scrollHeight - scrollHeight.current;
+    else if (aroundSeq === undefined && atBottom.current) list.scrollTop = list.scrollHeight;
+    previousHead.current = head;
+    scrollHeight.current = list.scrollHeight;
+    scrollTop.current = list.scrollTop;
+  }, [state.messages.length, pending.length, aroundSeq]);
+
   useEffect(() => {
-    if (aroundSeq !== undefined) {
-      return;
-    }
-    bottomRef.current?.scrollIntoView({ block: 'end' });
-  }, [state.messages.length, aroundSeq]);
+    const list = listRef.current;
+    const bottom = bottomRef.current;
+    if (!list || !bottom || !roomId || !slug) return;
+    const reporter = new ReadReceiptReporter(async seq => { await markRead(seq); },
+      () => visible.current && document.visibilityState === 'visible' && document.hasFocus() && aroundSeq === undefined);
+    receipts.current = reporter;
+    const observe = () => reporter.observe(roomStore(roomId).newestSeq);
+    const observer = new IntersectionObserver(entries => { visible.current = entries[0]?.isIntersecting ?? false; observe(); }, { root: list });
+    observer.observe(bottom);
+    document.addEventListener('visibilitychange', observe);
+    window.addEventListener('focus', observe);
+    return () => { reporter.dispose(); observer.disconnect(); document.removeEventListener('visibilitychange', observe); window.removeEventListener('focus', observe); };
+  }, [roomId, slug, aroundSeq, query.isLoading]);
+  useEffect(() => { receipts.current?.observe(state.messages.at(-1)?.seq ?? 0); }, [state.messages]);
 
-  // FR-SRCH-001 — scroll the ?around_seq= hit into view once, then drop the param
+  // FR-SRCH-001 — preserve the search anchor until the member returns to latest
   useEffect(() => {
     if (aroundSeq === undefined || query.isLoading || jumpedRef.current === `${roomId}:${aroundSeq}`) {
       return;
@@ -149,9 +195,7 @@ export function ChatView() {
     if (state.messages.some((m) => m.seq === aroundSeq)) {
       jumpedRef.current = `${roomId}:${aroundSeq}`;
       document.querySelector(`[data-seq="${aroundSeq}"]`)?.scrollIntoView({ block: 'center' });
-      const next = new URLSearchParams(searchParams);
-      next.delete('around_seq');
-      setSearchParams(next, { replace: true });
+
     }
   }, [aroundSeq, query.isLoading, state.messages, roomId, searchParams, setSearchParams]);
 
@@ -159,6 +203,7 @@ export function ChatView() {
     return null;
   }
 
+  if (query.isError || roomQuery.isError) return <p role="alert" className="p-4">Unable to open this room. Check your connection and room access.</p>;
   const room = roomQuery.data;
   const title = room?.room.type === 'dm' ? room.other_user?.display_name ?? 'Direct message' : room?.room.name ?? '…';
   const myMessages = state.messages.filter((m) => m.sender_id === me.id && m.deleted_at === null);
@@ -171,11 +216,13 @@ export function ChatView() {
   // FR-MSG-005/006 — edit (sender only), delete (sender anytime, moderator for others)
   const canModerate = roomQuery.data?.my_role === 'owner' || roomQuery.data?.my_role === 'admin';
   const editMessage = async (messageId: string, body: string) => {
-    await endpoints.editMessage(messageId, slug, body);
+    const response = await endpoints.editMessage(messageId, slug, body);
+    roomStore(roomId).add(response.message);
     void queryClient.invalidateQueries({ queryKey: ['rooms', slug] });
   };
   const deleteMessage = async (messageId: string) => {
     await endpoints.deleteMessage(messageId, slug);
+    roomStore(roomId).markDeleted(messageId, new Date().toISOString(), 'sender');
     void queryClient.invalidateQueries({ queryKey: ['rooms', slug] });
   };
 
@@ -203,10 +250,16 @@ export function ChatView() {
         </div>
       </header>
 
-      <div className="flex-1 space-y-1 overflow-y-auto px-4 py-3" data-testid="message-list">
-        {!query.isLoading && query.data?.has_more_before === true && (
+      <div ref={listRef} onScroll={() => {
+        const list = listRef.current!;
+        atBottom.current = list.scrollHeight - list.scrollTop - list.clientHeight < 40;
+        scrollHeight.current = list.scrollHeight;
+        scrollTop.current = list.scrollTop;
+      }} className="flex-1 space-y-1 overflow-y-auto px-4 py-3" data-testid="message-list">
+        {aroundSeq !== undefined && <button onClick={() => { atBottom.current = true; setSearchParams({}); }}>Back to latest messages</button>}
+        {!query.isLoading && (olderRemaining ?? query.data?.has_more_before) === true && (
           <button
-            onClick={() => void loadOlder()}
+            onClick={() => void loadOlder().then(setOlderRemaining)}
             className="mx-auto block rounded-full bg-white px-4 py-1 text-xs font-medium text-slate-500 shadow-sm hover:bg-slate-50"
           >
             Load older messages
@@ -237,10 +290,19 @@ export function ChatView() {
             </div>
           );
         })}
-        <div ref={bottomRef} />
+        {pending.filter(entry => !state.messages.some(message => message.client_message_id === entry.client_message_id)).map(entry => (
+          <div key={entry.id} data-testid="outbox-message" className="ml-auto max-w-[70%] rounded-xl bg-yellow-100 p-3 text-sm">
+            <p className="whitespace-pre-wrap">{entry.body}</p>
+            {entry.attachments.map(a => <p key={a.attachment_id}>📎 {a.original_name}</p>)}
+            <small>{entry.status === 'failed' ? entry.last_error : entry.status === 'sending' ? 'sending…' : 'Pending — waiting to send'}</small>
+            {entry.status === 'failed' && <button data-testid="outbox-retry" onClick={() => void sessionOutbox().outbox.retry(entry.id)}>Retry</button>}
+            {entry.status !== 'sending' && <button onClick={() => void sessionOutbox().outbox.remove(entry.id)}>Remove</button>}
+          </div>
+        ))}
+        <div ref={bottomRef} className="h-px" />
       </div>
 
-      <Composer roomId={roomId} workspaceId={room?.room.workspace_id ?? currentWorkspace?.workspace.id ?? ''} slug={slug} senderId={me.id} members={membersQuery.data ?? []} />
+      <Composer key={`${me.id}:${roomId}`} roomId={roomId} workspaceId={room?.room.workspace_id ?? currentWorkspace?.workspace.id ?? ''} slug={slug} senderId={me.id} members={membersQuery.data ?? []} />
       </div>
       {mediaOpen && <RoomMediaPanel roomId={roomId} slug={slug} onClose={() => setMediaOpen(false)} />}
     </div>

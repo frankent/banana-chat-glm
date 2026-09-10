@@ -174,3 +174,12 @@ describe('TC-CORE-014 tombstone (EVT-012, FR-MSG-006)', () => {
     expect(store.getState().messages).toHaveLength(1);
   });
 });
+
+it('TC-CORE-023 prepend count counts rows before the oldest message only', () => {
+  const store = new MessageStore('r1');
+  store.replace([msg(10), msg(11)]);
+  store.add(msg(12));
+  expect(store.getState().prependCount).toBe(0);
+  store.add([msg(8), msg(9)]);
+  expect(store.getState().prependCount).toBe(2);
+});

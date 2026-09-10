@@ -185,9 +185,10 @@ export class Endpoints {
     });
   }
 
-  completeUpload(attachmentId: string, slug: string) {
+  completeUpload(attachmentId: string, slug: string, parts?: { part_number: number; etag: string }[]) {
     return this.api.request<{ attachment: Attachment }>(`/api/v1/uploads/${attachmentId}/complete`, {
       method: 'POST',
+      body: parts === undefined ? undefined : { parts },
       workspaceSlug: slug,
     });
   }

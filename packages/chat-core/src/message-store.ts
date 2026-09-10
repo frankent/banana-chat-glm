@@ -75,6 +75,13 @@ export class MessageStore {
     return this.state;
   }
 
+  /** FR-MSG-009: preserve live deliveries while merging a fresh history page. */
+  mergePage(messages: Message[]): void {
+    for (const message of messages) this.insert(message);
+    this.seeded = true;
+    this.recompute();
+  }
+
   add(incoming: Message | Message[]): MessageStoreState {
     const prepended = this.countPrepended(() => {
       for (const message of Array.isArray(incoming) ? incoming : [incoming]) {
@@ -124,7 +131,10 @@ export class MessageStore {
 
   private insert(message: Message): void {
     if (this.byId.has(message.id)) {
-      this.byId.set(message.id, { ...this.byId.get(message.id)!, ...message });
+      const previous = this.byId.get(message.id)!;
+      if (previous.deleted_at && !message.deleted_at) return;
+      if (previous.edit_count > message.edit_count) return;
+      this.byId.set(message.id, { ...previous, ...message });
       return;
     }
     if (message.client_message_id !== null) {
@@ -143,7 +153,7 @@ export class MessageStore {
    * the delta to keep the viewport anchored.
    */
   private countPrepended(merge: () => void): number {
-    const headSeq = Math.max(0, ...[...this.byId.values()].map((m) => m.seq));
+    const headSeq = Math.min(Infinity, ...[...this.byId.values()].map((m) => m.seq));
     const before = [...this.byId.values()].filter((m) => m.seq < headSeq).length;
     merge();
     const after = [...this.byId.values()].filter((m) => m.seq < headSeq).length;

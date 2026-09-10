@@ -2,7 +2,7 @@ import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
 import Constants from 'expo-constants';
 import type { EventEnvelope, AiStreamEvent } from '@banana-chat/shared';
-import { API_BASE_URL, tokenManager } from '../lib/api';
+import { API_BASE_URL, tokenManager, endpoints } from '../lib/api';
 import { handleAiEvent } from '../ai/store';
 import { useSession } from '../auth/session';
 
@@ -28,6 +28,25 @@ function reverbConfig(): ReverbConfig {
 }
 
 let echo: Echo<'reverb'> | null = null;
+
+type RoomWatcher = { roomId: string; event: (name: string, data: Record<string, unknown>) => void; connection: (connected: boolean) => void };
+const watchers = new Set<RoomWatcher>();
+const listWatchers = new Set<() => void>();
+export function watchRoomList(callback: () => void) { listWatchers.add(callback); return () => { listWatchers.delete(callback); }; }
+function bindRoom(watcher: RoomWatcher) {
+  if (!echo) return;
+  const channel = echo.private(`room.${watcher.roomId}`);
+  for (const name of ['message.created', 'message.updated', 'message.deleted', 'room.read', 'room.deleted', 'room.member_removed']) {
+    channel.listen(`.${name}`, (envelope: EventEnvelope<Record<string, unknown>>) => watcher.event(name, envelope.data ?? {}));
+  }
+  watcher.connection(realtimeConnected());
+}
+export function watchRoom(roomId: string, event: RoomWatcher['event'], connection: RoomWatcher['connection']) {
+  const watcher = { roomId, event, connection };
+  watchers.add(watcher);
+  bindRoom(watcher);
+  return () => { watchers.delete(watcher); echo?.leave(`room.${roomId}`); };
+}
 
 const AI_EVENTS = [
   'ai.message.started',
@@ -78,7 +97,7 @@ export function connectRealtime(onRoomsChanged: () => void): void {
   user.listen('.session.revoked', (envelope: EventEnvelope<{ reason: string }>) => {
     if (envelope.data?.reason !== 'logout') {
       // another device's logout must not kill this one (FR-AUTH-011)
-      void useSession.getState().logout();
+      void endpoints.me().catch(() => useSession.getState().logout());
     }
   });
   for (const name of AI_EVENTS) {
@@ -87,12 +106,17 @@ export function connectRealtime(onRoomsChanged: () => void): void {
     });
   }
 
+  const refresh = () => { onRoomsChanged(); for (const callback of listWatchers) callback(); };
+  for (const name of ['room.created', 'room.activity', 'room.deleted', 'room.member_removed', 'workspace.unread_changed']) user.listen(`.${name}`, refresh);
   if (currentWorkspace !== null) {
     const ws = echo.private(`workspace.${currentWorkspace.workspace.id}`);
-    for (const name of ['room.created', 'room.updated', 'room.deleted', 'room.member_added', 'room.member_removed', 'workspace.unread_changed']) {
-      ws.listen(`.${name}`, onRoomsChanged);
-    }
+    ws.listen('.user.updated', refresh).listen('.user.status_changed', refresh);
   }
+  echo.connector.pusher.connection.bind('state_change', ({ current }: { current: string }) => {
+    for (const watcher of watchers) watcher.connection(current === 'connected');
+    if (current === 'connected') refresh();
+  });
+  for (const watcher of watchers) bindRoom(watcher);
 }
 
 export function disconnectRealtime(): void {

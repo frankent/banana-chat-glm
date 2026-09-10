@@ -18,11 +18,11 @@
         </include>
     </source>
     <php>
-        <env name="APP_ENV" value="testing"/>
+        <env force="true" name="APP_ENV" value="testing"/>
         <!-- signed media URLs are generated from APP_URL; pin so the cloud .env
              (or a different port) can't break signature validation in tests -->
         <env name="APP_URL" value="http://localhost"/>
-        <env name="APP_KEY" value="base64:2fl+Ktvkfl+Fuz4Qp/A75G2RTiWVA/ZoKZvp6fiiM10="/>
+        <env force="true" name="APP_KEY" value="base64:2fl+Ktvkfl+Fuz4Qp/A75G2RTiWVA/ZoKZvp6fiiM10="/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="HASH_DRIVER" value="argon2id"/>
@@ -32,19 +32,19 @@
         <!-- reverb: run the real Pusher-compatible auth path (socket_auth is a local
              HMAC — no network) so channel closures are enforced in tests (TC-RT-*) -->
         <env name="BROADCAST_CONNECTION" value="reverb"/>
-        <env name="CACHE_STORE" value="array"/>
+        <env force="true" name="CACHE_STORE" value="array"/>
         <!-- Postgres required: citext / tsvector / pg_trgm (spec §12.1 — never SQLite) -->
         <env name="DB_CONNECTION" value="pgsql"/>
         <env name="DB_HOST" value="127.0.0.1"/>
         <env name="DB_PORT" value="5433"/>
-        <env name="DB_DATABASE" value="orgchat_test"/>
+        <env force="true" name="DB_DATABASE" value="orgchat_test"/>
         <env name="DB_USERNAME" value="orgchat"/>
         <env name="DB_PASSWORD" value="orgchat"/>
         <!-- local docker pg has no TLS — neutralize cloud .env values -->
         <env name="DB_SSLMODE" value="prefer"/>
         <env name="MAIL_MAILER" value="array"/>
-        <env name="QUEUE_CONNECTION" value="sync"/>
-        <env name="SESSION_DRIVER" value="array"/>
+        <env force="true" name="QUEUE_CONNECTION" value="sync"/>
+        <env force="true" name="SESSION_DRIVER" value="array"/>
         <env name="REDIS_CLIENT" value="phpredis"/>
         <env name="REDIS_HOST" value="127.0.0.1"/>
         <env name="REDIS_PORT" value="6380"/>
@@ -53,13 +53,13 @@
         <env name="NIGHTWATCH_ENABLED" value="false"/>
         <!-- tests must NEVER reach cloud storage: pin the local disk and dummy
              AWS creds regardless of which infra .env currently points at -->
-        <env name="FILESYSTEM_DISK" value="local"/>
-        <env name="AWS_ACCESS_KEY_ID" value="testing"/>
-        <env name="AWS_SECRET_ACCESS_KEY" value="testing"/>
+        <env force="true" name="FILESYSTEM_DISK" value="local"/>
+        <env force="true" name="AWS_ACCESS_KEY_ID" value="testing"/>
+        <env force="true" name="AWS_SECRET_ACCESS_KEY" value="testing"/>
         <env name="AWS_DEFAULT_REGION" value="us-east-1"/>
-        <env name="AWS_BUCKET" value="testing"/>
-        <env name="AWS_ENDPOINT" value="http://127.0.0.1:9100"/>
-        <env name="AWS_ROOT" value=""/>
-        <env name="AWS_URL" value=""/>
+        <env force="true" name="AWS_BUCKET" value="testing"/>
+        <env force="true" name="AWS_ENDPOINT" value="http://127.0.0.1:9100"/>
+        <env force="true" name="AWS_ROOT" value=""/>
+        <env force="true" name="AWS_URL" value=""/>
     </php>
 </phpunit>

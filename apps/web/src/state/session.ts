@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { UserStub, WorkspaceSummary } from '@banana-chat/shared';
 import { endpoints, tokenManager } from '../lib/api';
 import { clearAllCaches } from '../lib/cache';
+import { resetSessionResources } from '../lib/session-resources';
 
 export interface Me extends UserStub {
   locale: string;
@@ -44,6 +45,8 @@ export const useSession = create<SessionState>((set, get) => ({
   },
 
   async login(username, password) {
+    tokenManager.clear();
+    await resetSessionResources();
     const res = await endpoints.login(username, password, {
       platform: 'web',
       name: `Browser (${navigator.userAgent.slice(0, 40)})`,
@@ -59,15 +62,16 @@ export const useSession = create<SessionState>((set, get) => ({
   },
 
   async logout() {
-    try {
-      await endpoints.logout();
-    } catch {
-      // already unauthenticated — fall through to local clear
-    }
+    const revoke = endpoints.logout().catch(() => undefined);
     tokenManager.clear();
-    // TC-CORE-021 — wipe rooms/messages/AI cache before the next user logs in
-    void clearAllCaches();
+    set({ status: 'loading', me: null, workspaces: [], currentWorkspace: null });
+    await resetSessionResources();
+    await clearAllCaches();
+    for (const key of Object.keys(window.sessionStorage)) {
+      if (key.startsWith('orgchat.draft.')) window.sessionStorage.removeItem(key);
+    }
     set({ status: 'anonymous', me: null, workspaces: [], currentWorkspace: null });
+    void revoke;
   },
 
   switchWorkspace(slug) {

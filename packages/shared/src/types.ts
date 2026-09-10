@@ -100,7 +100,8 @@ export interface Attachment {
 /** API-060 response */
 export interface UploadTicket {
   attachment_id: string;
-  put_url: string;
+  put_url: string | null;
+  multipart?: { upload_id: string; part_size: number; part_urls: string[] } | null;
   headers: Record<string, string>;
   expires_at: string;
 }

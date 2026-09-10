@@ -120,3 +120,16 @@ test('TC-WS-022 unknown workspace slug → 404 (no existence leak)', function ()
     $this->getJson('/api/v1/workspace', wsHeaders($token, 'nonexistent'))
         ->assertStatus(404);
 });
+
+test('TC-READ-013 workspace badges total unread and exclude muted deleted rooms', function () {
+    $room = App\Models\Room::create(['workspace_id' => $this->ws->id, 'type' => 'group', 'name' => 'Unread', 'created_by' => $this->owner->id, 'owner_id' => $this->owner->id, 'last_seq' => 6, 'last_user_seq' => 6, 'member_count' => 1]);
+    $room->forceFill(['last_seq' => 6, 'last_user_seq' => 6])->save();
+    App\Models\RoomMember::create(['room_id' => $room->id, 'workspace_id' => $this->ws->id, 'user_id' => $this->owner->id, 'role' => 'owner', 'last_read_seq' => 0]);
+    [$user, $token] = loginAs($this->owner);
+    $this->getJson('/api/v1/me/workspaces', authHeaders($token))->assertJsonPath('data.0.unread_rooms_count', 1)->assertJsonPath('data.0.total_unread', 6);
+    App\Models\RoomNotificationSetting::create(['room_id' => $room->id, 'user_id' => $user->id, 'mode' => 'all', 'muted_until' => now()->addHour()]);
+    $this->getJson('/api/v1/me/workspaces', authHeaders($token))->assertJsonPath('data.0.unread_rooms_count', 0)->assertJsonPath('data.0.total_unread', 0);
+    App\Models\RoomNotificationSetting::where('room_id', $room->id)->delete();
+    $room->forceFill(['deleted_at' => now()])->save();
+    $this->getJson('/api/v1/me/workspaces', authHeaders($token))->assertJsonPath('data.0.unread_rooms_count', 0);
+});

@@ -1,0 +1,1 @@
+{"status":"healthy","checks":{"database":"ok","redis":"ok","storage":"ok","reverb":"ok","queue":"ok (lag=0)"},"checked_at":"2026-09-10T19:30:54+00:00"}

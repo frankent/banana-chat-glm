@@ -54,17 +54,19 @@ describe('MessageStore prependCount', () => {
     const store = new MessageStore('room-1', 10);
     store.add([msg(1), msg(5)]); // seeds + gap withholding
     store.add([msg(2), msg(3)]);
-    expect(store.getState().prependCount).toBe(2);
+    expect(store.getState().prependCount).toBe(0); // filling an interior gap does not prepend
 
     store.replace([msg(1)]);
     expect(store.getState().prependCount).toBe(0);
   });
 
-  it('fillDelivered also reports prepends', () => {
+  it('TC-CORE-023 fillDelivered distinguishes interior gap fill from prepends', () => {
     const store = new MessageStore('room-1', 10);
     store.add([msg(1), msg(5)]);
     store.fillDelivered([msg(2), msg(3), msg(4)]);
-    expect(store.getState().prependCount).toBe(3);
+    expect(store.getState().prependCount).toBe(0);
+    store.fillDelivered([msg(0)]);
+    expect(store.getState().prependCount).toBe(1);
   });
 });
 

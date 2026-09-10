@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import type { RoomListItem } from '@banana-chat/shared';
 import { useSession, roomCache } from '../src/auth/session';
 import { endpoints } from '../src/lib/api';
+import { watchRoomList } from '../src/realtime/echo';
 import { tr } from '../src/lib/i18n';
 import { theme } from '../src/lib/theme';
 
@@ -42,6 +43,8 @@ export default function RoomsScreen() {
       await sync();
     })();
   }, [sync, me?.id]);
+
+  useEffect(() => watchRoomList(() => { void sync(); }), [sync]);
 
   return (
     <View style={styles.container}>

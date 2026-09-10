@@ -417,3 +417,27 @@ function tinyPng(): string
 
     return $bytes;
 }
+
+// FR-MSG-002/004/008, EVT-010: REST success must not hide missing realtime relations.
+test('TC-MEDIA-012 realtime payload preserves attachments mentions and reply from REST', function () {
+    [$user, $token] = loginAs($this->tony);
+    [$id] = uploadFile($this, $token, [
+        'kind' => 'file', 'filename' => 'realtime.txt', 'mime_type' => 'text/plain', 'size_bytes' => 5,
+    ], 'hello');
+    $original = $this->postJson("/api/v1/rooms/{$this->room->id}/messages", [
+        'body' => 'original', 'client_message_id' => (string) Str::uuid(),
+    ], wsHeaders($token, 'acme'))->assertCreated()->json('data.message');
+    Event::fake([App\Events\MessageCreated::class]);
+    $rest = $this->postJson("/api/v1/rooms/{$this->room->id}/messages", [
+        'body' => '@somchai see attachment', 'client_message_id' => (string) Str::uuid(),
+        'attachment_ids' => [$id], 'reply_to_message_id' => $original['id'],
+    ], wsHeaders($token, 'acme'))->assertCreated()->json('data.message');
+    expect($rest['attachments'][0]['id'])->toBe($id);
+    Event::assertDispatched(App\Events\MessageCreated::class, function ($event) use ($rest) {
+        $payload = $event->broadcastWith()['data']['message'];
+        expect($payload['attachments'])->toBe($rest['attachments'])
+            ->and($payload['mentions'])->toBe($rest['mentions'])
+            ->and($payload['reply_to'])->toBe($rest['reply_to']);
+        return true;
+    });
+});

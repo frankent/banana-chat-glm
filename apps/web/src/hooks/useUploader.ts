@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import type { Attachment, AttachmentKind } from '@banana-chat/shared';
+import { uploadTicket } from '@banana-chat/chat-core';
 import { endpoints } from '../lib/api';
 
 export interface StagedUpload {
@@ -82,16 +83,12 @@ export function useUploader(slug: string) {
 
         patch(localId, { status: 'uploading', attachmentId: ticket.attachment_id });
 
-        const put = await fetch(ticket.put_url, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/octet-stream' },
-          body: file,
+        const parts = await uploadTicket(ticket, file.size, async (url, headers, start, end) => {
+          const response = await fetch(url, { method: 'PUT', headers, body: file.slice(start, end) });
+          if (!response.ok) throw new Error(`upload failed (${response.status})`);
+          return response.headers.get('ETag');
         });
-        if (!put.ok) {
-          throw new Error(`upload failed (${put.status})`);
-        }
-
-        const { attachment } = await endpoints.completeUpload(ticket.attachment_id, slug);
+        const { attachment } = await endpoints.completeUpload(ticket.attachment_id, slug, parts);
 
         if (attachment.status === 'ready') {
           patch(localId, { status: 'ready' });

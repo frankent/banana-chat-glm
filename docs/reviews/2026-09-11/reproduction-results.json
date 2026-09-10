@@ -1,0 +1,24 @@
+[
+  {
+    "id": "TC-WEB-REVIEW-001 / FR-MSG-009",
+    "serverContainsConfirmed": true,
+    "visibleAfterReturning": 0
+  },
+  {
+    "id": "TC-WEB-REVIEW-002 / FR-RT-002",
+    "socketState": "connected",
+    "serverContainsMissed": true,
+    "visibleAfterReconnect": 1
+  },
+  {
+    "id": "TC-WEB-REVIEW-003 / FR-OFF-002",
+    "visibleBubble": "TC-WEB-REVIEW-003 offline 1789060981060\n\nsending…",
+    "serverContainsFailed": false,
+    "persistedOutbox": null
+  },
+  {
+    "id": "TC-WEB-REVIEW-004 / FR-WS-003 FR-OFF-001",
+    "otherAccountApiDenied": true,
+    "oldPrivateTextVisible": 1
+  }
+]

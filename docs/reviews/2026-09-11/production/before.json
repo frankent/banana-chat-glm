@@ -1,0 +1,27 @@
+{
+  "run": "[QA 2026-09-10T19:15:31.905Z]",
+  "results": [
+    {
+      "id": "TC-ROOM-006-DM-room-list",
+      "passed": true
+    },
+    {
+      "id": "TC-READ-011-background-delivery",
+      "passed": true
+    },
+    {
+      "id": "TC-READ-003-workspace-badge",
+      "passed": false,
+      "error": "expect(locator).toContainText(expected) failed\n\nLocator: getByRole('combobox', { name: 'Workspace' }).locator('option:checked')\nExpected substring: \"(1)\"\nReceived string:    \"Banana Chat\"\nTimeout: 5000ms\n\nCall log:\n  - Expect \"toContainText\" getByRole('combobox', { name: 'Workspace' }).locator('option:checked') with timeout 5000ms\n  - waiting for getByRole('combobox', { name: 'Workspace' }).locator('option:checked')\n    14 × locator resolved to <option value=\"banana\">Banana Chat</option>\n       - unexpected value \"Banana Chat\"\n"
+    },
+    {
+      "id": "TC-READ-001-open-room",
+      "passed": true
+    },
+    {
+      "id": "TC-RT-001-no-runtime-errors",
+      "passed": true
+    }
+  ],
+  "errors": []
+}

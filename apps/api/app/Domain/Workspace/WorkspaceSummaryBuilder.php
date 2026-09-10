@@ -20,6 +20,7 @@ class WorkspaceSummaryBuilder
         $memberships = $user->workspaceMemberships()
             ->with('workspace')
             ->where('status', 'active')
+            ->whereHas('workspace', fn ($query) => $query->where('status', 'active'))
             ->get();
 
         return $memberships->map(function ($membership) {
@@ -28,8 +29,16 @@ class WorkspaceSummaryBuilder
                 ->where('room_members.user_id', $membership->user_id)
                 ->where('room_members.workspace_id', $membership->workspace_id)
                 ->whereNull('room_members.left_at')
+                ->whereNull('rooms.deleted_at')
                 ->whereColumn('room_members.last_read_seq', '<', 'rooms.last_user_seq')
-                ->count();
+                ->whereNotExists(function ($query) use ($membership) {
+                    $query->selectRaw('1')->from('room_notification_settings')
+                        ->whereColumn('room_notification_settings.room_id', 'rooms.id')
+                        ->where('room_notification_settings.user_id', $membership->user_id)
+                        ->where(fn ($q) => $q->where('mode', 'none')->orWhere('muted_until', '>', now()));
+                })
+                ->selectRaw('count(*) as rooms, coalesce(sum(rooms.last_user_seq - room_members.last_read_seq), 0) as total')
+                ->first();
 
             // FR-MSG-008 — any mention in this ws I haven't read past yet (PH2)
             $hasMentions = RoomMember::query()
@@ -52,8 +61,8 @@ class WorkspaceSummaryBuilder
                     'status' => $membership->workspace->status->value,
                 ],
                 'role' => $membership->role->value,
-                'unread_rooms_count' => $unread,
-                'total_unread' => 0, // PH1: badge total derived client-side from room list
+                'unread_rooms_count' => (int) $unread->rooms,
+                'total_unread' => (int) $unread->total,
                 'has_mentions' => $hasMentions,
             ];
         })->values();

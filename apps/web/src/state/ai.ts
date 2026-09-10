@@ -4,6 +4,7 @@ import { createAiStreamStore, type AiCacheAdapter } from '@banana-chat/chat-core
 import { endpoints } from '../lib/api';
 import { aiCache } from '../lib/cache';
 import { useSession } from './session';
+import { registerSessionCleanup } from '../lib/session-resources';
 
 /**
  * FR-AI-018 — client AI state. The per-message delta machine lives in
@@ -117,9 +118,11 @@ export const useAiStore = create<AiState>((set, get) => ({
   async loadConversations(slug) {
     set({ loading: true });
     // hydrate from cache for an instant list (CORE-010), then refresh
+    const owner = useSession.getState().me?.id;
     const cache = cacheFor();
     if (cache !== null && get().conversations.length === 0) {
       const cached = await cache.loadConversations();
+      if (owner !== useSession.getState().me?.id) return;
       if (cached !== null && get().conversations.length === 0) {
         set({ conversations: cached });
       }
@@ -134,10 +137,12 @@ export const useAiStore = create<AiState>((set, get) => ({
   },
 
   async open(conversationId, slug) {
+    const owner = useSession.getState().me?.id;
     set({ activeId: conversationId });
     if (get().messages[conversationId] === undefined) {
       const cache = cacheFor();
       const cached = await cache?.loadMessages(conversationId);
+      if (owner !== useSession.getState().me?.id) return;
       if (cached !== null && cached !== undefined && get().messages[conversationId] === undefined) {
         set((st) => ({ messages: { ...st.messages, [conversationId]: cached } }));
       }
@@ -370,3 +375,8 @@ export const useAiStore = create<AiState>((set, get) => ({
 export function handleAiEvent(event: AiStreamEvent): void {
   void useAiStore.getState().applyEvent(event);
 }
+
+registerSessionCleanup(() => {
+  streamStore.streams.clear();
+  useAiStore.setState({ status: null, statusError: null, conversations: [], activeId: null, messages: {}, hasMoreBefore: {}, supersededVisible: {}, loading: false, sending: false, streamTick: 0, consentOpen: false });
+});
