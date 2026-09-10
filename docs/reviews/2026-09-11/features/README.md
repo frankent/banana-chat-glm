@@ -24,3 +24,11 @@ See `results.json` for isolated live-browser checks. Tests use the separate `org
 API contract additions are in `apps/api/openapi.yaml`; typed endpoint wrappers are maintained manually in this repository (no `gen:client` command is configured).
 
 Validation completed: 19 browser cases passed, 127 workspace unit tests passed, all workspace TypeScript checks and web production build passed. API full suite: 318 passed / 2 skipped; after the final attachment-delete guard and DM bot test, the targeted room-tools/upload suite passed 33 cases. Existing large-bundle build warning remains.
+
+## Production deployment
+
+Deployed runtime commit `b4b476f` to https://chat.gamecoms.net, preserving the existing production patches. Added the Notes/Pin tables without modifying existing conversation data. Previous images use the `before-room-tools-20260911` tag; database dump, original patch and build logs are in `/root/banana-chat-backups/room-tools-20260911/` (root-only).
+
+An initial deployment permission fault caused PHP login requests to fail: the restrictive backup umask carried into patch application, leaving source files mode 600. Restored runtime source permissions to 644, rebuilt/recreated the API/worker/scheduler/Reverb images, and verified readable permissions and live authentication. Health checks alone had not detected PHP bootstrap failures.
+
+Live verification covers login/WebSockets, background message/unread, workspace badge, open-room receipt, Conversations navigation, directory→DM, Notes realtime create/delete, named typing, Reply, Pin/jump/unpin, responsive UI, and a real queued AI-provider reply to @ai in a private test group. The test group is deleted afterwards. `verify-production.mjs` accepts only the test-account password on stdin and logs out its sessions; it creates clearly labeled QA messages. See `production-results.json`.
