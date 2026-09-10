@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { InAppNotification } from '@banana-chat/shared';
 import { endpoints } from '../lib/api';
+import { Icon } from './Visual';
 import { useSession } from '../state/session';
 
 /**
@@ -79,7 +80,7 @@ export function NotificationCenter() {
         className="relative rounded-lg px-2 py-1 text-lg hover:bg-slate-100"
         data-testid="notification-bell"
       >
-        🔔
+        <Icon name="bell" size={19} />
         {unread > 0 && (
           <span className="absolute -right-1 -top-1 rounded-full bg-yellow-400 px-1.5 text-[10px] font-bold text-slate-900">
             {unread > 9 ? '9+' : unread}

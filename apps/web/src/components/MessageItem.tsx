@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Avatar } from './Visual';
 import type { Attachment, Message } from '@banana-chat/shared';
 
 function formatTime(iso: string): string {
@@ -175,8 +176,9 @@ export function MessageItem({ message, mine, canModerate = false, onEdit, onDele
   };
 
   return (
-    <div className={`group flex ${mine ? 'justify-end' : 'justify-start'}`} data-testid="message" data-mine={mine}>
-      <div className={`relative max-w-[70%] rounded-2xl px-3 py-1.5 ${mine ? 'bg-yellow-300' : 'bg-white'} ${pending ? 'opacity-60' : ''} shadow-sm`}>
+    <div className={`bc-message group flex ${mine ? 'justify-end' : 'justify-start'}`} data-testid="message" data-mine={mine}>
+      {!mine && <Avatar name={message.sender?.display_name ?? 'Member'} className="bc-message-avatar" />}
+      <div className={`bc-message-bubble relative max-w-[70%] rounded-2xl px-3 py-1.5 ${mine ? 'bg-yellow-300' : 'bg-white'} ${pending ? 'opacity-60' : ''} shadow-sm`}>
         {!mine && message.sender !== null && (
           <p className="text-xs font-semibold text-slate-600">{message.sender.display_name}</p>
         )}

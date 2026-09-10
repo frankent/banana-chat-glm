@@ -10,6 +10,7 @@ import { useMessagePage } from '../hooks/useMessages';
 import { useEcho } from '../echo/EchoProvider';
 import { useSession } from '../state/session';
 import { MessageItem } from './MessageItem';
+import { Avatar, Icon } from './Visual';
 import { Composer } from './Composer';
 import { RoomMediaPanel } from './RoomMediaPanel';
 
@@ -227,14 +228,17 @@ export function ChatView() {
   };
 
   return (
-    <div className="flex h-full min-h-0">
+    <div className="bc-chat flex h-full min-h-0">
       <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
-      <header className="flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
-        <div>
-          <h2 className="text-base font-semibold">{room?.room.type === 'dm' ? '· ' : '# '}{title}</h2>
+      <header className="bc-chat-header">
+        <div className="bc-chat-identity">
+          {room?.room.type === 'dm' ? <Avatar name={title} /> : <span className="bc-room-hash" aria-hidden="true">#</span>}
+          <div><h2>{title}</h2>
           {room?.room.type === 'group' && room.room.member_count > 0 && (
             <p className="text-xs text-slate-400">{room.room.member_count} members</p>
           )}
+          {room?.room.type === 'dm' && <p className="bc-caption">Direct conversation</p>}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {seen && <span className="text-xs font-medium text-slate-400" data-testid="seen-indicator">Seen</span>}
@@ -245,7 +249,7 @@ export function ChatView() {
             className="rounded-lg px-2 py-1 text-sm text-slate-400 hover:bg-slate-100 hover:text-slate-600"
             data-testid="room-media-toggle"
           >
-            🖼
+            <Icon name="files" />
           </button>
         </div>
       </header>
@@ -255,7 +259,7 @@ export function ChatView() {
         atBottom.current = list.scrollHeight - list.scrollTop - list.clientHeight < 40;
         scrollHeight.current = list.scrollHeight;
         scrollTop.current = list.scrollTop;
-      }} className="flex-1 space-y-1 overflow-y-auto px-4 py-3" data-testid="message-list">
+      }} className="bc-message-list flex-1 space-y-1 overflow-y-auto" data-testid="message-list">
         {aroundSeq !== undefined && <button onClick={() => { atBottom.current = true; setSearchParams({}); }}>Back to latest messages</button>}
         {!query.isLoading && (olderRemaining ?? query.data?.has_more_before) === true && (
           <button
@@ -276,7 +280,7 @@ export function ChatView() {
           return (
             <div key={message.id} data-seq={message.seq}>
               {divider && (
-                <div className="my-3 text-center">
+                <div className="bc-day-divider my-3 text-center">
                   <span className="rounded-full bg-slate-200 px-3 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">{day}</span>
                 </div>
               )}

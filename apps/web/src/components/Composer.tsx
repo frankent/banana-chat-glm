@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { DEFAULT_SETTINGS } from '@banana-chat/shared';
 import type { UserStub } from '@banana-chat/shared';
+import { Icon } from './Visual';
 import { sessionOutbox } from '../lib/outbox';
 import { useUploader } from '../hooks/useUploader';
 
@@ -148,7 +149,7 @@ export function Composer({ roomId, workspaceId, slug, senderId, members = [] }: 
   };
 
   return (
-    <div className="relative border-t border-slate-200 bg-white p-3">
+    <div className="bc-composer relative">
       {sendError && <p role="alert" className="text-sm text-red-600">{sendError}</p>}
       {staged.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-2" data-testid="composer-attachments">
@@ -181,7 +182,7 @@ export function Composer({ roomId, workspaceId, slug, senderId, members = [] }: 
           ))}
         </div>
       )}
-      <div className="flex items-end gap-2">
+      <div className="bc-compose-box flex items-end gap-2">
         <input
           ref={fileInputRef}
           type="file"
@@ -198,7 +199,7 @@ export function Composer({ roomId, workspaceId, slug, senderId, members = [] }: 
           data-testid="attach-button"
           className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-100"
         >
-          📎
+          <Icon name="paperclip" />
         </button>
         <textarea
           ref={textareaRef}
@@ -216,9 +217,10 @@ export function Composer({ roomId, workspaceId, slug, senderId, members = [] }: 
           data-testid="send-button"
           className="rounded-xl bg-yellow-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-yellow-300 disabled:opacity-50"
         >
-          Send
+          <span>Send</span><Icon name="send" size={17} />
         </button>
       </div>
+      <div className="bc-compose-hint"><span>Make room for a good conversation.</span><span><kbd>Enter</kbd> to send · <kbd>Shift + Enter</kbd> for a new line</span></div>
       {mentionQuery !== null && mentionMatches.length > 0 && (
         <div
           className="absolute bottom-full left-12 mb-1 w-64 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg"

@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { ApiError } from '@banana-chat/api-client';
 import { useSession } from '../state/session';
 
+import { Banana, Icon, Avatar } from '../components/Visual';
+
 export function LoginPage() {
   const { login } = useSession();
   const navigate = useNavigate();
@@ -27,9 +29,18 @@ export function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-full items-center justify-center">
-      <form onSubmit={onSubmit} className="w-80 space-y-4 rounded-2xl bg-white p-8 shadow-lg">
-        <h1 className="text-center text-2xl font-bold">🍌 Banana Chat</h1>
+    <div className="bc-login">
+      <section className="bc-login-story">
+        <div className="bc-wordmark"><span className="bc-brand"><Banana /></span>banana<span>chat</span></div>
+        <div className="bc-story-content"><span className="bc-eyebrow">A LITTLE CLOSER, EVERY DAY</span><h1>Great work starts<br />with a <span>hello.</span></h1><p>A place for your people, your ideas,<br />and everything you’ll create together.</p><div className="bc-story-message"><Avatar name="Your workspace" /><div><strong>Your workspace</strong><p>Good things happen together.</p></div></div><div className="bc-story-message second"><span>Let’s make something great ✨</span></div></div>
+        <footer>YOUR PEOPLE. YOUR SPACE. <span>✳</span> BANANA CHAT</footer>
+        <div className="bc-story-decoration"><Banana size={380} /></div>
+      </section>
+      <section className="bc-login-form-section">
+      <form onSubmit={onSubmit} className="bc-login-form space-y-4">
+        <div className="bc-login-symbol"><Icon name="chat" size={36} /><span>✦</span></div>
+        <span className="bc-eyebrow">WELCOME TO BANANA CHAT</span>
+        <h2>Good to see you<span>.</span></h2><p className="bc-login-intro">Sign in to your workspace.<br />Your conversations are waiting for you.</p>
         {error !== null && (
           <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
         )}
@@ -60,7 +71,10 @@ export function LoginPage() {
         >
           {busy ? 'Signing in…' : 'Sign in'}
         </button>
-      </form>
+        <p className="bc-login-help">Need an account? Contact your workspace administrator.</p>
+        <div className="bc-login-secure"><Icon name="lock" size={14} /> A private space for your workspace</div>
+      </form><footer>Thoughtfully connected. <span>Banana Chat</span></footer>
+      </section>
     </div>
   );
 }

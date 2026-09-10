@@ -3,7 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { EchoProvider } from './echo/EchoProvider';
 import { AiAssistantView } from './components/ai/AiAssistantView';
-import { AppShell } from './components/AppShell';
+import { AppShell, WelcomeView } from './components/AppShell';
 import { ChatView } from './components/ChatView';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { LoginPage } from './pages/LoginPage';
@@ -32,7 +32,7 @@ export default function App() {
               <Route path="/change-password" element={<ChangePasswordPage />} />
               <Route path="/no-workspace" element={<NoWorkspacePage />} />
               <Route element={<AppShell />}>
-                <Route index element={<Navigate to="/" replace />} />
+                <Route index element={<WelcomeView />} />
                 <Route path="/rooms/:roomId" element={<ChatView />} />
                 <Route path="/search" element={<SearchPage />} />
                 <Route path="/ai" element={<AiAssistantView />} />
