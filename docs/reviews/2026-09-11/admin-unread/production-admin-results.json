@@ -1,0 +1,81 @@
+{
+  "results": [
+    {
+      "path": "",
+      "passed": true
+    },
+    {
+      "path": "users",
+      "passed": true
+    },
+    {
+      "path": "workspaces",
+      "passed": true
+    },
+    {
+      "path": "rooms",
+      "passed": true
+    },
+    {
+      "path": "messages",
+      "passed": true
+    },
+    {
+      "path": "room-notes",
+      "passed": true
+    },
+    {
+      "path": "attachments",
+      "passed": true
+    },
+    {
+      "path": "chat-sessions",
+      "passed": true
+    },
+    {
+      "path": "devices",
+      "passed": true
+    },
+    {
+      "path": "ai-providers",
+      "passed": true
+    },
+    {
+      "path": "ai-usage",
+      "passed": true
+    },
+    {
+      "path": "ai-conversations",
+      "passed": true
+    },
+    {
+      "path": "settings",
+      "passed": true
+    },
+    {
+      "path": "audit-logs",
+      "passed": true
+    },
+    {
+      "path": "operations",
+      "passed": true
+    },
+    {
+      "path": "api-coverage",
+      "passed": true
+    },
+    {
+      "path": "two-factor",
+      "passed": true
+    },
+    {
+      "path": "../horizon",
+      "passed": true
+    },
+    {
+      "id": "TC-ADM-073-mobile",
+      "passed": true
+    }
+  ],
+  "errors": []
+}
