@@ -1,0 +1,51 @@
+{
+  "run": "[QA 2026-09-10T21:07:53.861Z]",
+  "results": [
+    {
+      "id": "TC-ROOM-006-DM-room-list",
+      "passed": true
+    },
+    {
+      "id": "TC-READ-011-background-delivery",
+      "passed": true
+    },
+    {
+      "id": "TC-READ-003-workspace-badge",
+      "passed": true
+    },
+    {
+      "id": "TC-READ-001-open-room",
+      "passed": false,
+      "error": "expect(received).toBe(expected) // Object.is equality\n\nExpected: 0\nReceived: 2\n\nCall Log:\n- Timeout 5000ms exceeded while waiting on the predicate"
+    },
+    {
+      "id": "TC-MEDIA-021-real-upload-png",
+      "passed": true
+    },
+    {
+      "id": "TC-MEDIA-021-real-upload-jpeg",
+      "passed": true
+    },
+    {
+      "id": "TC-MEDIA-021-real-upload-gif",
+      "passed": true
+    },
+    {
+      "id": "TC-MEDIA-021-real-upload-webp",
+      "passed": true
+    },
+    {
+      "id": "TC-MEDIA-021-real-upload-indexed.png",
+      "passed": true
+    },
+    {
+      "id": "TASK-WEB-018-production-redesign",
+      "passed": true
+    },
+    {
+      "id": "TC-RT-001-no-runtime-errors",
+      "passed": true
+    }
+  ],
+  "errors": []
+}
