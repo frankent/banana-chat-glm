@@ -94,6 +94,31 @@ export function EchoProvider({ children }: { children: ReactNode }) {
       return;
     }
     const channel = instance.private(`user.${me.id}`);
+    const openRoomId = () => /^\/rooms\/([^/]+)/.exec(window.location.pathname)?.[1];
+
+    // room list refetch gives authoritative order/unread/preview; bursts of
+    // room.activity coalesce into one refetch per 2s window (leading + trailing)
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let lastRun = 0;
+    const refreshRooms = () => {
+      lastRun = Date.now();
+      void queryClient.invalidateQueries({ queryKey: ['rooms'] });
+      void queryClient.invalidateQueries({ queryKey: ['workspaces'] });
+    };
+    const throttledRoomRefresh = () => {
+      if (timer !== null) {
+        return;
+      }
+      const wait = 2_000 - (Date.now() - lastRun);
+      if (wait <= 0) {
+        refreshRooms();
+        return;
+      }
+      timer = setTimeout(() => {
+        timer = null;
+        refreshRooms();
+      }, wait);
+    };
 
     channel.listen('.session.revoked', (envelope: EventEnvelope<{ session_id: string; reason: string }>) => {
       if (envelope.data?.reason === 'logout') {
@@ -127,39 +152,65 @@ export function EchoProvider({ children }: { children: ReactNode }) {
         handleAiEvent({ event: name, ...(envelope.data ?? {}) } as AiStreamEvent);
       });
     }
+
+    // EVT-001 room.created — new rooms/DMs land here on private-user, NOT on
+    // the workspace channel (found on prod: a fresh DM never appeared in the
+    // recipient's sidebar until reload).
+    channel.listen('.room.created', () => {
+      void queryClient.invalidateQueries({ queryKey: ['rooms'] });
+      void queryClient.invalidateQueries({ queryKey: ['workspaces'] });
+    });
+
+    // EVT-015 room.activity — message in a room we are not subscribed to
+    // (only the open room has a private-room channel — DEC-009). This is the
+    // only realtime source of preview + unread badge for background rooms
+    // (found on prod: badges and previews never updated for unfocused rooms).
+    channel.listen('.room.activity', (envelope: EventEnvelope<{ room_id: string }>) => {
+      // skip the refetch when the activity is for the room this client is
+      // reading — the room channel already handled it (markRead clears the
+      // badge, so a refetch here would only race it).
+      if (envelope.data?.room_id !== undefined && envelope.data.room_id === openRoomId()) {
+        return;
+      }
+      throttledRoomRefresh();
+    });
+
+    // EVT-024 workspace.unread_changed — cross-device badge sync (FR-READ-001/003).
+    // Shares the throttle: the server fans this out alongside room.activity
+    // for every message, so it bursts the same way.
+    channel.listen('.workspace.unread_changed', throttledRoomRefresh);
+
     return () => {
+      if (timer !== null) {
+        clearTimeout(timer);
+      }
       channel.stopListening('.session.revoked');
       for (const name of aiEvents) {
         channel.stopListening(`.${name}`);
       }
+      channel.stopListening('.room.created');
+      channel.stopListening('.room.activity');
+      channel.stopListening('.workspace.unread_changed');
     };
-  }, [instance, me, logout]);
+  }, [instance, me, logout, queryClient]);
 
-  // workspace channel: room list churn + unread badges
+  // workspace channel (FR-RT-001): user.updated / user.status_changed —
+  // directory + roster freshness (deactivated members must disappear).
   useEffect(() => {
     if (instance === null || currentWorkspace === null) {
       return;
     }
-    const slug = currentWorkspace.workspace.slug;
     const channel = instance.private(`workspace.${currentWorkspace.workspace.id}`);
-    const refreshRooms = () => {
-      void queryClient.invalidateQueries({ queryKey: ['rooms', slug] });
-      void queryClient.invalidateQueries({ queryKey: ['workspaces'] });
+    const refreshPeople = () => {
+      void queryClient.invalidateQueries({ queryKey: ['directory'] });
+      void queryClient.invalidateQueries({ queryKey: ['room-members'] });
     };
 
-    channel.listen('.room.created', refreshRooms);
-    channel.listen('.room.updated', refreshRooms);
-    channel.listen('.room.deleted', refreshRooms);
-    channel.listen('.room.member_added', refreshRooms);
-    channel.listen('.room.member_removed', refreshRooms);
-    channel.listen('.workspace.unread_changed', refreshRooms);
+    channel.listen('.user.updated', refreshPeople);
+    channel.listen('.user.status_changed', refreshPeople);
     return () => {
-      channel.stopListening('.room.created');
-      channel.stopListening('.room.updated');
-      channel.stopListening('.room.deleted');
-      channel.stopListening('.room.member_added');
-      channel.stopListening('.room.member_removed');
-      channel.stopListening('.workspace.unread_changed');
+      channel.stopListening('.user.updated');
+      channel.stopListening('.user.status_changed');
     };
   }, [instance, currentWorkspace, queryClient]);
 
