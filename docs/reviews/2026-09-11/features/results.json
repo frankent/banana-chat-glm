@@ -1,0 +1,773 @@
+{
+  "negativeControl": false,
+  "commit": "a70f5290f8f77c55f1b64229f3a63acf5e0ccc05",
+  "results": [
+    {
+      "id": "TC-WEB-040-conversations-navigation",
+      "passed": true,
+      "ms": 85,
+      "returnsToConversations": true
+    },
+    {
+      "id": "TC-ROOM-006-new-dm",
+      "passed": true,
+      "ms": 987,
+      "freshRoom": true,
+      "recipientStayedInOtherRoom": true,
+      "reloads": 0
+    },
+    {
+      "id": "TC-READ-011-background-first-message",
+      "passed": true,
+      "ms": 594,
+      "previewUpdated": true,
+      "unread": 1,
+      "reloads": 0
+    },
+    {
+      "id": "TC-READ-011-background-burst",
+      "passed": true,
+      "ms": 4163,
+      "unread": 6,
+      "finalPreviewCorrect": true,
+      "roomListGetsDuringBurstAndSettle": 1
+    },
+    {
+      "id": "TC-READ-003-workspace-badge",
+      "passed": true,
+      "ms": 271,
+      "unreadRooms": 1
+    },
+    {
+      "id": "TC-READ-001-open-room-clears-badge",
+      "passed": true,
+      "ms": 2125,
+      "unreadAfterOpen": 0
+    },
+    {
+      "id": "TC-RT-001-focused-room-message",
+      "passed": true,
+      "ms": 2479,
+      "liveDelivery": true,
+      "unread": 0
+    },
+    {
+      "id": "TC-MSG-009-reopen-updated-room",
+      "passed": true,
+      "ms": 1154,
+      "latestMessageVisibleOnReopen": true
+    },
+    {
+      "id": "TC-RT-002-reconnect-catchup",
+      "passed": true,
+      "ms": 567,
+      "recoveredMissedMessage": true
+    },
+    {
+      "id": "TC-CORE-030-persisted-failure-retry",
+      "passed": true,
+      "ms": 6397,
+      "attempts": 4,
+      "stableId": true,
+      "persistedAcrossReload": true
+    },
+    {
+      "id": "TC-CORE-023-scroll-search-read-viewport",
+      "passed": true,
+      "ms": 12847,
+      "prependAnchorPreserved": true,
+      "backgroundReadNotSent": true,
+      "searchAnchorPreserved": true
+    },
+    {
+      "id": "TC-WEB-UI-existing-edit-delete-controls",
+      "passed": true,
+      "ms": 3855,
+      "existingEditDeletePreserved": true
+    },
+    {
+      "id": "TC-MSG-060-reply-markdown-pin-typing",
+      "passed": true,
+      "ms": 2063,
+      "typingNamed": true,
+      "markdown": true,
+      "replyQuoted": true,
+      "pinJump": true
+    },
+    {
+      "id": "TC-NOTE-001-browser-room-notebook",
+      "passed": true,
+      "ms": 2510,
+      "create": true,
+      "realtime": true,
+      "edit": true,
+      "delete": true
+    },
+    {
+      "id": "TC-MEDIA-020-viewers-and-media-replies",
+      "passed": true,
+      "ms": 3433,
+      "imageLoaded": true,
+      "videoLoaded": true,
+      "markdownFilePreview": true,
+      "mediaReply": true
+    },
+    {
+      "id": "TC-WS-005-workspace-directory",
+      "passed": true,
+      "ms": 719,
+      "directoryStartsDm": true
+    },
+    {
+      "id": "TC-WEB-UI-responsive-room-navigation",
+      "passed": true,
+      "ms": 684,
+      "mobileNavigation": true,
+      "noHorizontalOverflow": true
+    },
+    {
+      "id": "TC-AUTH-013-account-cache-isolation",
+      "passed": true,
+      "ms": 1959,
+      "privateDataAbsentAfterAccountSwitch": true
+    },
+    {
+      "id": "TC-RT-001-no-runtime-errors",
+      "passed": true,
+      "ms": 1,
+      "errors": []
+    }
+  ],
+  "events": [
+    {
+      "receiver": true,
+      "event": "room.created"
+    },
+    {
+      "receiver": true,
+      "event": "room.created"
+    },
+    {
+      "receiver": false,
+      "event": "room.created"
+    },
+    {
+      "receiver": false,
+      "event": "room.typing"
+    },
+    {
+      "receiver": false,
+      "event": "room.typing"
+    },
+    {
+      "receiver": true,
+      "event": "room.activity"
+    },
+    {
+      "receiver": false,
+      "event": "message.created"
+    },
+    {
+      "receiver": true,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": false,
+      "event": "room.activity"
+    },
+    {
+      "receiver": false,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": false,
+      "event": "room.typing"
+    },
+    {
+      "receiver": false,
+      "event": "room.typing"
+    },
+    {
+      "receiver": false,
+      "event": "message.created"
+    },
+    {
+      "receiver": false,
+      "event": "room.activity"
+    },
+    {
+      "receiver": false,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": true,
+      "event": "room.activity"
+    },
+    {
+      "receiver": true,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": false,
+      "event": "room.typing"
+    },
+    {
+      "receiver": false,
+      "event": "room.typing"
+    },
+    {
+      "receiver": false,
+      "event": "message.created"
+    },
+    {
+      "receiver": false,
+      "event": "room.activity"
+    },
+    {
+      "receiver": false,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": true,
+      "event": "room.activity"
+    },
+    {
+      "receiver": true,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": false,
+      "event": "room.typing"
+    },
+    {
+      "receiver": false,
+      "event": "room.typing"
+    },
+    {
+      "receiver": false,
+      "event": "message.created"
+    },
+    {
+      "receiver": false,
+      "event": "room.activity"
+    },
+    {
+      "receiver": false,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": true,
+      "event": "room.activity"
+    },
+    {
+      "receiver": true,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": false,
+      "event": "room.typing"
+    },
+    {
+      "receiver": false,
+      "event": "room.typing"
+    },
+    {
+      "receiver": false,
+      "event": "message.created"
+    },
+    {
+      "receiver": false,
+      "event": "room.activity"
+    },
+    {
+      "receiver": false,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": true,
+      "event": "room.activity"
+    },
+    {
+      "receiver": true,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": false,
+      "event": "room.typing"
+    },
+    {
+      "receiver": false,
+      "event": "room.typing"
+    },
+    {
+      "receiver": false,
+      "event": "message.created"
+    },
+    {
+      "receiver": false,
+      "event": "room.activity"
+    },
+    {
+      "receiver": false,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": true,
+      "event": "room.activity"
+    },
+    {
+      "receiver": true,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": true,
+      "event": "room.read"
+    },
+    {
+      "receiver": false,
+      "event": "room.read"
+    },
+    {
+      "receiver": true,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": true,
+      "event": "room.typing"
+    },
+    {
+      "receiver": false,
+      "event": "room.typing"
+    },
+    {
+      "receiver": true,
+      "event": "room.typing"
+    },
+    {
+      "receiver": false,
+      "event": "room.typing"
+    },
+    {
+      "receiver": true,
+      "event": "message.created"
+    },
+    {
+      "receiver": true,
+      "event": "room.activity"
+    },
+    {
+      "receiver": false,
+      "event": "message.created"
+    },
+    {
+      "receiver": true,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": false,
+      "event": "room.activity"
+    },
+    {
+      "receiver": false,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": true,
+      "event": "room.read"
+    },
+    {
+      "receiver": false,
+      "event": "room.read"
+    },
+    {
+      "receiver": true,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": false,
+      "event": "room.typing"
+    },
+    {
+      "receiver": false,
+      "event": "room.typing"
+    },
+    {
+      "receiver": true,
+      "event": "room.activity"
+    },
+    {
+      "receiver": false,
+      "event": "message.created"
+    },
+    {
+      "receiver": true,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": false,
+      "event": "room.activity"
+    },
+    {
+      "receiver": false,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": false,
+      "event": "room.typing"
+    },
+    {
+      "receiver": false,
+      "event": "room.typing"
+    },
+    {
+      "receiver": false,
+      "event": "message.created"
+    },
+    {
+      "receiver": false,
+      "event": "room.activity"
+    },
+    {
+      "receiver": false,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": true,
+      "event": "room.typing"
+    },
+    {
+      "receiver": false,
+      "event": "room.typing"
+    },
+    {
+      "receiver": true,
+      "event": "room.typing"
+    },
+    {
+      "receiver": false,
+      "event": "room.typing"
+    },
+    {
+      "receiver": false,
+      "event": "room.read"
+    },
+    {
+      "receiver": true,
+      "event": "room.read"
+    },
+    {
+      "receiver": true,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": false,
+      "event": "message.created"
+    },
+    {
+      "receiver": true,
+      "event": "message.created"
+    },
+    {
+      "receiver": true,
+      "event": "room.activity"
+    },
+    {
+      "receiver": true,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": false,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": true,
+      "event": "room.created"
+    },
+    {
+      "receiver": false,
+      "event": "room.created"
+    },
+    {
+      "receiver": false,
+      "event": "room.read"
+    },
+    {
+      "receiver": true,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": true,
+      "event": "room.read"
+    },
+    {
+      "receiver": true,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": true,
+      "event": "message.created"
+    },
+    {
+      "receiver": true,
+      "event": "room.activity"
+    },
+    {
+      "receiver": true,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": false,
+      "event": "room.activity"
+    },
+    {
+      "receiver": false,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": true,
+      "event": "room.typing"
+    },
+    {
+      "receiver": false,
+      "event": "room.typing"
+    },
+    {
+      "receiver": true,
+      "event": "room.typing"
+    },
+    {
+      "receiver": false,
+      "event": "room.typing"
+    },
+    {
+      "receiver": true,
+      "event": "message.created"
+    },
+    {
+      "receiver": false,
+      "event": "message.created"
+    },
+    {
+      "receiver": true,
+      "event": "room.activity"
+    },
+    {
+      "receiver": true,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": false,
+      "event": "room.activity"
+    },
+    {
+      "receiver": false,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": true,
+      "event": "message.updated"
+    },
+    {
+      "receiver": false,
+      "event": "message.updated"
+    },
+    {
+      "receiver": true,
+      "event": "room.read"
+    },
+    {
+      "receiver": false,
+      "event": "room.read"
+    },
+    {
+      "receiver": true,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": true,
+      "event": "message.deleted"
+    },
+    {
+      "receiver": false,
+      "event": "message.deleted"
+    },
+    {
+      "receiver": false,
+      "event": "room.typing"
+    },
+    {
+      "receiver": true,
+      "event": "room.typing"
+    },
+    {
+      "receiver": true,
+      "event": "room.typing"
+    },
+    {
+      "receiver": false,
+      "event": "room.typing"
+    },
+    {
+      "receiver": false,
+      "event": "message.created"
+    },
+    {
+      "receiver": true,
+      "event": "message.created"
+    },
+    {
+      "receiver": true,
+      "event": "room.activity"
+    },
+    {
+      "receiver": true,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": false,
+      "event": "room.activity"
+    },
+    {
+      "receiver": false,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": true,
+      "event": "room.typing"
+    },
+    {
+      "receiver": false,
+      "event": "room.typing"
+    },
+    {
+      "receiver": false,
+      "event": "room.typing"
+    },
+    {
+      "receiver": true,
+      "event": "room.typing"
+    },
+    {
+      "receiver": true,
+      "event": "message.created"
+    },
+    {
+      "receiver": false,
+      "event": "message.created"
+    },
+    {
+      "receiver": false,
+      "event": "room.activity"
+    },
+    {
+      "receiver": false,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": true,
+      "event": "room.activity"
+    },
+    {
+      "receiver": true,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": false,
+      "event": "room.pins_changed"
+    },
+    {
+      "receiver": true,
+      "event": "room.pins_changed"
+    },
+    {
+      "receiver": false,
+      "event": "room.pins_changed"
+    },
+    {
+      "receiver": true,
+      "event": "room.pins_changed"
+    },
+    {
+      "receiver": false,
+      "event": "room.read"
+    },
+    {
+      "receiver": true,
+      "event": "room.read"
+    },
+    {
+      "receiver": false,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": true,
+      "event": "room.notes_changed"
+    },
+    {
+      "receiver": false,
+      "event": "room.notes_changed"
+    },
+    {
+      "receiver": false,
+      "event": "room.notes_changed"
+    },
+    {
+      "receiver": true,
+      "event": "room.notes_changed"
+    },
+    {
+      "receiver": false,
+      "event": "room.notes_changed"
+    },
+    {
+      "receiver": true,
+      "event": "room.notes_changed"
+    },
+    {
+      "receiver": true,
+      "event": "message.created"
+    },
+    {
+      "receiver": false,
+      "event": "message.created"
+    },
+    {
+      "receiver": true,
+      "event": "room.activity"
+    },
+    {
+      "receiver": false,
+      "event": "room.activity"
+    },
+    {
+      "receiver": false,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": true,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": true,
+      "event": "room.read"
+    },
+    {
+      "receiver": true,
+      "event": "workspace.unread_changed"
+    },
+    {
+      "receiver": false,
+      "event": "room.created"
+    },
+    {
+      "receiver": false,
+      "event": "room.activity"
+    },
+    {
+      "receiver": false,
+      "event": "workspace.unread_changed"
+    }
+  ],
+  "errors": [],
+  "cleanup": "isolated fixture cleanup complete"
+}

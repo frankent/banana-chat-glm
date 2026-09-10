@@ -62,7 +62,7 @@ export interface Message {
   body: string | null;
   seq: number;
   client_message_id: string | null;
-  reply_to: { id: string; sender_id: string; snippet: string | null; deleted: boolean } | null;
+  reply_to: { seq?: number; id: string; sender_id: string; snippet: string | null; deleted: boolean } | null;
   system_event: SystemEvent | null;
   edited_at: string | null;
   edit_count: number;
@@ -350,3 +350,6 @@ export type AiStreamEvent =
   | { event: 'ai.conversation.updated'; conversation_summary: AiConversationSummary }
   | { event: 'ai.conversation.compacted'; conversation_id: string }
   | { event: 'ai.conversation.deleted'; conversation_id: string };
+
+/** FR-NOTE-001 — a durable room note, independent from message history. */
+export interface RoomNote { id: string; room_id: string; author_id: string; author_name: string; body: string | null; attachments: Attachment[]; created_at: string; updated_at: string; }

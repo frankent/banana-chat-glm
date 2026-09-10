@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { MediaViewer } from './MediaViewer';
+import { Markdown } from './ai/Markdown';
 import { Avatar } from './Visual';
 import type { Attachment, Message } from '@banana-chat/shared';
 
@@ -31,32 +33,10 @@ function systemText(message: Message): string {
   }
 }
 
-const MENTION_TOKEN = /(@[a-zA-Z0-9][a-zA-Z0-9_.]*)/g;
-
-/** FR-MSG-008 — render @tokens as chips; text stays escaped (split, no HTML). */
-function BodyWithMentions({ body, mine }: { body: string; mine: boolean }) {
-  const parts = body.split(MENTION_TOKEN);
-  return (
-    <p className="whitespace-pre-wrap break-words text-sm">
-      {parts.map((part, i) =>
-        part.startsWith('@') && part.length > 1 ? (
-          <span
-            key={i}
-            data-testid="mention-chip"
-            className={`rounded px-0.5 font-medium ${mine ? 'bg-yellow-500/30' : 'bg-yellow-200/70'}`}
-          >
-            {part}
-          </span>
-        ) : (
-          part
-        ),
-      )}
-    </p>
-  );
-}
-
 /** FR-MEDIA-004 — thumbnails inline, originals open in a new tab on click. */
-function AttachmentView({ attachment }: { attachment: Attachment }) {
+export function AttachmentView({ attachment }: { attachment: Attachment }) {
+  const [viewing, setViewing] = useState(false);
+  const viewer = viewing ? <MediaViewer attachment={attachment} onClose={() => setViewing(false)} /> : null;
   const thumb = attachment.urls.thumb_md ?? attachment.urls.thumb_sm ?? attachment.urls.original;
 
   if (attachment.status === 'processing' || attachment.status === 'pending' || attachment.status === 'uploaded') {
@@ -77,30 +57,33 @@ function AttachmentView({ attachment }: { attachment: Attachment }) {
 
   if (attachment.kind === 'image' && thumb !== null) {
     return (
-      <a href={attachment.urls.original ?? thumb} target="_blank" rel="noreferrer">
+      <><button onClick={() => setViewing(true)} aria-label={`View ${attachment.original_name}`}>
         <img
           src={thumb}
           alt={attachment.original_name}
           data-testid="attachment-image"
           className="max-h-72 max-w-full rounded-lg object-contain"
         />
-      </a>
+      </button>{viewer}</>
     );
   }
 
   if (attachment.kind === 'video' && attachment.urls.original !== null) {
     return (
-      <video
+      <><video
         controls
         preload="metadata"
         src={attachment.urls.original}
         poster={attachment.urls.poster ?? undefined}
         data-testid="attachment-video"
         className="max-h-72 max-w-full rounded-lg"
-      />
+      /><button onClick={() => setViewing(true)}>Open video viewer</button>{viewer}</>
     );
   }
 
+  if (/^(text\/|application\/(json|xml))/.test(attachment.mime_type) || /\.(md|txt|json|csv|log)$/i.test(attachment.original_name)) {
+    return <><button className="bc-file-preview" onClick={() => setViewing(true)} data-testid="attachment-file">📄 {attachment.original_name} · {formatSize(attachment.size_bytes)}</button>{viewer}</>;
+  }
   return (
     <a
       href={attachment.urls.original ?? '#'}
@@ -118,13 +101,17 @@ function AttachmentView({ attachment }: { attachment: Attachment }) {
 export interface MessageItemProps {
   message: Message;
   mine: boolean;
+  grouped?: boolean;
   /** sender may edit+delete; room owner/admin may delete as moderator (FR-MSG-005/006) */
   canModerate?: boolean;
+  onReply?: (message: Message) => void;
+  onPin?: (message: Message) => void;
+  onJump?: (seq: number) => void;
   onEdit?: (messageId: string, body: string) => Promise<unknown>;
   onDelete?: (messageId: string) => Promise<unknown>;
 }
 
-export function MessageItem({ message, mine, canModerate = false, onEdit, onDelete }: MessageItemProps) {
+export function MessageItem({ message, mine, canModerate = false, grouped = false, onEdit, onDelete, onReply, onPin, onJump }: MessageItemProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -176,12 +163,13 @@ export function MessageItem({ message, mine, canModerate = false, onEdit, onDele
   };
 
   return (
-    <div className={`bc-message group flex ${mine ? 'justify-end' : 'justify-start'}`} data-testid="message" data-mine={mine}>
+    <div className={`bc-message group flex ${mine ? 'justify-end' : 'justify-start'}`} data-testid="message" data-mine={mine} data-grouped={grouped}>
       {!mine && <Avatar name={message.sender?.display_name ?? 'Member'} className="bc-message-avatar" />}
       <div className={`bc-message-bubble relative max-w-[70%] rounded-2xl px-3 py-1.5 ${mine ? 'bg-yellow-300' : 'bg-white'} ${pending ? 'opacity-60' : ''} shadow-sm`}>
         {!mine && message.sender !== null && (
           <p className="text-xs font-semibold text-slate-600">{message.sender.display_name}</p>
         )}
+        {!deleted && message.reply_to && <button className="bc-reply-quote" onClick={() => message.reply_to?.seq && onJump?.(message.reply_to.seq)}><strong>Reply</strong><span>{message.reply_to.deleted ? 'Deleted message' : message.reply_to.snippet}</span></button>}
         {deleted ? (
           <p className="text-sm italic text-slate-400" data-testid="deleted-placeholder">
             {message.delete_reason === 'moderator' ? 'This message was removed by a moderator' : 'This message was deleted'}
@@ -226,7 +214,7 @@ export function MessageItem({ message, mine, canModerate = false, onEdit, onDele
                 ))}
               </div>
             )}
-            {message.body !== null && <BodyWithMentions body={message.body} mine={mine} />}
+            {message.body !== null && <div className="bc-markdown"><Markdown content={message.body} /></div>}
           </>
         )}
         <p className="mt-0.5 text-right text-[10px] text-slate-500">
@@ -235,11 +223,13 @@ export function MessageItem({ message, mine, canModerate = false, onEdit, onDele
         </p>
 
         {/* hover actions — edit (sender), delete (sender or moderator) */}
-        {!pending && !editing && !deleted && (mayEdit || mayDelete) && (
+        {!pending && !editing && !deleted && (mayEdit || mayDelete || onReply || onPin) && (
           <div
             className={`absolute top-0 ${mine ? '-left-16' : '-right-16'} hidden gap-1 group-hover:flex`}
             data-testid="message-actions"
           >
+            {onReply && <button aria-label="Reply" title="Reply" onClick={() => onReply(message)}>↩</button>}
+            {onPin && <button aria-label="Pin message" title="Pin message" onClick={() => onPin(message)}>⌖</button>}
             {mayEdit && (
               <button
                 type="button"

@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
+import { TypingPublisher } from '@banana-chat/chat-core';
+import { endpoints } from '../lib/api';
+import type { Message } from '@banana-chat/shared';
 import { DEFAULT_SETTINGS } from '@banana-chat/shared';
 import type { UserStub } from '@banana-chat/shared';
 import { Icon } from './Visual';
@@ -13,6 +16,8 @@ interface ComposerProps {
   senderId: string;
   /** room roster for @mention autocomplete (FR-MSG-008, TASK-WEB-006) */
   members?: UserStub[];
+  reply?: Message | null;
+  onReplyClear?: () => void;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -22,10 +27,13 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 /** @token immediately before the caret (username charset per FR-MSG-008) */
-const MENTION_AT_CARET = /(?:^|\s)@([a-zA-Z0-9][a-zA-Z0-9_.]*)$/;
+const MENTION_AT_CARET = /(?:^|\s)@([a-zA-Z0-9_.]*)$/;
 
 /** TASK-WEB-006 — Enter sends, Shift+Enter newlines, optimistic insert, one draft per room. */
-export function Composer({ roomId, workspaceId, slug, senderId, members = [] }: ComposerProps) {
+export function Composer({ roomId, workspaceId, slug, senderId, members = [], reply, onReplyClear }: ComposerProps) {
+  const typing = useMemo(() => new TypingPublisher(value => {void endpoints.typing(roomId, slug, value).catch(() => undefined);}), [roomId, slug]);
+  useEffect(() => () => typing.stop(), [typing]);
+  useEffect(() => {if (reply) textareaRef.current?.focus();}, [reply]);
   const [body, setBody] = useState('');
   const submitting = useRef(false);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -62,7 +70,8 @@ export function Composer({ roomId, workspaceId, slug, senderId, members = [] }: 
     try {
       const { outbox, ready } = sessionOutbox();
       await ready;
-      await outbox.enqueue({ roomId, workspaceId: slug, body: trimmed, attachments });
+      await outbox.enqueue({ roomId, workspaceId: slug, body: trimmed, attachments, replyToMessageId: reply?.id });
+      typing.stop(); onReplyClear?.();
       setBody('');
       window.sessionStorage.removeItem(draftKey);
       clear();
@@ -140,6 +149,7 @@ export function Composer({ roomId, workspaceId, slug, senderId, members = [] }: 
   };
 
   const onBodyChange = (value: string) => {
+    typing.update(value.trim() !== '');
     setBody(value.slice(0, maxLength));
     window.sessionStorage.setItem(draftKey, value.slice(0, maxLength));
     const textarea = textareaRef.current;
@@ -150,6 +160,7 @@ export function Composer({ roomId, workspaceId, slug, senderId, members = [] }: 
 
   return (
     <div className="bc-composer relative">
+      {reply && <div className="bc-reply-compose"><span><strong>Reply to {reply.sender?.display_name ?? 'message'}</strong><small>{reply.body ?? reply.attachments[0]?.original_name}</small></span><button aria-label="Cancel reply" onClick={onReplyClear}>✕</button></div>}
       {sendError && <p role="alert" className="text-sm text-red-600">{sendError}</p>}
       {staged.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-2" data-testid="composer-attachments">

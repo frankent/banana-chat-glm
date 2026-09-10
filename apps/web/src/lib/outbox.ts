@@ -25,7 +25,7 @@ export function sessionOutbox() {
       if (useSession.getState().me?.id !== scope.userId) return { ok: false, retryable: false, error: 'Session changed' };
       if (useSession.getState().currentWorkspace?.workspace.id === scope.workspaceId) stores.set(entry.room_id, roomStore(entry.room_id));
       try {
-        const res = await endpoints.sendMessage(entry.room_id, slug, entry.body, entry.client_message_id, undefined,
+        const res = await endpoints.sendMessage(entry.room_id, slug, entry.body, entry.client_message_id, entry.reply_to_message_id,
           entry.attachments.map(a => a.attachment_id!).filter(Boolean));
         return { ok: true, message: res.message };
       } catch (e) {

@@ -14,7 +14,7 @@ export function AppShell() {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { connected } = useEcho();
-  useEffect(() => { setSidebarOpen(false); }, [location.pathname]);
+  useEffect(() => { if (location.pathname !== '/') setSidebarOpen(false); }, [location.pathname]);
 
   // TASK-WEB-018 — Ctrl/Cmd+K jumps to search
   useEffect(() => {
@@ -50,8 +50,9 @@ export function AppShell() {
         <nav className="bc-rail" aria-label="Main navigation">
           <button className="bc-brand" aria-label="Banana Chat home" onClick={() => navigate('/')}><Banana /></button>
           <div className="bc-rail-links">
-            <button className={!location.pathname.startsWith('/ai') && !location.pathname.startsWith('/search') ? 'active' : ''} aria-label="Conversations" title="Conversations" onClick={() => setSidebarOpen(true)}><Icon name="chat" size={23} /></button>
+            <button className={!location.pathname.startsWith('/ai') && !location.pathname.startsWith('/search') && location.pathname !== '/members' ? 'active' : ''} aria-label="Conversations" title="Conversations" onClick={() => { navigate('/'); setSidebarOpen(true); }}><Icon name="chat" size={23} /></button>
             <button className={location.pathname.startsWith('/search') ? 'active' : ''} onClick={() => navigate('/search')} aria-label="Search (Ctrl+K)" title="Search (Ctrl+K)" data-testid="open-search"><Icon name="search" size={23} /></button>
+            <button className={location.pathname === '/members' ? 'active' : ''} onClick={() => navigate('/members')} aria-label="Workspace members" title="Workspace members"><Icon name="users" /></button>
             <div className="bc-rail-divider" />
             <button className={location.pathname.startsWith('/ai') ? 'active' : ''} aria-label="AI Assistant" title="AI Assistant" onClick={() => navigate('/ai')}><Icon name="sparkle" size={23} /></button>
           </div>

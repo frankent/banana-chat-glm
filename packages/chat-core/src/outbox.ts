@@ -19,6 +19,7 @@ export type OutboxSendResult =
 export type OutboxSendFn = (entry: OutboxEntry) => Promise<OutboxSendResult>;
 
 export interface OutboxDraft {
+  replyToMessageId?: string;
   roomId: string;
   workspaceId: string;
   body: string | null;
@@ -120,6 +121,7 @@ export class Outbox {
       workspace_id: draft.workspaceId,
       client_message_id: draft.clientMessageId ?? randomId(),
       body: draft.body,
+      reply_to_message_id: draft.replyToMessageId,
       attachments: draft.attachments ?? [],
       attempts: 0,
       last_error: null,

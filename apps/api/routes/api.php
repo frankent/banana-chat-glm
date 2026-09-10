@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AiController;
+use App\Http\Controllers\Api\V1\RoomToolsController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\MeController;
@@ -82,6 +83,7 @@ Route::prefix('v1')->group(function (): void {
     // Workspace-scoped routes — X-Workspace-Id required (FR-WS-003 isolation)
     Route::middleware(['auth:api', 'account.active', 'password.fresh', 'workspace.context'])->group(function (): void {
         Route::get('/workspace', [WorkspaceController::class, 'show']);
+        Route::get('/directory', [WorkspaceController::class, 'directory']);
         Route::get('/members', [WorkspaceController::class, 'members']);
         Route::get('/sync', [WorkspaceController::class, 'sync']);
         Route::get('/me/mentions', [MeController::class, 'mentions']); // API-044 (auth ws)
@@ -97,6 +99,15 @@ Route::prefix('v1')->group(function (): void {
         // Room params resolve inside the controller (RoomController::roomOrFail):
         // SubstituteBindings runs before workspace.context sets the scope, so
         // implicit binding here would leak cross-workspace rooms.
+
+        Route::get('/rooms/{roomId}/notes', [RoomToolsController::class, 'notes'])->whereUlid('roomId');
+        Route::post('/rooms/{roomId}/notes', [RoomToolsController::class, 'createNote'])->whereUlid('roomId');
+        Route::patch('/rooms/{roomId}/notes/{noteId}', [RoomToolsController::class, 'updateNote'])->whereUlid('roomId');
+        Route::delete('/rooms/{roomId}/notes/{noteId}', [RoomToolsController::class, 'deleteNote'])->whereUlid('roomId');
+        Route::get('/rooms/{roomId}/pins', [RoomToolsController::class, 'pins'])->whereUlid('roomId');
+        Route::put('/rooms/{roomId}/pins/{messageId}', [RoomToolsController::class, 'pin'])->whereUlid('roomId');
+        Route::delete('/rooms/{roomId}/pins/{messageId}', [RoomToolsController::class, 'unpin'])->whereUlid('roomId');
+        Route::post('/rooms/{roomId}/typing', [RoomToolsController::class, 'typing'])->whereUlid('roomId');
 
         Route::get('/rooms', [RoomController::class, 'index']);
         Route::post('/rooms', [RoomController::class, 'store']);

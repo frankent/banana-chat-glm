@@ -41,6 +41,7 @@ export interface OutboxEntry {
   workspace_id: string;
   client_message_id: string;
   body: string | null;
+  reply_to_message_id?: string;
   attachments: OutboxAttachmentDraft[];
   attempts: number;
   last_error: string | null;

@@ -258,3 +258,14 @@ it('TC-CORE-021 disposing while persistence is pending prevents a new network se
   expect(sender).not.toHaveBeenCalled();
   await expect(outbox.enqueue({ roomId: 'r', workspaceId: 'w', body: 'late' })).rejects.toThrow('disposed');
 });
+
+
+it('TC-MSG-060 preserves reply target and attachments across restart and retry', async () => {
+  const {cache, outbox} = makeOutbox();
+  await outbox.enqueue({roomId:'room-1', workspaceId:'ws-1', body:'Reply', replyToMessageId:'original', attachments:[{local_path:'', attachment_id:'video', kind:'video', mime_type:'video/mp4', original_name:'clip.mp4', size_bytes:20}]});
+  const restored = new Outbox(cache);
+  await restored.restore();
+  expect(restored.all()[0]?.reply_to_message_id).toBe('original');
+  expect(restored.all()[0]?.attachments[0]?.attachment_id).toBe('video');
+  await restored.dispose(); await outbox.dispose();
+});

@@ -165,7 +165,7 @@ export function parseMarkdown(md: string): MdBlock[] {
   return blocks;
 }
 
-const INLINE_RE = /(`[^`\n]+`)|(\*\*[^*\n]+\*\*)|(\*[^*\n]+\*)|(\[[^\]\n]+\]\([^)\s]+\))/g;
+const INLINE_RE = /(`[^`\n]+`)|(\*\*[^*\n]+\*\*)|(\*[^*\n]+\*)|(\[[^\]\n]+\]\([^)\s]+\))|(https?:\/\/[^\s<>]+)/g;
 
 export function parseInline(text: string): MdInlineNode[] {
   const nodes: MdInlineNode[] = [];
@@ -182,6 +182,10 @@ export function parseInline(text: string): MdInlineNode[] {
       nodes.push({ type: 'strong', text: token.slice(2, -2) });
     } else if (token.startsWith('*')) {
       nodes.push({ type: 'em', text: token.slice(1, -1) });
+    } else if (/^https?:\/\//.test(token)) {
+      const href = token.replace(/[.,!;:]+$/, '');
+      nodes.push({type:'link', href, text:href});
+      if (href.length < token.length) nodes.push({type:'text', text:token.slice(href.length)});
     } else {
       const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
       const href = link !== null ? safeHref(link[2]) : null;

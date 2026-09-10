@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { EventEnvelope, Message } from '@banana-chat/shared';
-import { RoomSync, ReadReceiptReporter, type OutboxEntry } from '@banana-chat/chat-core';
+import { continuesMessage, RoomSync, ReadReceiptReporter, type OutboxEntry } from '@banana-chat/chat-core';
 import { sessionOutbox } from '../lib/outbox';
 import { endpoints } from '../lib/api';
 import { useMessageStore, roomStore } from '../lib/room-stores';
@@ -12,6 +12,8 @@ import { useSession } from '../state/session';
 import { MessageItem } from './MessageItem';
 import { Avatar, Icon } from './Visual';
 import { Composer } from './Composer';
+import { useRoomTools } from '../hooks/useRoomTools';
+import { NotesPanel } from './NotesPanel';
 import { RoomMediaPanel } from './RoomMediaPanel';
 
 function dayLabel(iso: string): string {
@@ -32,6 +34,12 @@ export function ChatView() {
   const state = useMessageStore(roomId);
   const bottomRef = useRef<HTMLDivElement>(null);
   const jumpedRef = useRef<string | undefined>(undefined);
+  const [reply, setReply] = useState<Message | null>(null);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [toolError, setToolError] = useState('');
+  const typingNames = useRoomTools(roomId, slug, me?.id);
+  const pinsQuery = useQuery({queryKey:['pins', slug, roomId, me?.id], queryFn:() => endpoints.pins(roomId!, slug!), enabled:!!roomId && !!slug, refetchInterval:15000});
+  useEffect(() => {setReply(null);setNotesOpen(false);setToolError('');}, [roomId]);
   const [mediaOpen, setMediaOpen] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const atBottom = useRef(true);
@@ -206,7 +214,7 @@ export function ChatView() {
 
   if (query.isError || roomQuery.isError) return <p role="alert" className="p-4">Unable to open this room. Check your connection and room access.</p>;
   const room = roomQuery.data;
-  const title = room?.room.type === 'dm' ? room.other_user?.display_name ?? 'Direct message' : room?.room.name ?? '…';
+  const title = room?.room.type === 'dm' ? room.other_user?.display_name ?? membersQuery.data?.find(member => member.id !== me.id)?.display_name ?? 'Direct message' : room?.room.name ?? '…';
   const myMessages = state.messages.filter((m) => m.sender_id === me.id && m.deleted_at === null);
   const myNewestSeq = myMessages.length > 0 ? myMessages[myMessages.length - 1]!.seq : 0;
   const other = readStatusQuery.data?.read_by.find((entry) => entry.user_id !== me.id);
@@ -215,7 +223,7 @@ export function ChatView() {
   let lastDay = '';
 
   // FR-MSG-005/006 — edit (sender only), delete (sender anytime, moderator for others)
-  const canModerate = roomQuery.data?.my_role === 'owner' || roomQuery.data?.my_role === 'admin';
+  const canModerate = roomQuery.data?.my_role === 'owner' || roomQuery.data?.my_role === 'admin' || currentWorkspace?.role === 'owner' || currentWorkspace?.role === 'admin';
   const editMessage = async (messageId: string, body: string) => {
     const response = await endpoints.editMessage(messageId, slug, body);
     roomStore(roomId).add(response.message);
@@ -241,9 +249,10 @@ export function ChatView() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <button className="bc-tool-button" onClick={() => {setNotesOpen(!notesOpen);setMediaOpen(false);}} aria-label="Room notes">Notes</button>
           {seen && <span className="text-xs font-medium text-slate-400" data-testid="seen-indicator">Seen</span>}
           <button
-            onClick={() => setMediaOpen((v) => !v)}
+            onClick={() => {setMediaOpen((v) => !v);setNotesOpen(false);}}
             aria-pressed={mediaOpen}
             aria-label="Media and files"
             className="rounded-lg px-2 py-1 text-sm text-slate-400 hover:bg-slate-100 hover:text-slate-600"
@@ -253,6 +262,9 @@ export function ChatView() {
           </button>
         </div>
       </header>
+      {room?.room.type === 'group' && <div className="bc-bot-presence"><Icon name="sparkle" size={13} /> AI bot is here · mention <strong>@ai</strong> to ask. Only your mention is sent to AI. <a href="/ai">AI setup & consent</a></div>}
+      {!!pinsQuery.data?.length && <div className="bc-pins" aria-label="Pinned messages">{pinsQuery.data.map(pin => <div key={pin.id}><button onClick={() => setSearchParams({around_seq:String(pin.seq)})}>⌖ <span>{pin.body ?? pin.attachments[0]?.original_name ?? 'Message'}</span></button><button aria-label="Unpin message" onClick={async () => {try {await endpoints.pin(roomId, slug, pin.id, false);void pinsQuery.refetch();}catch(e){setToolError(e instanceof Error ? e.message : 'Unable to unpin');}}}>✕</button></div>)}</div>}
+      {toolError && <p role="alert">{toolError}</p>}
 
       <div ref={listRef} onScroll={() => {
         const list = listRef.current!;
@@ -273,7 +285,7 @@ export function ChatView() {
         {state.fillTimedOut && (
           <p className="text-center text-xs text-amber-600">Some messages failed to load — refresh to resync.</p>
         )}
-        {state.messages.map((message) => {
+        {state.messages.map((message, index) => {
           const day = dayLabel(message.created_at);
           const divider = day !== lastDay;
           lastDay = day;
@@ -286,10 +298,14 @@ export function ChatView() {
               )}
               <MessageItem
                 message={message}
+                grouped={!divider && continuesMessage(state.messages[index - 1], message)}
                 mine={message.sender_id === me.id}
                 canModerate={canModerate}
                 onEdit={editMessage}
                 onDelete={deleteMessage}
+                onReply={setReply}
+                onJump={seq => setSearchParams({around_seq:String(seq)})}
+                onPin={async message => {try {await endpoints.pin(roomId, slug, message.id, true);void pinsQuery.refetch();}catch(e){setToolError(e instanceof Error ? e.message : 'Unable to pin');}}}
               />
             </div>
           );
@@ -306,8 +322,10 @@ export function ChatView() {
         <div ref={bottomRef} className="h-px" />
       </div>
 
-      <Composer key={`${me.id}:${roomId}`} roomId={roomId} workspaceId={room?.room.workspace_id ?? currentWorkspace?.workspace.id ?? ''} slug={slug} senderId={me.id} members={membersQuery.data ?? []} />
+      <div className="bc-typing" role="status" data-testid="typing-indicator">{typingNames.length > 0 && <><span className="bc-typing-dots">•••</span> {typingNames.join(', ')} {typingNames.length > 1 ? 'are' : 'is'} typing…</>}</div>
+      <Composer reply={reply} onReplyClear={() => setReply(null)} key={`${me.id}:${roomId}`} roomId={roomId} workspaceId={room?.room.workspace_id ?? currentWorkspace?.workspace.id ?? ''} slug={slug} senderId={me.id} members={[...(membersQuery.data ?? []), ...(room?.room.type === 'group' ? [{id:'ai-bot', username:'ai', display_name:'AI Assistant', avatar_attachment_id:null}] : [])]} />
       </div>
+      {notesOpen && <NotesPanel key={roomId} roomId={roomId} slug={slug} me={me.id} canModerate={canModerate} onClose={() => setNotesOpen(false)} />}
       {mediaOpen && <RoomMediaPanel roomId={roomId} slug={slug} onClose={() => setMediaOpen(false)} />}
     </div>
   );

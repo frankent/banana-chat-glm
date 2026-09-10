@@ -454,3 +454,114 @@ paths:
       responses:
         '200': { description: all checks ok }
         '503': { description: degraded, per-check detail }
+
+  /directory:
+    get:
+      summary: API-138 paginated workspace directory (FR-WS-005)
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/workspaceSlug'}
+        - {name: q, in: query, schema: {type: string, maxLength: 100}}
+        - {name: cursor, in: query, schema: {type: string}}
+        - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 50}}
+      responses:
+        '200': {description: 'data: {members: UserStub[], next_cursor: string|null}'}
+        '403': {description: Not a workspace member}
+  /rooms/{roomId}/notes:
+    parameters:
+      - {$ref: '#/components/parameters/workspaceSlug'}
+      - {name: roomId, in: path, required: true, schema: {type: string}}
+    get:
+      summary: API-130 list room notes (FR-NOTE-001)
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: before, in: query, schema: {type: string}, description: Last note ULID from preceding page}
+      responses:
+        '200': {description: 'data: {notes: [{id,room_id,author_id,author_name,body,attachments,created_at,updated_at}], has_more}; 30 notes/page'}
+        '403': {description: Not a room member}
+    post:
+      summary: API-131 create room note (FR-NOTE-001)
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                body: {type: [string, 'null'], maxLength: 20000}
+                attachment_ids: {type: array, maxItems: 10, uniqueItems: true, items: {type: string}}
+              description: At least nonblank body or one attachment; uploader/workspace ownership checked
+      responses:
+        '201': {description: 'data: note with author name and signed attachment URLs'}
+        '422': {description: Invalid content or attachment claim}
+        '403': {description: Not a room member}
+  /rooms/{roomId}/notes/{noteId}:
+    parameters:
+      - {$ref: '#/components/parameters/workspaceSlug'}
+      - {name: roomId, in: path, required: true, schema: {type: string}}
+      - {name: noteId, in: path, required: true, schema: {type: string}}
+    patch:
+      summary: API-132 edit note text (author or admin)
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                body: {type: [string, 'null'], maxLength: 20000}
+      responses:
+        '200': {description: Updated note in data envelope}
+        '403': {description: Not author or room/workspace admin}
+        '422': {description: Empty note}
+    delete:
+      summary: API-133 delete room note (author or admin)
+      security: [{bearerAuth: []}]
+      responses:
+        '204': {description: Deleted}
+        '403': {description: Not author or room/workspace admin}
+  /rooms/{roomId}/pins:
+    parameters:
+      - {$ref: '#/components/parameters/workspaceSlug'}
+      - {name: roomId, in: path, required: true, schema: {type: string}}
+    get:
+      summary: API-134 pinned nondeleted messages, descending seq (FR-PIN-001)
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: Message array in data envelope}
+        '403': {description: Not a room member}
+  /rooms/{roomId}/pins/{messageId}:
+    parameters:
+      - {$ref: '#/components/parameters/workspaceSlug'}
+      - {name: roomId, in: path, required: true, schema: {type: string}}
+      - {name: messageId, in: path, required: true, schema: {type: string}}
+    put:
+      summary: API-135 pin message idempotently (FR-PIN-001)
+      security: [{bearerAuth: []}]
+      responses:
+        '200': {description: 'data: {pinned: true}'}
+        '404': {description: Message absent, deleted or in another room}
+        '403': {description: Not a room member}
+    delete:
+      summary: API-136 unpin message (FR-PIN-001)
+      security: [{bearerAuth: []}]
+      responses:
+        '204': {description: Unpinned}
+        '403': {description: Not a room member}
+  /rooms/{roomId}/typing:
+    parameters:
+      - {$ref: '#/components/parameters/workspaceSlug'}
+      - {name: roomId, in: path, required: true, schema: {type: string}}
+    post:
+      summary: API-137 publish named typing state (FR-RT-003, EVT-062)
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, required: [typing], properties: {typing: {type: boolean}}}
+      responses:
+        '204': {description: Accepted, true updates throttled to one per two seconds}
+        '403': {description: Not a room member}

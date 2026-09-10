@@ -1,4 +1,5 @@
 import type {
+  RoomNote,
   AiConversationSummary,
   AiMemory,
   AiMemoryCategory,
@@ -42,6 +43,27 @@ export interface RoomDetail {
 /** Typed endpoint wrappers — one method per API row in spec §8. */
 export class Endpoints {
   constructor(private readonly api: ApiClient) {}
+
+  directoryPage(slug: string, q = '', cursor = '') {
+    return this.api.request<{members: UserStub[]; next_cursor: string | null}>(`/api/v1/directory?q=${encodeURIComponent(q)}&cursor=${encodeURIComponent(cursor)}`, {workspaceSlug: slug});
+  }
+  notes(roomId: string, slug: string, before = '') {
+    return this.api.request<{notes: RoomNote[]; has_more: boolean}>(`/api/v1/rooms/${roomId}/notes${before ? '?before='+before : ''}`, {workspaceSlug: slug});
+  }
+  createNote(roomId: string, slug: string, body: string, attachment_ids: string[]) {
+    return this.api.request<RoomNote>(`/api/v1/rooms/${roomId}/notes`, {method:'POST', workspaceSlug:slug, body:{body, attachment_ids}});
+  }
+  updateNote(roomId: string, slug: string, id: string, body: string) {
+    return this.api.request<RoomNote>(`/api/v1/rooms/${roomId}/notes/${id}`, {method:'PATCH', workspaceSlug:slug, body:{body}});
+  }
+  deleteNote(roomId: string, slug: string, id: string) {
+    return this.api.request<void>(`/api/v1/rooms/${roomId}/notes/${id}`, {method:'DELETE', workspaceSlug:slug});
+  }
+  pins(roomId: string, slug: string) { return this.api.request<Message[]>(`/api/v1/rooms/${roomId}/pins`, {workspaceSlug:slug}); }
+  pin(roomId: string, slug: string, id: string, pinned: boolean) {
+    return this.api.request<void>(`/api/v1/rooms/${roomId}/pins/${id}`, {method:pinned ? 'PUT' : 'DELETE', workspaceSlug:slug});
+  }
+  typing(roomId: string, slug: string, typing: boolean) { return this.api.request<void>(`/api/v1/rooms/${roomId}/typing`, {method:'POST', workspaceSlug:slug, body:{typing}}); }
 
   // -- auth (API-001..010) --
 

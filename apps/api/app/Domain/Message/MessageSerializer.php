@@ -27,6 +27,7 @@ class MessageSerializer
             $original = $message->replyTo;
             $replyTo = [
                 'id' => $original->id,
+                'seq' => (int) $original->seq,
                 'sender_id' => $original->sender_id,
                 'snippet' => $original->deleted_at !== null ? null : ($original->body !== null
                     ? mb_substr($original->body, 0, 100)
@@ -75,7 +76,7 @@ class MessageSerializer
     {
         $message->loadMissing([
             'sender:id,username,display_name,avatar_attachment_id',
-            'replyTo:id,room_id,sender_id,body,deleted_at',
+            'replyTo:id,room_id,seq,sender_id,body,deleted_at',
             'attachments',
             'mentions:id',
         ]);

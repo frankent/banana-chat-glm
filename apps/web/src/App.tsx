@@ -8,6 +8,7 @@ import { ChatView } from './components/ChatView';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { LoginPage } from './pages/LoginPage';
 import { NoWorkspacePage } from './pages/NoWorkspacePage';
+import { MembersPage } from './pages/MembersPage';
 import { SearchPage } from './pages/SearchPage';
 import { useSession } from './state/session';
 
@@ -34,6 +35,7 @@ export default function App() {
               <Route element={<AppShell />}>
                 <Route index element={<WelcomeView />} />
                 <Route path="/rooms/:roomId" element={<ChatView />} />
+                <Route path="/members" element={<MembersPage />} />
                 <Route path="/search" element={<SearchPage />} />
                 <Route path="/ai" element={<AiAssistantView />} />
                 <Route path="/ai/:conversationId" element={<AiAssistantView />} />

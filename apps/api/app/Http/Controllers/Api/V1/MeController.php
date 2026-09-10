@@ -80,7 +80,7 @@ class MeController extends Controller
             ->whereNull('messages.deleted_at')
             ->with([
                 'sender:id,username,display_name,avatar_attachment_id',
-                'replyTo:id,room_id,sender_id,body,deleted_at',
+                'replyTo:id,room_id,seq,sender_id,body,deleted_at',
                 'attachments',
                 'mentions:id',
             ])

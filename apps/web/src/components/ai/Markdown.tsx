@@ -30,7 +30,7 @@ function Inline({ node }: { node: MdInlineNode }) {
         </a>
       );
     default:
-      return <>{node.text}</>;
+      return <>{node.text.split(/(@[a-zA-Z0-9][a-zA-Z0-9_.]*)/g).map((part, i) => part.startsWith('@') ? <span key={i} className="bc-mention" data-testid="mention-chip">{part}</span> : part)}</>;
   }
 }
 

@@ -173,9 +173,11 @@ class MessageWriter
             $ok = $attachment !== null
                 && $attachment->workspace_id === $room->workspace_id
                 && $attachment->uploader_id === $sender->id
+                && $attachment->deleted_at === null
                 && $attachment->kind !== AttachmentKind::Avatar
                 && in_array($attachment->status, [AttachmentStatus::Ready, AttachmentStatus::Processing, AttachmentStatus::Uploaded], true)
-                && ! $attachment->messages()->exists();
+                && ! $attachment->messages()->exists()
+                && ! DB::table('room_note_attachments')->where('attachment_id', $attachment->id)->exists();
 
             if (! $ok) {
                 throw ApiException::msgAttachmentInvalid();

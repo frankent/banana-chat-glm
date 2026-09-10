@@ -9,6 +9,7 @@ use App\Domain\Room\RoomPolicy;
 use App\Events\RoomRead;
 use App\Events\WorkspaceUnreadChanged;
 use App\Http\Controllers\Controller;
+use App\Jobs\GenerateRoomBotReply;
 use App\Models\Message;
 use App\Models\Room;
 use App\Models\RoomMember;
@@ -55,7 +56,7 @@ class MessageController extends Controller
             ->where('room_id', $room->id)
             ->with([
                 'sender:id,username,display_name,avatar_attachment_id',
-                'replyTo:id,room_id,sender_id,body,deleted_at',
+                'replyTo:id,room_id,seq,sender_id,body,deleted_at',
                 'attachments',
                 'mentions:id',
             ]);
@@ -138,9 +139,13 @@ class MessageController extends Controller
             $data['attachment_ids'] ?? [],
         );
 
+        if ($created && ! $room->isDm() && GenerateRoomBotReply::mentioned($message->body)) {
+            GenerateRoomBotReply::dispatch($message->id)->onQueue('ai')->afterCommit();
+        }
+
         $message->loadMissing([
             'sender:id,username,display_name,avatar_attachment_id',
-            'replyTo:id,room_id,sender_id,body,deleted_at',
+            'replyTo:id,room_id,seq,sender_id,body,deleted_at',
             'attachments',
             'mentions:id',
         ]);

@@ -27,6 +27,14 @@ class WorkspaceController extends Controller
      * API-011 — member directory: search display_name/username, hide deactivated,
      * cursor pagination (default 50).
      */
+    /** API-138: preserve cursor metadata inside the typed data envelope. */
+    public function directory(Request $request): JsonResponse
+    {
+        $page = $this->members($request)->getData(true);
+
+        return response()->json(['data' => ['members' => $page['data'], 'next_cursor' => $page['meta']['next_cursor']]]);
+    }
+
     public function members(Request $request): JsonResponse
     {
         $request->validate([
@@ -42,7 +50,7 @@ class WorkspaceController extends Controller
             ->where('workspace_members.status', 'active')
             ->where('users.status', '!=', UserStatus::Deactivated->value)
             ->join('users', 'users.id', '=', 'workspace_members.user_id')
-            ->orderBy('users.display_name')
+            ->orderBy('users.display_name')->orderBy('users.id')
             ->select([
                 'users.id', 'users.username', 'users.display_name',
                 'users.avatar_attachment_id', 'users.last_seen_at', 'users.status',

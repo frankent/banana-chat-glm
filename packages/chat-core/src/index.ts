@@ -26,3 +26,7 @@ export { RoomSync, ReadReceiptReporter } from './room-sync.js';
 export { uploadTicket } from './upload.js';
 export type { CompletedPart } from './upload.js';
 export { applyRoomEvent } from './room-sync.js';
+
+export { TypingState, TypingPublisher } from './typing.js';
+
+export { continuesMessage } from './message-layout.js';
