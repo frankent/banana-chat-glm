@@ -1,0 +1,49 @@
+{
+  "requirements": [
+    "FR-MEET-001..005",
+    "API-160..164",
+    "API-156",
+    "TC-MEET-001..010",
+    "DEC-054"
+  ],
+  "feature_commit": "ff8c0e9",
+  "api_regression": {
+    "passed": 380,
+    "skipped": 2,
+    "assertions": 1752
+  },
+  "call_and_meeting_api": {
+    "passed": 26,
+    "assertions": 131
+  },
+  "unit_tests_passed": 134,
+  "browser_checks": {
+    "results": 9,
+    "production-results": 9,
+    "private-calls-results": 14
+  },
+  "typecheck": "passed",
+  "web_build": "passed; existing chunk-size advisory",
+  "targeted_ui_lint": "passed without warnings",
+  "openapi_paths": 48,
+  "production": {
+    "deployed": true,
+    "url": "https://chat.gamecoms.net",
+    "forced_turn_tls": true,
+    "scheduler_revocation_verified": true,
+    "nginx_config": "passed",
+    "meeting_headers": {
+      "cache-control": "no-store",
+      "referrer-policy": "no-referrer"
+    },
+    "physical_capture_verified": false,
+    "capture": "synthetic; real RTP, SFU and TLS relay"
+  },
+  "cleanup": {
+    "qa_fixtures_removed": true,
+    "local_database_and_containers_removed": true,
+    "temporary_media_proxy_removed": true,
+    "temporary_media_key_file_removed": true,
+    "existing_customer_content_changed": false
+  }
+}

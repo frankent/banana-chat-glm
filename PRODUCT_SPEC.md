@@ -2783,7 +2783,7 @@ Size: S ≤ 1 วัน · M 2–3 วัน · L 4–5 วัน · XL > 1 ส�
 | Version | Date | By | Change |
 |---|---|---|---|
 | 1.6.1 | 2026-09-11 | Codex | FR-ADM-001, FR-AUTH-005, TC-ADM-079: declare password_hash as the authentication password column so Laravel admin-login rehash does not update the nonexistent password column. Reproduced during production validation. |
-| 1.9.0-draft | 2026-09-11 | Codex | TASK-BE/WEB/CORE/QA-043 / FR-MEET-001..005 / DEC-054: public meeting links with member identity and named guests. |
+| 1.9.0 | 2026-09-11 | Codex | TASK-BE/WEB/CORE/QA-043 / FR-MEET-001..005 / DEC-054: deployed public meeting links, verified member names, named guests, shared media controls, expiry and creator revocation; production forced-TURN tests and private-call regression verified. |
 | 1.8.0 | 2026-09-11 | Codex | TASK-BE/WEB/CORE/INF/QA-042 / FR-CALL-001..005 / DEC-052,053: deployed room calls; media.gamecoms.net certificate and renewal verified, forced TURN TLS audio/video and production browser regression passed. Physical-device validation remains open in OQ-018. |
 | 1.7.0 | 2026-09-11 | Codex | TASK-BE/WEB/ADM/QA-041, FR-KAN-001..005, DEC-051, API-140..148, EVT-064, TC-KAN-001..009: workspace Kanban, editable lanes, shared tickets, comments/history and assignee deadline reminders. |
 | 1.6.2 | 2026-09-11 | Codex | FR-NOTI-007, FR-READ-003, DEC-050, EVT-063, TC-NOTI-025..028/TC-READ-013/TC-WEB-043: browser sound, tab unread count, first-login mobile room visibility and room fetch recovery. |
