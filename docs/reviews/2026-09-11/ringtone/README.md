@@ -40,3 +40,18 @@ The original audio probe counted a non-ringtone oscillator during answer.
 The corrected probe tracks the distinctive 480 Hz ringtone component; answer
 then passes without changing application audio code. Timeout simulation now
 uses a fixed aged timestamp, not one that moves forward on each poll.
+
+## Production deployment
+
+Application commit: 79f3cf7, pushed to origin/main.
+
+Production Playwright: all 7 ringtone/screenshot checks passed with no browser
+runtime errors. Temporary accounts and workspace were cleaned up.
+`production-results.json` and `production-*.png` contain the final evidence.
+
+Running nginx image:
+`sha256:77e4e81c788b2580552d710be91d06a04e4e364ff4ba51a46fd499ff37325109`.
+Container healthy. Public API health returned healthy with database, Redis,
+storage, Reverb and queue checks passing at 2026-09-11T14:25:09Z.
+Only nginx was recreated; no database migrations or backend changes.
+Native source was synchronized, but no mobile binary was built or released.
