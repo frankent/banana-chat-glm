@@ -1,3 +1,4 @@
+import { BoardPage } from './pages/BoardPage';
 import { unlockNotificationAudio } from './lib/notification-audio';
 import { unreadTitle } from '@banana-chat/chat-core';
 import { useEffect } from 'react';
@@ -43,6 +44,8 @@ export default function App() {
               <Route path="/no-workspace" element={<NoWorkspacePage />} />
               <Route element={<AppShell />}>
                 <Route index element={<WelcomeView />} />
+                <Route path="/board" element={<BoardPage />} />
+                <Route path="/board/:ticketId" element={<BoardPage />} />
                 <Route path="/rooms/:roomId" element={<ChatView />} />
                 <Route path="/members" element={<MembersPage />} />
                 <Route path="/search" element={<SearchPage />} />

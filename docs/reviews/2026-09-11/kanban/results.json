@@ -1,0 +1,89 @@
+{
+  "negativeControl": false,
+  "commit": "b07231aa5f88eb920ab3734c17d4cba52da5b20e",
+  "results": [
+    {
+      "id": "TC-KAN-008-create-and-live-share",
+      "passed": true,
+      "ms": 1998
+    },
+    {
+      "id": "TC-KAN-008-move-comment",
+      "passed": true,
+      "ms": 2143
+    },
+    {
+      "id": "TC-KAN-002-lane-settings-live",
+      "passed": true,
+      "ms": 948
+    },
+    {
+      "id": "TC-KAN-004-deadline-notification-deeplink",
+      "passed": true,
+      "ms": 3501
+    },
+    {
+      "id": "TC-KAN-008-mobile-board",
+      "passed": true,
+      "ms": 38
+    },
+    {
+      "id": "TC-KAN-001-switch-workspace-isolation",
+      "passed": true,
+      "ms": 4542
+    },
+    {
+      "id": "TC-KAN-008-no-runtime-errors",
+      "passed": true,
+      "ms": 2
+    }
+  ],
+  "events": [
+    {
+      "receiver": true,
+      "event": "board.changed"
+    },
+    {
+      "receiver": false,
+      "event": "board.changed"
+    },
+    {
+      "receiver": true,
+      "event": "board.changed"
+    },
+    {
+      "receiver": false,
+      "event": "board.changed"
+    },
+    {
+      "receiver": false,
+      "event": "board.changed"
+    },
+    {
+      "receiver": true,
+      "event": "board.changed"
+    },
+    {
+      "receiver": true,
+      "event": "board.changed"
+    },
+    {
+      "receiver": false,
+      "event": "board.changed"
+    },
+    {
+      "receiver": false,
+      "event": "board.changed"
+    },
+    {
+      "receiver": true,
+      "event": "board.changed"
+    },
+    {
+      "receiver": true,
+      "event": "notification.alert"
+    }
+  ],
+  "errors": [],
+  "cleanup": "isolated fixture cleanup complete"
+}

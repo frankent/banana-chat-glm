@@ -20,6 +20,7 @@ class ApiCoverage extends Page
     {
         return [
             ['People & workspaces', 'Accounts, roles, access and workspace membership.', '/admin/users'],
+            ['Kanban boards', 'Workspace workflow lanes, shared tickets and assignee deadline reminders.', '/admin/kanban'],
             ['Rooms & messages', 'Room recovery, message inspection, history, moderation and export.', '/admin/rooms'],
             ['Notes, pins & replies', 'Inspect notes and attachments; moderate messages and shared pins.', '/admin/room-notes'],
             ['Uploads & media', 'Image, video and file status; retry failed processing.', '/admin/attachments'],

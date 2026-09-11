@@ -26,6 +26,7 @@ export function NotificationCenter() {
     queryFn: () => endpoints.myNotifications(slug!),
     enabled: slug !== undefined,
     staleTime: 30_000,
+    refetchInterval: 30_000,
   });
 
   const settings = useQuery({queryKey: ['notification-settings', me?.id], queryFn: () => endpoints.me(), enabled: me !== null});
@@ -80,6 +81,10 @@ export function NotificationCenter() {
     setOpen(false);
     if (row.read_at === null) {
       void markRead([row.id]);
+    }
+    if (row.type === 'ticket_due' && typeof row.data['ticket_id'] === 'string') {
+      navigate(`/board/${row.data['ticket_id']}`);
+      return;
     }
     if (row.room_id !== null) {
       const seq = typeof row.data['seq'] === 'number' ? row.data['seq'] : undefined;
@@ -160,12 +165,14 @@ export function NotificationCenter() {
 }
 
 function iconFor(row: InAppNotification): string {
+  if (row.type === 'ticket_due') return '◷';
   if (row.type === 'mention') return '@';
   if (row.type === 'added_to_room') return '#';
   return '🔑';
 }
 
 function titleFor(row: InAppNotification): string {
+  if (row.type === 'ticket_due') return `Ticket #${row.data['number']} is due`;
   const actor = row.actor?.display_name ?? 'Someone';
   if (row.type === 'mention') return `${actor} mentioned you`;
   if (row.type === 'added_to_room') return `${actor} added you to a room`;
@@ -173,6 +180,7 @@ function titleFor(row: InAppNotification): string {
 }
 
 function snippetFor(row: InAppNotification): string {
+  if (row.type === 'ticket_due') return typeof row.data['title'] === 'string' ? row.data['title'] : '';
   if (row.type === 'mention') {
     const snippet = row.data['snippet'];
     return typeof snippet === 'string' ? snippet : '';

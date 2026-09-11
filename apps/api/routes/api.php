@@ -1,13 +1,14 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AiController;
-use App\Http\Controllers\Api\V1\RoomToolsController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\HealthController;
+use App\Http\Controllers\Api\V1\KanbanController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\MessageController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\RoomController;
+use App\Http\Controllers\Api\V1\RoomToolsController;
 use App\Http\Controllers\Api\V1\SearchController;
 use App\Http\Controllers\Api\V1\UploadController;
 use App\Http\Controllers\Api\V1\WorkspaceController;
@@ -82,6 +83,17 @@ Route::prefix('v1')->group(function (): void {
 
     // Workspace-scoped routes — X-Workspace-Id required (FR-WS-003 isolation)
     Route::middleware(['auth:api', 'account.active', 'password.fresh', 'workspace.context'])->group(function (): void {
+        // API-140..148 / FR-KAN-001..005
+        Route::get('/board', [KanbanController::class, 'board']);
+        Route::post('/board/lanes', [KanbanController::class, 'createLane']);
+        Route::patch('/board/lanes/{id}', [KanbanController::class, 'updateLane'])->whereUlid('id');
+        Route::delete('/board/lanes/{id}', [KanbanController::class, 'deleteLane'])->whereUlid('id');
+        Route::get('/board/tickets', [KanbanController::class, 'tickets']);
+        Route::post('/board/tickets', [KanbanController::class, 'create']);
+        Route::get('/board/tickets/{id}', [KanbanController::class, 'show'])->whereUlid('id');
+        Route::patch('/board/tickets/{id}', [KanbanController::class, 'update'])->whereUlid('id');
+        Route::post('/board/tickets/{id}/comments', [KanbanController::class, 'comment'])->whereUlid('id');
+
         Route::get('/workspace', [WorkspaceController::class, 'show']);
         Route::get('/directory', [WorkspaceController::class, 'directory']);
         Route::get('/members', [WorkspaceController::class, 'members']);

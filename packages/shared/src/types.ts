@@ -158,7 +158,7 @@ export interface SearchPage<T> {
 
 // ---- §5.9 FR-NOTI-006 — in-app notification center (API-073) ----
 
-export type InAppNotificationType = 'mention' | 'added_to_room' | 'session_revoked';
+export type InAppNotificationType = 'mention' | 'added_to_room' | 'session_revoked' | 'ticket_due';
 
 export interface InAppNotification {
   id: string;
@@ -353,3 +353,19 @@ export type AiStreamEvent =
 
 /** FR-NOTE-001 — a durable room note, independent from message history. */
 export interface RoomNote { id: string; room_id: string; author_id: string; author_name: string; body: string | null; attachments: Attachment[]; created_at: string; updated_at: string; }
+
+// FR-KAN-001..005 / API-140..148
+export interface KanbanLane { id: string; workspace_id: string; name: string; color: string; position: number; is_done: boolean }
+export type TicketType = 'task' | 'bug' | 'story';
+export type TicketPriority = 'low' | 'medium' | 'high' | 'urgent';
+export type TicketPerson = Pick<UserStub, 'id' | 'username' | 'display_name'>;
+export interface KanbanTicket {
+  id: string; workspace_id: string; number: number; title: string; description: string | null;
+  lane_id: string; type: TicketType; priority: TicketPriority; assignee_id: string | null; reporter_id: string | null;
+  assignee: TicketPerson | null; reporter: TicketPerson | null; labels: string[]; due_at: string | null;
+  version: number; created_at: string; updated_at: string;
+}
+export interface TicketComment { id: string; body: string; author: TicketPerson | null; created_at: string }
+export interface TicketHistory { id: string; actor: TicketPerson | null; changes: Record<string,{from:unknown;to:unknown}>; created_at: string }
+export interface TicketDetail extends KanbanTicket { comments: TicketComment[]; comments_cursor: string | null; history: TicketHistory[] }
+export interface TicketInput { title: string; description?: string | null; lane_id: string; type?: TicketType; priority?: TicketPriority; assignee_id?: string | null; due_at?: string | null; labels?: string[] }

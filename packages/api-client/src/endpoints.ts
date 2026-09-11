@@ -1,3 +1,4 @@
+import type { KanbanLane, KanbanTicket, TicketDetail, TicketInput } from '@banana-chat/shared';
 import type {
   RoomNote,
   AiConversationSummary,
@@ -43,6 +44,17 @@ export interface RoomDetail {
 /** Typed endpoint wrappers — one method per API row in spec §8. */
 export class Endpoints {
   constructor(private readonly api: ApiClient) {}
+  board(slug: string) { return this.api.request<{lanes: KanbanLane[]; can_manage: boolean}>('/api/v1/board', {workspaceSlug:slug}); }
+  boardTickets(slug: string, filters: {q?: string; assignee?: string; priority?: string; cursor?: string} = {}) {
+    return this.api.request<{tickets: KanbanTicket[]; next_cursor: string | null}>(`/api/v1/board/tickets?${new URLSearchParams(filters)}`, {workspaceSlug:slug});
+  }
+  boardTicket(slug: string, id: string, before = '') { return this.api.request<TicketDetail>(`/api/v1/board/tickets/${id}${before ? `?before=${before}` : ''}`, {workspaceSlug:slug}); }
+  createTicket(slug: string, input: TicketInput) { return this.api.request<KanbanTicket>('/api/v1/board/tickets', {method:'POST',workspaceSlug:slug,body:input}); }
+  updateTicket(slug: string, id: string, input: Partial<TicketInput> & {version: number}) { return this.api.request<KanbanTicket>(`/api/v1/board/tickets/${id}`, {method:'PATCH',workspaceSlug:slug,body:input}); }
+  commentTicket(slug: string, id: string, body: string) { return this.api.request(`/api/v1/board/tickets/${id}/comments`, {method:'POST',workspaceSlug:slug,body:{body}}); }
+  saveBoardLane(slug: string, input: Partial<KanbanLane>, id?: string) { return this.api.request<KanbanLane>(`/api/v1/board/lanes${id ? `/${id}` : ''}`, {method:id?'PATCH':'POST',workspaceSlug:slug,body:input}); }
+  deleteBoardLane(slug: string,id: string) { return this.api.request<void>(`/api/v1/board/lanes/${id}`, {method:'DELETE',workspaceSlug:slug}); }
+
 
   directoryPage(slug: string, q = '', cursor = '') {
     return this.api.request<{members: UserStub[]; next_cursor: string | null}>(`/api/v1/directory?q=${encodeURIComponent(q)}&cursor=${encodeURIComponent(cursor)}`, {workspaceSlug: slug});

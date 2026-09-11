@@ -24,6 +24,25 @@ components:
       schema: { type: string }
       description: slug of the active workspace
   schemas:
+    KanbanLaneInput:
+      type: object
+      properties:
+        name: {type: string, minLength: 1, maxLength: 60}
+        color: {type: string, pattern: '^#[0-9a-fA-F]{6}$'}
+        position: {type: integer, minimum: 0, maximum: 100}
+        is_done: {type: boolean}
+    KanbanTicketInput:
+      type: object
+      properties:
+        title: {type: string, minLength: 1, maxLength: 200}
+        description: {type: [string, 'null'], maxLength: 20000}
+        lane_id: {type: string}
+        type: {type: string, enum: [task,bug,story]}
+        priority: {type: string, enum: [low,medium,high,urgent]}
+        assignee_id: {type: [string, 'null']}
+        due_at: {type: [string, 'null'], format: date-time}
+        labels: {type: array, maxItems: 10, items: {type: string, maxLength: 30}}
+        version: {type: integer, minimum: 1}
     UploadTicket:
       description: API-060 / FR-MEDIA-001; multipart is returned for S3 uploads above the configured threshold.
       type: object
@@ -227,12 +246,12 @@ paths:
               properties:
                 refresh_token: { type: string }
       responses:
-        '200': { description: rotated tokens }
-        '401': { description: reuse detected → session revoked }
+        '200': {description: 'rotated tokens'}
+        '401': {description: 'reuse detected → session revoked'}
   /auth/logout:
-    post: { summary: API-003 logout current session, responses: { '204': { description: no content } } }
+    post: { summary: API-003 logout current session, responses: { '204': {description: 'no content'} } }
   /auth/logout-all:
-    post: { summary: API-004 revoke every session, responses: { '204': { description: no content } } }
+    post: { summary: API-004 revoke every session, responses: { '204': {description: 'no content'} } }
   /auth/change-password:
     post:
       summary: API-005 change password (revokes other sessions)
@@ -246,11 +265,11 @@ paths:
                 current_password: { type: string }
                 new_password: { type: string }
       responses:
-        '204': { description: changed }
+        '204': {description: 'changed'}
         '422': { description: policy violation, schema: { $ref: '#/components/schemas/Error' } }
   /me:
-    get: { summary: API-008 profile + settings, responses: { '200': { description: ok } } }
-    patch: { summary: API-009 update profile, responses: { '200': { description: updated } } }
+    get: { summary: API-008 profile + settings, responses: { '200': {description: 'ok'} } }
+    patch: { summary: API-009 update profile, responses: { '200': {description: 'updated'} } }
   /me/workspaces:
     get:
       summary: API-010 workspaces the user belongs to
@@ -263,18 +282,18 @@ paths:
                 type: array
                 items: { $ref: '#/components/schemas/WorkspaceSummary' }
   /me/sessions:
-    get: { summary: API-006 active sessions, responses: { '200': { description: list } } }
+    get: { summary: API-006 active sessions, responses: { '200': {description: 'list'} } }
   /me/sessions/{sessionId}:
     delete:
       summary: API-007 revoke another session
       parameters: [{ name: sessionId, in: path, required: true, schema: { type: string } }]
       responses:
-        '204': { description: revoked }
+        '204': {description: 'revoked'}
   /workspace:
     get:
       summary: API-012 current workspace detail (X-Workspace-Id)
       parameters: [{ $ref: '#/components/parameters/workspaceSlug' }]
-      responses: { '200': { description: ok }, '403': { description: WS_FORBIDDEN / WS_ARCHIVED } }
+      responses: { '200': {description: 'ok'}, '403': {description: 'WS_FORBIDDEN / WS_ARCHIVED'} }
   /members:
     get:
       summary: API-011 workspace directory
@@ -295,7 +314,7 @@ paths:
       parameters:
         - { $ref: '#/components/parameters/workspaceSlug' }
         - { name: since, in: query, schema: { type: string, format: date-time } }
-      responses: { '200': { description: changed rooms } }
+      responses: { '200': {description: 'changed rooms'} }
   /rooms:
     get:
       summary: API-020 room list
@@ -331,20 +350,20 @@ paths:
                     member_ids: { type: array, items: { type: string } }
                     description: { type: string }
       responses:
-        '201': { description: created }
-        '422': { description: ROOM_DM_SELF / ROOM_FULL / VALIDATION_FAILED }
+        '201': {description: 'created'}
+        '422': {description: 'ROOM_DM_SELF / ROOM_FULL / VALIDATION_FAILED'}
   /rooms/{roomId}:
     parameters:
       - { name: roomId, in: path, required: true, schema: { type: string } }
       - { $ref: '#/components/parameters/workspaceSlug' }
-    get: { summary: API-022 room detail, responses: { '200': { description: ok }, '404': { description: not found } } }
-    patch: { summary: API-023 update group info, responses: { '200': { description: updated } } }
-    delete: { summary: API-024 soft delete + purge_after, responses: { '204': { description: deleted } } }
+    get: { summary: API-022 room detail, responses: { '200': {description: 'ok'}, '404': {description: 'not found'} } }
+    patch: { summary: API-023 update group info, responses: { '200': {description: 'updated'} } }
+    delete: { summary: API-024 soft delete + purge_after, responses: { '204': {description: 'deleted'} } }
   /rooms/{roomId}/members:
     parameters:
       - { name: roomId, in: path, required: true, schema: { type: string } }
       - { $ref: '#/components/parameters/workspaceSlug' }
-    get: { summary: API-025 members, responses: { '200': { description: list } } }
+    get: { summary: API-025 members, responses: { '200': {description: 'list'} } }
     post:
       summary: API-026 add members
       requestBody:
@@ -355,21 +374,21 @@ paths:
               required: [user_ids]
               properties:
                 user_ids: { type: array, items: { type: string } }
-      responses: { '201': { description: added } }
+      responses: { '201': {description: 'added'} }
   /rooms/{roomId}/members/{userId}:
     parameters:
       - { name: roomId, in: path, required: true, schema: { type: string } }
       - { name: userId, in: path, required: true, schema: { type: string } }
       - { $ref: '#/components/parameters/workspaceSlug' }
-    delete: { summary: API-027 remove member, responses: { '204': { description: removed } } }
-    patch: { summary: API-028 change role, responses: { '200': { description: updated } } }
+    delete: { summary: API-027 remove member, responses: { '204': {description: 'removed'} } }
+    patch: { summary: API-028 change role, responses: { '200': {description: 'updated'} } }
   /rooms/{roomId}/leave:
     post:
       summary: API-029 leave room
       parameters:
         - { name: roomId, in: path, required: true, schema: { type: string } }
         - { $ref: '#/components/parameters/workspaceSlug' }
-      responses: { '204': { description: left } }
+      responses: { '204': {description: 'left'} }
   /rooms/{roomId}/messages:
     parameters:
       - { name: roomId, in: path, required: true, schema: { type: string } }
@@ -406,9 +425,9 @@ paths:
                 body: { type: string, maxLength: 4000 }
                 reply_to_message_id: { type: string }
       responses:
-        '201': { description: sent }
-        '200': { description: idempotent replay of the same client_message_id }
-        '422': { description: MSG_EMPTY / MSG_TOO_LONG / MSG_REPLY_INVALID }
+        '201': {description: 'sent'}
+        '200': {description: 'idempotent replay of the same client_message_id'}
+        '422': {description: 'MSG_EMPTY / MSG_TOO_LONG / MSG_REPLY_INVALID'}
   /rooms/{roomId}/read:
     post:
       summary: API-045 mark read (monotonic, clamped)
@@ -423,7 +442,7 @@ paths:
               required: [seq]
               properties:
                 seq: { type: integer }
-      responses: { '200': { description: last_read_seq } }
+      responses: { '200': {description: 'last_read_seq'} }
   /rooms/{roomId}/read-status:
     get:
       summary: API-046 per-member read positions
@@ -431,7 +450,7 @@ paths:
         - { name: roomId, in: path, required: true, schema: { type: string } }
         - { $ref: '#/components/parameters/workspaceSlug' }
         - { name: seq, in: query, schema: { type: integer } }
-      responses: { '200': { description: read_by list } }
+      responses: { '200': {description: 'read_by list'} }
   /broadcasting/auth:
     post:
       summary: API-090 authorize private channel (pusher protocol)
@@ -446,14 +465,14 @@ paths:
                 channel_name: { type: string, example: private-room.01J... }
       responses:
         '200': { description: "auth HMAC signature object" }
-        '403': { description: not a member }
+        '403': {description: 'not a member'}
   /health:
     get:
       summary: liveness/readiness (db, redis, storage, reverb, queue lag)
       security: []
       responses:
-        '200': { description: all checks ok }
-        '503': { description: degraded, per-check detail }
+        '200': {description: 'all checks ok'}
+        '503': {description: 'degraded, per-check detail'}
 
   /directory:
     get:
@@ -466,7 +485,7 @@ paths:
         - {name: limit, in: query, schema: {type: integer, minimum: 1, maximum: 50}}
       responses:
         '200': {description: 'data: {members: UserStub[], next_cursor: string|null}'}
-        '403': {description: Not a workspace member}
+        '403': {description: 'Not a workspace member'}
   /rooms/{roomId}/notes:
     parameters:
       - {$ref: '#/components/parameters/workspaceSlug'}
@@ -478,7 +497,7 @@ paths:
         - {name: before, in: query, schema: {type: string}, description: Last note ULID from preceding page}
       responses:
         '200': {description: 'data: {notes: [{id,room_id,author_id,author_name,body,attachments,created_at,updated_at}], has_more}; 30 notes/page'}
-        '403': {description: Not a room member}
+        '403': {description: 'Not a room member'}
     post:
       summary: API-131 create room note (FR-NOTE-001)
       security: [{bearerAuth: []}]
@@ -494,8 +513,8 @@ paths:
               description: At least nonblank body or one attachment; uploader/workspace ownership checked
       responses:
         '201': {description: 'data: note with author name and signed attachment URLs'}
-        '422': {description: Invalid content or attachment claim}
-        '403': {description: Not a room member}
+        '422': {description: 'Invalid content or attachment claim'}
+        '403': {description: 'Not a room member'}
   /rooms/{roomId}/notes/{noteId}:
     parameters:
       - {$ref: '#/components/parameters/workspaceSlug'}
@@ -513,15 +532,15 @@ paths:
               properties:
                 body: {type: [string, 'null'], maxLength: 20000}
       responses:
-        '200': {description: Updated note in data envelope}
-        '403': {description: Not author or room/workspace admin}
-        '422': {description: Empty note}
+        '200': {description: 'Updated note in data envelope'}
+        '403': {description: 'Not author or room/workspace admin'}
+        '422': {description: 'Empty note'}
     delete:
       summary: API-133 delete room note (author or admin)
       security: [{bearerAuth: []}]
       responses:
-        '204': {description: Deleted}
-        '403': {description: Not author or room/workspace admin}
+        '204': {description: 'Deleted'}
+        '403': {description: 'Not author or room/workspace admin'}
   /rooms/{roomId}/pins:
     parameters:
       - {$ref: '#/components/parameters/workspaceSlug'}
@@ -530,8 +549,8 @@ paths:
       summary: API-134 pinned nondeleted messages, descending seq (FR-PIN-001)
       security: [{bearerAuth: []}]
       responses:
-        '200': {description: Message array in data envelope}
-        '403': {description: Not a room member}
+        '200': {description: 'Message array in data envelope'}
+        '403': {description: 'Not a room member'}
   /rooms/{roomId}/pins/{messageId}:
     parameters:
       - {$ref: '#/components/parameters/workspaceSlug'}
@@ -542,14 +561,14 @@ paths:
       security: [{bearerAuth: []}]
       responses:
         '200': {description: 'data: {pinned: true}'}
-        '404': {description: Message absent, deleted or in another room}
-        '403': {description: Not a room member}
+        '404': {description: 'Message absent, deleted or in another room'}
+        '403': {description: 'Not a room member'}
     delete:
       summary: API-136 unpin message (FR-PIN-001)
       security: [{bearerAuth: []}]
       responses:
-        '204': {description: Unpinned}
-        '403': {description: Not a room member}
+        '204': {description: 'Unpinned'}
+        '403': {description: 'Not a room member'}
   /rooms/{roomId}/typing:
     parameters:
       - {$ref: '#/components/parameters/workspaceSlug'}
@@ -563,5 +582,117 @@ paths:
           application/json:
             schema: {type: object, required: [typing], properties: {typing: {type: boolean}}}
       responses:
-        '204': {description: Accepted, true updates throttled to one per two seconds}
-        '403': {description: Not a room member}
+        '204': {description: 'Accepted, true updates throttled to one per two seconds'}
+        '403': {description: 'Not a room member'}
+
+  /board:
+    get:
+      summary: API-140 Workspace board lanes and can_manage
+      security: [{bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/workspaceSlug'}]
+      responses:
+        '200': {description: 'data: {lanes: [{id,workspace_id,name,color,position,is_done}], can_manage: boolean}'}
+  /board/lanes:
+    post:
+      summary: API-141 Create lane (workspace owner/admin)
+      security: [{bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/workspaceSlug'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/KanbanLaneInput'}
+      responses:
+        '201': {description: 'Created lane in data'}
+        '403': {description: 'Member cannot administer lanes'}
+  /board/lanes/{id}:
+    parameters:
+      - {$ref: '#/components/parameters/workspaceSlug'}
+      - {name: id, in: path, required: true, schema: {type: string}}
+    patch:
+      summary: API-142 Rename/reorder/recolor/completed lane (owner/admin)
+      security: [{bearerAuth: []}]
+      requestBody:
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/KanbanLaneInput'}
+      responses:
+        '200': {description: 'Updated lane in data'}
+        '404': {description: 'Foreign or unknown lane'}
+    delete:
+      summary: API-143 Delete empty lane (owner/admin)
+      security: [{bearerAuth: []}]
+      responses:
+        '204': {description: 'Deleted'}
+        '409': {description: 'Lane occupied or last remaining lane'}
+  /board/tickets:
+    parameters: [{$ref: '#/components/parameters/workspaceSlug'}]
+    get:
+      summary: API-144 List tickets in this workspace, newest first (100/page)
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: q, in: query, schema: {type: string, maxLength: 200}}
+        - {name: assignee, in: query, schema: {type: string}, description: User ULID or me}
+        - {name: priority, in: query, schema: {type: string, enum: [low,medium,high,urgent]}}
+        - {name: cursor, in: query, schema: {type: string}}
+      responses:
+        '200': {description: 'data: {tickets: Ticket[], next_cursor: string|null}'}
+    post:
+      summary: API-145 Create ticket (all members)
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - {$ref: '#/components/schemas/KanbanTicketInput'}
+                - {required: [title,lane_id]}
+      responses:
+        '201': {description: 'Created ticket in data, version 1'}
+        '422': {description: 'Invalid lane/assignee/fields'}
+  /board/tickets/{id}:
+    parameters:
+      - {$ref: '#/components/parameters/workspaceSlug'}
+      - {name: id, in: path, required: true, schema: {type: string}}
+    get:
+      summary: API-146 Ticket detail with latest 50 comments and 100 history entries
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: before, in: query, schema: {type: string}, description: Older comments ULID cursor}
+      responses:
+        '200': {description: 'Ticket in data with comments/comments_cursor/history'}
+        '404': {description: 'Foreign or unknown ticket'}
+    patch:
+      summary: API-147 Update/move ticket (all members, optimistic version)
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - {$ref: '#/components/schemas/KanbanTicketInput'}
+                - {required: [version]}
+      responses:
+        '200': {description: 'Updated ticket in data'}
+        '409': {description: 'Stale version, reload before editing'}
+        '404': {description: 'Foreign or unknown ticket'}
+  /board/tickets/{id}/comments:
+    post:
+      summary: API-148 Add immutable Markdown comment
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/workspaceSlug'}
+        - {name: id, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body: {type: string, minLength: 1, maxLength: 10000}
+      responses:
+        '201': {description: 'Created comment in data'}

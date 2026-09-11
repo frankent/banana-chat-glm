@@ -1,0 +1,13 @@
+{
+  "results": [
+    {
+      "id": "TC-KAN-007-admin-lanes-save-reload",
+      "passed": true
+    },
+    {
+      "id": "TC-KAN-007-admin-responsive",
+      "passed": true
+    }
+  ],
+  "errors": []
+}

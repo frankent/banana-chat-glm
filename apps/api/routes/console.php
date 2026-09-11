@@ -1,5 +1,6 @@
 <?php
 
+use App\Jobs\NotifyDueTickets;
 use App\Jobs\PurgeDeletedAiConversations;
 use App\Jobs\PurgeExpiredUploads;
 use App\Jobs\RollupAiUsage;
@@ -22,3 +23,6 @@ Schedule::job(new PurgeExpiredUploads)->hourly()->onOneServer();
 
 // NFR-OPS-011 — provider error-rate / first-token p95 alert rules (TASK-INF-014)
 Schedule::command('ai:check-alerts')->everyFiveMinutes()->onOneServer();
+
+// TASK-BE-041 / FR-KAN-004 — durable reminders, one scheduler owner.
+Schedule::job(new NotifyDueTickets)->everyMinute()->onOneServer()->withoutOverlapping();

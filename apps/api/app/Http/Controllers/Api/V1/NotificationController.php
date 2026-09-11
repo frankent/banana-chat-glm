@@ -9,6 +9,7 @@ use App\Models\Room;
 use App\Models\RoomNotificationSetting;
 use App\Models\User;
 use App\Models\UserNotificationSetting;
+use App\Support\WorkspaceContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -197,6 +198,7 @@ class NotificationController extends Controller
 
         $query = InAppNotification::query()
             ->where('user_id', $user->id)
+            ->where(fn ($q) => $q->where('type', '!=', 'ticket_due')->orWhere('workspace_id', app(WorkspaceContext::class)->id()))
             ->with('actor:id,username,display_name')
             ->orderByDesc('created_at')
             ->orderByDesc('id');
