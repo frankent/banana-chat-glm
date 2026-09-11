@@ -165,7 +165,7 @@ class ProcessAttachment implements ShouldQueue
 
         $source = @imagecreatefromstring($bytes);
         if ($source === false) {
-            return; // undecodable but valid bytes — keep, no thumbs
+            throw new \RuntimeException('Image bytes could not be decoded.'); // TC-KAN-015
         }
 
         try {
@@ -255,7 +255,7 @@ class ProcessAttachment implements ShouldQueue
             // TC-MEDIA-022: GIF/indexed PNG decode to palette images.
             // WebP only accepts true-color; convert the in-memory thumbnail,
             // never the stored original (animated GIF remains untouched).
-            if (!imageistruecolor($thumb) && !imagepalettetotruecolor($thumb)) {
+            if (! imageistruecolor($thumb) && ! imagepalettetotruecolor($thumb)) {
                 throw new \RuntimeException('Unable to convert palette thumbnail to true-color');
             }
             ob_start();

@@ -2,12 +2,17 @@
 
 use App\Filament\Pages\Kanban;
 use App\Jobs\NotifyDueTickets;
+use App\Jobs\PurgeAttachmentFiles;
+use App\Models\Attachment;
 use App\Models\InAppNotification;
 use App\Models\KanbanComment;
 use App\Models\KanbanLane;
+use App\Models\KanbanTicket;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMember;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
 
 beforeEach(function () {
     $this->owner = User::factory()->create();
@@ -130,7 +135,7 @@ test('TC-KAN-009 completed reopen resets reminder and reassignment targets curre
 test('TC-KAN-008 ticket and comment cursors do not truncate the shared board', function () {
     $ticket = $this->postJson('/api/v1/board/tickets', ticketInput($this), $this->headers)->assertCreated()->json('data');
     for ($i = 2; $i <= 102; $i++) {
-        \App\Models\KanbanTicket::create(['workspace_id' => $this->ws->id, 'lane_id' => $ticket['lane_id'], 'number' => $i, 'title' => 'Pagination '.$i]);
+        KanbanTicket::create(['workspace_id' => $this->ws->id, 'lane_id' => $ticket['lane_id'], 'number' => $i, 'title' => 'Pagination '.$i]);
     }
     $first = $this->getJson('/api/v1/board/tickets', $this->headers)->assertOk()->assertJsonCount(100, 'data.tickets')->json('data');
     $second = $this->getJson('/api/v1/board/tickets?cursor='.$first['next_cursor'], $this->headers)->assertOk()->assertJsonCount(2, 'data.tickets')->json('data');
@@ -139,5 +144,61 @@ test('TC-KAN-008 ticket and comment cursors do not truncate the shared board', f
         KanbanComment::create(['ticket_id' => $ticket['id'], 'author_id' => $this->member->id, 'body' => 'Comment '.$i]);
     }
     $page = $this->getJson('/api/v1/board/tickets/'.$ticket['id'], $this->headers)->assertOk()->assertJsonCount(50, 'data.comments')->json('data');
-    $this->getJson('/api/v1/board/tickets/'.$ticket['id'].'?before='.$page['comments_cursor'], $this->headers)->assertOk()->assertJsonCount(2,'data.comments');
+    $this->getJson('/api/v1/board/tickets/'.$ticket['id'].'?before='.$page['comments_cursor'], $this->headers)->assertOk()->assertJsonCount(2, 'data.comments');
+});
+
+function ticketImage($test, array $extra = [])
+{
+    return Attachment::create(array_replace([
+        'workspace_id' => $test->ws->id, 'uploader_id' => $test->owner->id,
+        'kind' => 'image', 'status' => 'ready', 'original_name' => 'photo.png',
+        'mime_type' => 'image/png', 'size_bytes' => 123, 'storage_key' => 'ws/'.$test->ws->id.'/att/'.Str::ulid().'/original',
+    ], $extra));
+}
+
+test('TC-KAN-010 multiple images persist and workspace members preserve remove and add images atomically', function () {
+    Queue::fake();
+    $input = ticketInput($this);
+    $a = ticketImage($this);
+    $b = ticketImage($this);
+    $ticket = $this->postJson('/api/v1/board/tickets', $input + ['attachment_ids' => [$a->id, $b->id]], $this->headers)
+        ->assertCreated()->assertJsonCount(2, 'data.attachments')->json('data');
+    $url = '/api/v1/board/tickets/'.$ticket['id'];
+    $this->getJson($url, $this->memberHeaders)->assertOk()->assertJsonPath('data.attachments.0.id', $a->id);
+    $this->patchJson($url, ['version' => 1, 'title' => 'Keep photos'], $this->memberHeaders)->assertOk()->assertJsonCount(2, 'data.attachments');
+    $c = ticketImage($this, ['uploader_id' => $this->member->id]);
+    $this->patchJson($url, ['version' => 2, 'attachment_ids' => [$b->id, $c->id]], $this->memberHeaders)->assertOk()->assertJsonCount(2, 'data.attachments')->assertJsonPath('data.attachments.0.id', $b->id);
+    expect($a->fresh()->deleted_at)->not->toBeNull();
+    Queue::assertPushed(PurgeAttachmentFiles::class);
+    $this->patchJson($url, ['version' => 2, 'attachment_ids' => []], $this->headers)->assertStatus(409);
+    $this->getJson($url, $this->headers)->assertJsonCount(2, 'data.attachments');
+    $this->getJson($url, $this->otherHeaders)->assertNotFound();
+    $this->patchJson($url, ['version' => 3, 'attachment_ids' => []], $this->headers)->assertOk()->assertJsonCount(0, 'data.attachments');
+});
+
+test('TC-KAN-011 rejects foreign reused invalid and excessive ticket images', function () {
+    $input = ticketInput($this);
+    foreach ([['workspace_id' => $this->other->id], ['uploader_id' => $this->member->id], ['kind' => 'file'], ['status' => 'pending'], ['status' => 'failed'], ['deleted_at' => now()]] as $extra) {
+        $image = ticketImage($this, $extra);
+        $this->postJson('/api/v1/board/tickets', $input + ['attachment_ids' => [$image->id]], $this->headers)->assertUnprocessable();
+    }
+    $image = ticketImage($this);
+    $this->postJson('/api/v1/board/tickets', $input + ['attachment_ids' => [$image->id, $image->id]], $this->headers)->assertUnprocessable();
+    $this->postJson('/api/v1/board/tickets', $input + ['attachment_ids' => array_map(fn () => (string) Str::ulid(), range(1, 21))], $this->headers)->assertUnprocessable();
+    $this->postJson('/api/v1/board/tickets', $input + ['attachment_ids' => [$image->id]], $this->headers)->assertCreated();
+    $this->postJson('/api/v1/board/tickets', $input + ['attachment_ids' => [$image->id]], $this->headers)->assertUnprocessable();
+});
+
+test('TC-KAN-014 image ownership is exclusive across tickets messages and notes', function () {
+    $input = ticketInput($this);
+    $room = $this->postJson('/api/v1/rooms', ['type' => 'group', 'name' => 'Images', 'member_ids' => [$this->member->id]], $this->headers)->assertCreated()->json('data.room.id');
+    $image = ticketImage($this);
+    $this->postJson('/api/v1/board/tickets', $input + ['attachment_ids' => [$image->id]], $this->headers)->assertCreated();
+    $this->postJson('/api/v1/rooms/'.$room.'/notes', ['body' => 'Cannot reuse', 'attachment_ids' => [$image->id]], $this->headers)->assertUnprocessable();
+    $this->postJson('/api/v1/rooms/'.$room.'/messages', ['client_message_id' => (string) Str::uuid(), 'attachment_ids' => [$image->id]], $this->headers)->assertUnprocessable();
+    foreach (['notes', 'messages'] as $target) {
+        $other = ticketImage($this);
+        $this->postJson('/api/v1/rooms/'.$room.'/'.$target, ['body' => 'Original owner', 'client_message_id' => (string) Str::uuid(), 'attachment_ids' => [$other->id]], $this->headers)->assertCreated();
+        $this->postJson('/api/v1/board/tickets', $input + ['attachment_ids' => [$other->id]], $this->headers)->assertUnprocessable();
+    }
 });

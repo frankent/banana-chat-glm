@@ -4,6 +4,8 @@ namespace App\Domain\Kanban;
 
 use App\Enums\UserStatus;
 use App\Events\BoardChanged;
+use App\Jobs\PurgeAttachmentFiles;
+use App\Models\Attachment;
 use App\Models\KanbanHistory;
 use App\Models\KanbanLane;
 use App\Models\KanbanTicket;
@@ -99,6 +101,7 @@ class BoardService
                 'type' => ['sometimes', Rule::in(['task', 'bug', 'story'])], 'priority' => ['sometimes', Rule::in(['low', 'medium', 'high', 'urgent'])],
                 'assignee_id' => ['nullable', Rule::exists('workspace_members', 'user_id')->where('workspace_id', $workspaceId)->where('status', 'active')],
                 'due_at' => ['nullable', 'date'], 'labels' => ['sometimes', 'array', 'max:10'], 'labels.*' => ['string', 'max:30', 'distinct'],
+                'attachment_ids' => ['sometimes', 'array', 'max:20'], 'attachment_ids.*' => ['required', 'ulid', 'distinct'],
                 'version' => [$id ? 'required' : 'sometimes', 'integer', 'min:1'],
             ])->validate();
             if (isset($data['assignee_id'])) {
@@ -107,7 +110,23 @@ class BoardService
             if ($id) {
                 abort_if($ticket->version !== $data['version'], 409, 'Ticket changed. Reload before saving.');
             }
-            unset($data['version']);
+            $previousImages = $id ? $ticket->attachments()->pluck('attachments.id')->all() : [];
+            $imageIds = $data['attachment_ids'] ?? null;
+            if ($imageIds !== null) {
+                $images = Attachment::withoutGlobalScopes()->whereIn('id', $imageIds)->orderBy('id')->lockForUpdate()->get();
+                abort_unless($images->count() === count($imageIds), 422, 'Image not found.');
+                foreach ($images as $image) {
+                    $existing = in_array($image->id, $previousImages);
+                    abort_unless($image->workspace_id === $workspaceId && $image->deleted_at === null && $image->kind->value === 'image', 422, 'Invalid ticket image.');
+                    if (! $existing) {
+                        abort_unless($image->uploader_id === $actor->id && in_array($image->status->value, ['ready', 'processing', 'uploaded'])
+                            && ! $image->messages()->exists()
+                            && ! DB::table('room_note_attachments')->where('attachment_id', $image->id)->exists()
+                            && ! DB::table('kanban_ticket_attachments')->where('attachment_id', $image->id)->exists(), 422, 'Image is unavailable or already attached.');
+                    }
+                }
+            }
+            unset($data['version'], $data['attachment_ids']);
             $old = $ticket->getAttributes();
             $wasDone = $id && $ticket->lane->is_done;
             $ticket->fill($data);
@@ -128,10 +147,19 @@ class BoardService
                 }
             }
             $ticket->save();
+            if ($imageIds !== null && $imageIds !== $previousImages) {
+                $changes['attachments'] = ['from' => $previousImages, 'to' => $imageIds];
+                $ticket->attachments()->sync(collect($imageIds)->mapWithKeys(fn ($imageId, $position) => [$imageId => ['position' => $position]])->all());
+                $removed = array_values(array_diff($previousImages, $imageIds));
+                if ($removed) {
+                    Attachment::withoutGlobalScopes()->whereIn('id', $removed)->update(['deleted_at' => now()]);
+                    PurgeAttachmentFiles::dispatch($removed)->delay(now()->addHours(24))->afterCommit();
+                }
+            }
             KanbanHistory::create(['ticket_id' => $ticket->id, 'actor_id' => $actor->id, 'changes' => $changes]);
             broadcast(new BoardChanged($workspaceId));
 
-            return $ticket->refresh()->load(['assignee', 'reporter']);
+            return $ticket->refresh()->load(['assignee', 'reporter', 'attachments']);
         });
     }
 }

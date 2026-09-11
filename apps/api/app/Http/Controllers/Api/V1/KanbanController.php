@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Kanban\BoardService;
+use App\Domain\Media\AttachmentSerializer;
 use App\Events\BoardChanged;
 use App\Http\Controllers\Controller;
 use App\Models\KanbanComment;
@@ -50,7 +51,7 @@ class KanbanController extends Controller
     public function tickets(Request $request)
     {
         $data = $request->validate(['q' => ['nullable', 'string', 'max:200'], 'assignee' => ['nullable', 'string', 'max:26'], 'priority' => ['nullable', 'in:low,medium,high,urgent'], 'cursor' => ['nullable', 'ulid']]);
-        $query = KanbanTicket::where('workspace_id', $this->context->id())->with(['assignee', 'reporter']);
+        $query = KanbanTicket::where('workspace_id', $this->context->id())->with(['assignee', 'reporter', 'attachments']);
         if (! empty($data['q'])) {
             $query->where(function ($q) use ($data) {
                 $q->where('title', 'ilike', '%'.$data['q'].'%')->orWhereRaw('CAST(number AS TEXT) = ?', [$data['q']]);
@@ -72,7 +73,7 @@ class KanbanController extends Controller
 
     public function show(Request $request, string $id)
     {
-        $ticket = $this->ticket($id)->load(['assignee', 'reporter']);
+        $ticket = $this->ticket($id)->load(['assignee', 'reporter', 'attachments']);
         $request->validate(['before' => ['nullable', 'ulid']]);
         $comments = KanbanComment::where('ticket_id', $id)->with('author')->when($request->query('before'), fn ($q, $before) => $q->where('id', '<', $before))->orderByDesc('id')->limit(51)->get();
         $history = KanbanHistory::where('ticket_id', $id)->with('actor')->orderByDesc('id')->limit(100)->get();
@@ -107,6 +108,7 @@ class KanbanController extends Controller
     private function serialize(KanbanTicket $ticket): array
     {
         return array_merge($ticket->only(['id', 'workspace_id', 'number', 'title', 'description', 'lane_id', 'type', 'priority', 'assignee_id', 'reporter_id', 'labels', 'due_at', 'version', 'created_at', 'updated_at']), [
+            'attachments' => $ticket->attachments->map(fn ($a) => app(AttachmentSerializer::class)->toArray($a))->all(),
             'assignee' => $ticket->assignee?->only(['id', 'display_name', 'username']), 'reporter' => $ticket->reporter?->only(['id', 'display_name', 'username']),
         ]);
     }

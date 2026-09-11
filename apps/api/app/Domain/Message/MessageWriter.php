@@ -177,7 +177,7 @@ class MessageWriter
                 && $attachment->kind !== AttachmentKind::Avatar
                 && in_array($attachment->status, [AttachmentStatus::Ready, AttachmentStatus::Processing, AttachmentStatus::Uploaded], true)
                 && ! $attachment->messages()->exists()
-                && ! DB::table('room_note_attachments')->where('attachment_id', $attachment->id)->exists();
+                && ! DB::table('room_note_attachments')->where('attachment_id', $attachment->id)->exists() && ! DB::table('kanban_ticket_attachments')->where('attachment_id', $attachment->id)->exists();
 
             if (! $ok) {
                 throw ApiException::msgAttachmentInvalid();

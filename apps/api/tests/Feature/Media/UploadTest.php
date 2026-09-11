@@ -3,6 +3,7 @@
 use App\Domain\Media\MediaUrls;
 use App\Enums\AttachmentStatus;
 use App\Events\AttachmentProcessed;
+use App\Events\MessageCreated;
 use App\Models\Attachment;
 use App\Models\Room;
 use App\Models\RoomMember;
@@ -427,17 +428,24 @@ test('TC-MEDIA-012 realtime payload preserves attachments mentions and reply fro
     $original = $this->postJson("/api/v1/rooms/{$this->room->id}/messages", [
         'body' => 'original', 'client_message_id' => (string) Str::uuid(),
     ], wsHeaders($token, 'acme'))->assertCreated()->json('data.message');
-    Event::fake([App\Events\MessageCreated::class]);
+    Event::fake([MessageCreated::class]);
     $rest = $this->postJson("/api/v1/rooms/{$this->room->id}/messages", [
         'body' => '@somchai see attachment', 'client_message_id' => (string) Str::uuid(),
         'attachment_ids' => [$id], 'reply_to_message_id' => $original['id'],
     ], wsHeaders($token, 'acme'))->assertCreated()->json('data.message');
     expect($rest['attachments'][0]['id'])->toBe($id);
-    Event::assertDispatched(App\Events\MessageCreated::class, function ($event) use ($rest) {
+    Event::assertDispatched(MessageCreated::class, function ($event) use ($rest) {
         $payload = $event->broadcastWith()['data']['message'];
         expect($payload['attachments'])->toBe($rest['attachments'])
             ->and($payload['mentions'])->toBe($rest['mentions'])
             ->and($payload['reply_to'])->toBe($rest['reply_to']);
+
         return true;
     });
+});
+
+it('TC-KAN-015 rejects undecodable image bytes instead of marking them ready', function () {
+    [, $token] = loginAs($this->tony);
+    [, $attachment] = uploadFile($this, $token, ['kind' => 'image', 'filename' => 'broken.png', 'mime_type' => 'image/png', 'size_bytes' => 12], 'not an image');
+    expect($attachment['status'])->toBe('failed');
 });

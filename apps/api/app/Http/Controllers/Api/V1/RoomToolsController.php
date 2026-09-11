@@ -53,7 +53,7 @@ class RoomToolsController
             $attachments = Attachment::whereIn('id', $ids)->lockForUpdate()->get();
             abort_unless($attachments->count() === count($ids), 422);
             foreach ($attachments as $a) {
-                abort_unless($a->uploader_id === $r->user()->id && $a->workspace_id === $room->workspace_id && $a->deleted_at === null && in_array($a->kind->value, ['image', 'video', 'file']) && in_array($a->status->value, ['ready', 'processing', 'uploaded']) && ! $a->messages()->exists() && ! DB::table('room_note_attachments')->where('attachment_id', $a->id)->exists(), 422);
+                abort_unless($a->uploader_id === $r->user()->id && $a->workspace_id === $room->workspace_id && $a->deleted_at === null && in_array($a->kind->value, ['image', 'video', 'file']) && in_array($a->status->value, ['ready', 'processing', 'uploaded']) && ! $a->messages()->exists() && ! DB::table('room_note_attachments')->where('attachment_id', $a->id)->exists() && ! DB::table('kanban_ticket_attachments')->where('attachment_id', $a->id)->exists(), 422);
             }
             $note = RoomNote::create(['workspace_id' => $room->workspace_id, 'room_id' => $room->id, 'author_id' => $r->user()->id, 'body' => $data['body'] ?? null]);
             $note->attachments()->attach($ids);

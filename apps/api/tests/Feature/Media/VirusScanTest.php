@@ -121,7 +121,12 @@ test('TC-MEDIA-035 only kind=file is scanned; images go straight to ready', func
     config(['services.clamav.host' => '127.0.0.1', 'services.clamav.port' => $port]);
     Event::fake([AttachmentProcessed::class]);
 
-    $attachment = makeFileAttachment($this, 'EICAR would be flagged if scanned', AttachmentKind::Image);
+    $image = imagecreatetruecolor(8, 8);
+    ob_start();
+    imagepng($image);
+    $png = ob_get_clean();
+    imagedestroy($image);
+    $attachment = makeFileAttachment($this, $png, AttachmentKind::Image);
     (new ProcessAttachment($attachment))->handle();
 
     expect($attachment->refresh()->status)->toBe(AttachmentStatus::Ready)

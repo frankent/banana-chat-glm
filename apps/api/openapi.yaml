@@ -81,6 +81,7 @@ components:
         position: {type: integer, minimum: 0, maximum: 100}
         is_done: {type: boolean}
     KanbanTicketInput:
+      description: FR-KAN-006; ticket responses include ordered attachments using the standard Attachment shape. Omitted attachment_ids preserves existing images; empty array removes all.
       type: object
       properties:
         title: {type: string, minLength: 1, maxLength: 200}
@@ -91,6 +92,7 @@ components:
         assignee_id: {type: [string, 'null']}
         due_at: {type: [string, 'null'], format: date-time}
         labels: {type: array, maxItems: 10, items: {type: string, maxLength: 30}}
+        attachment_ids: {type: array, maxItems: 20, uniqueItems: true, items: {type: string}, description: "New IDs must be completed image uploads owned by the actor in this workspace and not already linked."}
         version: {type: integer, minimum: 1}
     UploadTicket:
       description: API-060 / FR-MEDIA-001; multipart is returned for S3 uploads above the configured threshold.

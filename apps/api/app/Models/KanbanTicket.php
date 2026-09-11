@@ -18,6 +18,11 @@ class KanbanTicket extends Model
         return ['number' => 'integer', 'version' => 'integer', 'labels' => 'array', 'due_at' => 'immutable_datetime', 'due_notified_at' => 'immutable_datetime'];
     }
 
+    public function attachments()
+    {
+        return $this->belongsToMany(Attachment::class, 'kanban_ticket_attachments')->withPivot('position')->orderByPivot('position');
+    }
+
     public function assignee()
     {
         return $this->belongsTo(User::class, 'assignee_id');

@@ -360,6 +360,7 @@ export type TicketType = 'task' | 'bug' | 'story';
 export type TicketPriority = 'low' | 'medium' | 'high' | 'urgent';
 export type TicketPerson = Pick<UserStub, 'id' | 'username' | 'display_name'>;
 export interface KanbanTicket {
+  attachments: Attachment[];
   id: string; workspace_id: string; number: number; title: string; description: string | null;
   lane_id: string; type: TicketType; priority: TicketPriority; assignee_id: string | null; reporter_id: string | null;
   assignee: TicketPerson | null; reporter: TicketPerson | null; labels: string[]; due_at: string | null;
@@ -368,7 +369,7 @@ export interface KanbanTicket {
 export interface TicketComment { id: string; body: string; author: TicketPerson | null; created_at: string }
 export interface TicketHistory { id: string; actor: TicketPerson | null; changes: Record<string,{from:unknown;to:unknown}>; created_at: string }
 export interface TicketDetail extends KanbanTicket { comments: TicketComment[]; comments_cursor: string | null; history: TicketHistory[] }
-export interface TicketInput { title: string; description?: string | null; lane_id: string; type?: TicketType; priority?: TicketPriority; assignee_id?: string | null; due_at?: string | null; labels?: string[] }
+export interface TicketInput { attachment_ids?: string[]; title: string; description?: string | null; lane_id: string; type?: TicketType; priority?: TicketPriority; assignee_id?: string | null; due_at?: string | null; labels?: string[] }
 
 /** FR-CALL-001..004 / API-150..155 */
 export interface RoomCall {
