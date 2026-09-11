@@ -40,7 +40,7 @@ function RoomRow({ item }: { item: RoomListItem }) {
 }
 
 export function RoomList({ slug }: { slug: string }) {
-  const { data: rooms, isLoading } = useRooms(slug);
+  const { data: rooms, isLoading, isError, refetch, isFetching } = useRooms(slug);
 
   return (
     <div className="flex h-full flex-col">
@@ -49,6 +49,7 @@ export function RoomList({ slug }: { slug: string }) {
       </div>
       <nav className="bc-room-list flex-1 overflow-y-auto">
         <p className="bc-list-label">RECENT CONVERSATIONS</p>
+        {isError && <p role="alert" className="px-3 py-2 text-sm text-red-600">Could not load conversations. <button disabled={isFetching} onClick={() => void refetch()} className="underline">Retry</button></p>}
         {isLoading && <p className="px-3 py-2 text-sm text-slate-400">Loading…</p>}
         {rooms?.map((item) => <RoomRow key={item.room.id} item={item} />)}
         {rooms !== undefined && rooms.length === 0 && (

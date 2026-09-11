@@ -90,7 +90,7 @@ export class Endpoints {
   }
 
   me() {
-    return this.api.request<{ user: UserStub & { locale: string } }>('/api/v1/me');
+    return this.api.request<{ user: UserStub & { locale: string }; settings: { locale: string; timezone: string; notification: {sound?: boolean} | null } }>('/api/v1/me');
   }
 
   myWorkspaces() {

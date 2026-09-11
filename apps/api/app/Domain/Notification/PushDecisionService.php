@@ -140,7 +140,7 @@ class PushDecisionService
      * DND window in the user's timezone; supports ranges crossing midnight
      * (TC-NOTI-009). dnd_days = ISO day numbers (1=Mon .. 7=Sun) or null = every day.
      */
-    private function inDnd(?UserNotificationSetting $setting, ?string $timezone): bool
+    public function inDnd(?UserNotificationSetting $setting, ?string $timezone): bool
     {
         if ($setting === null || $setting->dnd_start === null || $setting->dnd_end === null) {
             return false;
@@ -166,6 +166,6 @@ class PushDecisionService
         $lateWindow = $now->gte($start) && $now->lt($end->copy()->addDay());
         $earlyWindow = $now->lt($end);
 
-        return ($inYesterday && $lateWindow) || ($inToday && $earlyWindow);
+        return ($inToday && $lateWindow) || ($inYesterday && $earlyWindow);
     }
 }

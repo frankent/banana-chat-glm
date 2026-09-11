@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { InAppNotification } from '@banana-chat/shared';
 import { endpoints } from '../lib/api';
+import { unlockNotificationAudio, playNotificationAudio } from '../lib/notification-audio';
 import { Icon } from './Visual';
 import { useSession } from '../state/session';
 
@@ -12,7 +13,9 @@ import { useSession } from '../state/session';
  */
 export function NotificationCenter() {
   const [open, setOpen] = useState(false);
-  const { currentWorkspace } = useSession();
+  const { currentWorkspace, me } = useSession();
+  const [savingSound, setSavingSound] = useState(false);
+  const [soundError, setSoundError] = useState(false);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const slug = currentWorkspace?.workspace.slug;
@@ -24,6 +27,20 @@ export function NotificationCenter() {
     enabled: slug !== undefined,
     staleTime: 30_000,
   });
+
+  const settings = useQuery({queryKey: ['notification-settings', me?.id], queryFn: () => endpoints.me(), enabled: me !== null});
+  const sound = (settings.data?.settings as {notification?: {sound?: boolean}} | undefined)?.notification?.sound ?? true;
+  const toggleSound = async () => {
+    if (!slug) return;
+    unlockNotificationAudio();
+    setSavingSound(true); setSoundError(false);
+    try {
+      await endpoints.notificationSettings(slug, {sound: !sound});
+      await settings.refetch();
+      if (!sound) playNotificationAudio();
+    } catch { setSoundError(true); }
+    finally { setSavingSound(false); }
+  };
 
   const notifications = query.data?.notifications ?? [];
   const unread = notifications.filter((n) => n.read_at === null).length;
@@ -104,6 +121,8 @@ export function NotificationCenter() {
             )}
           </div>
 
+          <label className="flex items-center gap-2 px-2 py-2 text-sm"><input type="checkbox" checked={sound} disabled={savingSound || !settings.data} onChange={() => void toggleSound()} />Notification sound</label>
+          {soundError && <p role="alert" className="px-2 text-sm text-red-600">Could not save sound preference. Try again.</p>}
           {query.isLoading && <p className="px-2 py-3 text-sm text-slate-400">Loading…</p>}
           {!query.isLoading && notifications.length === 0 && (
             <p className="px-2 py-3 text-sm text-slate-400" data-testid="notification-empty">

@@ -12,9 +12,9 @@ export function AppShell() {
   const { status, me, currentWorkspace, logout } = useSession();
   const location = useLocation();
   const navigate = useNavigate();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(location.pathname === '/');
   const { connected } = useEcho();
-  useEffect(() => { if (location.pathname !== '/') setSidebarOpen(false); }, [location.pathname]);
+  useEffect(() => { setSidebarOpen(location.pathname === '/'); }, [location.pathname]);
 
   // TASK-WEB-018 — Ctrl/Cmd+K jumps to search
   useEffect(() => {

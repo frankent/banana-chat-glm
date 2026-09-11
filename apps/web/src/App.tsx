@@ -1,3 +1,5 @@
+import { unlockNotificationAudio } from './lib/notification-audio';
+import { unreadTitle } from '@banana-chat/chat-core';
 import { useEffect } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -15,7 +17,14 @@ import { useSession } from './state/session';
 import { queryClient } from './lib/query-client';
 
 function SessionGate({ children }: { children: React.ReactNode }) {
-  const { bootstrap } = useSession();
+  const { bootstrap, workspaces, status } = useSession();
+  useEffect(() => { document.title = unreadTitle(status === 'authenticated' ? workspaces : []); }, [workspaces, status]);
+  useEffect(() => {
+    const unlock = (event: Event) => { if (event.isTrusted) unlockNotificationAudio(); };
+    document.addEventListener('pointerdown', unlock);
+    document.addEventListener('keydown', unlock);
+    return () => { document.removeEventListener('pointerdown', unlock); document.removeEventListener('keydown', unlock); };
+  }, []);
   useEffect(() => {
     void bootstrap();
   }, [bootstrap]);

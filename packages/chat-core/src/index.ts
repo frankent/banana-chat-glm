@@ -30,3 +30,4 @@ export { applyRoomEvent } from './room-sync.js';
 export { TypingState, TypingPublisher } from './typing.js';
 
 export { continuesMessage } from './message-layout.js';
+export { NotificationGate, unreadTitle } from './notification.js';

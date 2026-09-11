@@ -24,6 +24,7 @@ export function useRooms(slug: string | undefined, filter: 'all' | 'unread' = 'a
     },
     enabled: slug !== undefined,
     staleTime: 10_000,
+    retry: 2,
   });
 
   // instant paint from cache while the request is in flight

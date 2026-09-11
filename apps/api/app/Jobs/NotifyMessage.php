@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Domain\Notification\FcmPushSender;
 use App\Domain\Notification\PushDecisionService;
+use App\Events\NotificationAlert;
 use App\Models\Device;
 use App\Models\InAppNotification;
 use App\Models\Message;
@@ -94,6 +95,13 @@ class NotifyMessage implements ShouldQueue
                 $mentioned,
             )) {
                 continue;
+            }
+
+            // FR-NOTI-007: browser sound uses the same mute/mention/DND decision.
+            if ($recipient->notificationSetting?->sound ?? true) {
+                broadcast(new NotificationAlert(
+                    $recipient->id, $message->id, $room->id, $room->workspace_id, 'message',
+                ));
             }
 
             /** @var list<Device> $devices */

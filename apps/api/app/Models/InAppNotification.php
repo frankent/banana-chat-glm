@@ -3,6 +3,9 @@
 namespace App\Models;
 
 use App\Concerns\HasUlid;
+use App\Domain\Notification\PushDecisionService;
+use App\Enums\UserStatus;
+use App\Events\NotificationAlert;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -27,6 +30,25 @@ class InAppNotification extends Model
     protected $attributes = [
         'data' => '[]',
     ];
+
+    protected static function booted(): void
+    {
+        static::created(function (self $notification): void {
+            // Mentions already receive the message alert; never double-ring.
+            if ($notification->type === 'mention' || $notification->actor_id === $notification->user_id) {
+                return;
+            }
+            $user = User::find($notification->user_id);
+            if ($user === null || $user->status !== UserStatus::Active) {
+                return;
+            }
+            $setting = $user->notificationSetting;
+            if (! ($setting?->sound ?? true) || app(PushDecisionService::class)->inDnd($setting, $user->timezone)) {
+                return;
+            }
+            broadcast(new NotificationAlert($user->id, $notification->id, $notification->room_id, $notification->workspace_id, $notification->type));
+        });
+    }
 
     protected function casts(): array
     {

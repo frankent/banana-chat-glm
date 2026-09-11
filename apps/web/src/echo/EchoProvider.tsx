@@ -1,3 +1,5 @@
+import { NotificationGate } from '@banana-chat/chat-core';
+import { playNotificationAudio } from '../lib/notification-audio';
 import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
@@ -94,6 +96,14 @@ export function EchoProvider({ children }: { children: ReactNode }) {
       return;
     }
     const channel = instance.private(`user.${me.id}`);
+    const notifications = new NotificationGate();
+    channel.listen('.notification.alert', (envelope: EventEnvelope<{id: string; room_id: string | null; kind: string}>) => {
+      void queryClient.invalidateQueries({queryKey: ['notifications']});
+      const data = envelope.data;
+      if (!data?.id) return;
+      const focused = data.kind === 'message' && data.room_id === openRoomId() && document.visibilityState === 'visible' && document.hasFocus();
+      if (notifications.accept(data.id, true, focused, Date.now())) playNotificationAudio();
+    });
     const openRoomId = () => /^\/rooms\/([^/]+)/.exec(window.location.pathname)?.[1];
 
     // room list refetch gives authoritative order/unread/preview; bursts of
@@ -191,6 +201,7 @@ export function EchoProvider({ children }: { children: ReactNode }) {
       if (timer !== null) {
         clearTimeout(timer);
       }
+      channel.stopListening('.notification.alert');
       channel.stopListening('.session.revoked');
       for (const name of aiEvents) {
         channel.stopListening(`.${name}`);

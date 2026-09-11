@@ -4,8 +4,10 @@ use App\Domain\Notification\FcmPushSender;
 use App\Domain\Notification\PushDecisionService;
 use App\Enums\MessageType;
 use App\Enums\RoomRole;
+use App\Events\NotificationAlert;
 use App\Jobs\NotifyMessage;
 use App\Models\Device;
+use App\Models\InAppNotification;
 use App\Models\Message;
 use App\Models\Room;
 use App\Models\RoomMember;
@@ -15,6 +17,7 @@ use App\Models\UserNotificationSetting;
 use App\Models\Workspace;
 use Carbon\Carbon;
 use Illuminate\Http\Client\Request as HttpRequest;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
@@ -399,4 +402,46 @@ test('focus reporting records room + timestamp', function () {
     $device = Device::query()->findOrFail($deviceId);
     expect($device->focused_room_id)->toBe($this->room->id)
         ->and($device->focused_at)->not->toBeNull();
+});
+
+test('TC-NOTI-026 browser message alert respects eligibility and sound without a push token', function () {
+    Queue::fake();
+    $message = sendMessageRaw($this, $this->tonyToken, $this->room->id, 'browser alert');
+    Event::fake([NotificationAlert::class]);
+    $job = new NotifyMessage($message->id);
+    $job->handle(app(PushDecisionService::class), app(FcmPushSender::class));
+    Event::assertDispatched(NotificationAlert::class, fn ($event) => $event->userId === $this->somchai->id && $event->id === $message->id);
+    Event::assertNotDispatched(NotificationAlert::class, fn ($event) => $event->userId === $this->tony->id);
+    Event::fake([NotificationAlert::class]);
+    UserNotificationSetting::create(['user_id' => $this->somchai->id, 'sound' => false]);
+    $job->handle(app(PushDecisionService::class), app(FcmPushSender::class));
+    Event::assertNotDispatched(NotificationAlert::class);
+    UserNotificationSetting::where('user_id', $this->somchai->id)->update(['sound' => true]);
+    RoomNotificationSetting::create(['user_id' => $this->somchai->id, 'room_id' => $this->room->id, 'mode' => 'none']);
+    $job->handle(app(PushDecisionService::class), app(FcmPushSender::class));
+    Event::assertNotDispatched(NotificationAlert::class);
+});
+
+test('TC-NOTI-027 overnight DND belongs to the day the window starts', function () {
+    $setting = new UserNotificationSetting(['dnd_start' => '22:00', 'dnd_end' => '07:00', 'dnd_days' => [1]]);
+    $decision = app(PushDecisionService::class);
+    try {
+        Carbon::setTestNow(Carbon::parse('2026-09-07 23:00', 'Asia/Bangkok'));
+        expect($decision->inDnd($setting, 'Asia/Bangkok'))->toBeTrue();
+        Carbon::setTestNow(Carbon::parse('2026-09-08 06:00', 'Asia/Bangkok'));
+        expect($decision->inDnd($setting, 'Asia/Bangkok'))->toBeTrue();
+        Carbon::setTestNow(Carbon::parse('2026-09-08 23:00', 'Asia/Bangkok'));
+        expect($decision->inDnd($setting, 'Asia/Bangkok'))->toBeFalse();
+    } finally {
+        Carbon::setTestNow();
+    }
+});
+
+test('TC-NOTI-028 invitation alert avoids duplicate mention sounds', function () {
+    Event::fake([NotificationAlert::class]);
+    $base = ['user_id' => $this->somchai->id, 'workspace_id' => $this->ws->id, 'actor_id' => $this->tony->id, 'room_id' => $this->room->id];
+    InAppNotification::create($base + ['type' => 'mention']);
+    Event::assertNotDispatched(NotificationAlert::class);
+    InAppNotification::create($base + ['type' => 'added_to_room']);
+    Event::assertDispatched(NotificationAlert::class, fn ($event) => $event->kind === 'added_to_room');
 });
