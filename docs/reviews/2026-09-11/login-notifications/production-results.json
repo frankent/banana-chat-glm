@@ -1,10 +1,26 @@
 {
   "results": [
     {
-      "id": "setup",
-      "passed": false,
-      "error": "expect(locator).toBeVisible() failed\n\nLocator: getByText('Connected to your workspace', { exact: true })\nExpected: visible\nTimeout: 30000ms\nError: element(s) not found\n\n"
+      "id": "TC-WEB-043-production-first-login-mobile",
+      "passed": true
+    },
+    {
+      "id": "TC-NOTI-025-production-sound-title",
+      "passed": true
+    },
+    {
+      "id": "TC-READ-013-production-read-title",
+      "passed": true
+    },
+    {
+      "id": "TC-NOTI-025-production-preference-control",
+      "passed": true
+    },
+    {
+      "id": "TC-RT-001-production-runtime",
+      "passed": true
     }
   ],
-  "errors": []
+  "errors": [],
+  "evidence": "Recovered from successful verify-production process stdout (exit 0); earlier failed selector run finished cleanup later and overwrote the shared results file."
 }
