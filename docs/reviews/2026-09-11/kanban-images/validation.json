@@ -1,0 +1,22 @@
+{
+  "feature_commit": "0e9fccb",
+  "api": {
+    "passed": 384,
+    "skipped": 2,
+    "assertions": 1793
+  },
+  "unit": {
+    "shared": 3,
+    "api_client": 6,
+    "chat_core": 88,
+    "mobile": 39,
+    "total": 136
+  },
+  "typecheck": "passed",
+  "build": "passed (existing chunk size advisories)",
+  "targeted_oxlint": "passed",
+  "openapi": "48 paths parsed",
+  "browser_local": 5,
+  "browser_production": 5,
+  "production": "https://chat.gamecoms.net"
+}

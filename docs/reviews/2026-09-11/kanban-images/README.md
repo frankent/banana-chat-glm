@@ -31,6 +31,6 @@ The new API test failed before the fix and passes after it. The browser now show
 
 ## Deployment
 
-Production backup prepared at `/root/banana-chat-backups/kanban-images-20260911`; previous images tagged `before-kanban-images-20260911`. Additive `kanban_ticket_attachments` migration; no existing ticket data rewritten. Production runtime delta is applied over the current server working tree, preserving unrelated changes. Server OpenAPI has preexisting divergence and is excluded from runtime patching; the repository contract is updated.
+Production backup prepared at `/root/banana-chat-backups/kanban-images-20260911`; previous images tagged `before-kanban-images-20260911`. Additive `kanban_ticket_attachments` migration; no existing ticket data rewritten. Production runtime delta is applied over the current server working tree, preserving unrelated changes. Server OpenAPI has preexisting divergence and is excluded from runtime patching; test sources absent from the production checkout are also excluded. The repository contract and tests are updated.
 
-Production verification pending deployment. Temporary QA members/workspaces and uploaded objects are removed by the script's cleanup.
+Deployed feature commit `0e9fccb` to https://chat.gamecoms.net. Migration completed and all application health checks passed. Production browser verification passed all five scenarios, including loaded image dimensions and the real MinIO/worker pipeline. Both local and production results/screenshots are attached. Temporary production QA members/workspace and uploaded objects were removed successfully by the script cleanup.

@@ -1,0 +1,25 @@
+{
+  "results": [
+    {
+      "id": "TC-KAN-013 multi-image upload and Markdown save",
+      "passed": true
+    },
+    {
+      "id": "TC-KAN-013 peer preserves removes and adds images",
+      "passed": true
+    },
+    {
+      "id": "TC-KAN-013 invalid image recovery",
+      "passed": true
+    },
+    {
+      "id": "TC-KAN-013 mobile gallery and Markdown preview",
+      "passed": true
+    },
+    {
+      "id": "TC-KAN-013 no runtime errors",
+      "passed": true
+    }
+  ],
+  "errors": []
+}
