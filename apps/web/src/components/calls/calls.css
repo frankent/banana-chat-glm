@@ -1,0 +1,214 @@
+.bc-call-stage {
+  position: fixed;
+  inset: 24px;
+  z-index: 1100;
+  background: #121824;
+  color: #f5f7fa;
+  border: 1px solid #334155;
+  border-radius: 20px;
+  box-shadow: 0 28px 100px #0008;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.bc-call-stage header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 24px;
+  border-bottom: 1px solid #ffffff12;
+}
+.bc-call-stage header > div {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.bc-call-stage small {
+  color: #9daec4;
+}
+.bc-call-live {
+  width: 8px;
+  height: 8px;
+  background: #42d8a5;
+  border-radius: 50%;
+}
+.bc-call-stage button {
+  border: 1px solid #ffffff20;
+  border-radius: 10px;
+  padding: 10px 16px;
+  background: #253248;
+  color: #fff;
+  cursor: pointer;
+}
+.bc-call-grid {
+  flex: 1;
+  min-height: 0;
+  padding: 16px;
+  position: relative;
+}
+.bc-call-grid .lk-grid-layout {
+  height: calc(100% - 28px);
+}
+.bc-call-count {
+  font-size: 12px;
+  color: #94a3b8;
+  height: 28px;
+}
+.bc-call-stage footer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px;
+  border-top: 1px solid #ffffff12;
+}
+.bc-call-stage .lk-control-bar {
+  border: 0;
+  padding: 0;
+}
+.bc-call-stage .bc-call-hangup {
+  background: #dc3948;
+}
+.bc-call-stage .bc-call-end {
+  background: transparent;
+  color: #ff9ba5;
+}
+.bc-call-stage.is-minimized {
+  inset: auto 20px 20px auto;
+  width: 370px;
+  height: 280px;
+}
+.bc-call-stage.is-minimized .bc-call-grid {
+  display: none;
+}
+.bc-call-stage.is-minimized header > div {
+  flex-wrap: wrap;
+}
+.bc-call-incoming {
+  position: fixed;
+  z-index: 1150;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: #162238;
+  color: white;
+  padding: 18px 22px;
+  border-radius: 16px;
+  box-shadow: 0 12px 40px #0005;
+  width: max-content;
+  max-width: calc(100vw - 24px);
+}
+.bc-call-incoming p {
+  font-size: 13px;
+  color: #b4c5db;
+  margin: 4px 0;
+}
+.bc-call-incoming button {
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 10px;
+  background: #21a575;
+  color: white;
+  cursor: pointer;
+}
+.bc-call-incoming .bc-call-decline {
+  background: #923c49;
+}
+.bc-call-pulse {
+  font-size: 28px;
+  color: #6fe8be;
+}
+.bc-call-alert,
+.bc-call-loading {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1200;
+  background: #162238;
+  color: white;
+  padding: 16px 22px;
+  border-radius: 12px;
+  max-width: 90vw;
+}
+.bc-call-alert button {
+  margin-left: 16px;
+}
+.bc-call-error {
+  padding: 12px 20px;
+  background: #683d23;
+  color: #fff;
+}
+.bc-call-join {
+  color: #0e926b !important;
+}
+@media (max-width: 650px) {
+  .bc-call-stage {
+    inset: 0;
+    border-radius: 0;
+  }
+  .bc-call-stage header {
+    padding: 12px;
+  }
+  .bc-call-stage header > div {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .bc-call-stage footer {
+    gap: 6px;
+    padding: 8px;
+  }
+  .bc-call-stage .lk-button-group > .lk-button {
+    padding: 10px;
+  }
+  .bc-call-stage .bc-call-end {
+    font-size: 12px;
+  }
+  .bc-call-stage.is-minimized {
+    inset: auto 8px 8px;
+    width: calc(100% - 16px);
+    height: auto;
+    min-height: 160px;
+    border-radius: 16px;
+  }
+  .bc-call-label {
+    display: none;
+  }
+  .bc-call-incoming {
+    gap: 8px;
+    padding: 14px;
+  }
+  .bc-call-pulse {
+    display: none;
+  }
+}
+.bc-call-stage.is-voice:not(.is-minimized) {
+  inset: 20vh auto auto max(12px, calc((100vw - 680px) / 2));
+  width: min(680px, calc(100vw - 24px));
+  height: 460px;
+}
+.bc-call-stage.is-voice .lk-participant-placeholder svg {
+  width: 90px;
+  height: 90px;
+}
+.bc-call-stage.is-voice .lk-participant-placeholder {
+  background: #202e40;
+}
+.bc-call-stage.is-voice .lk-participant-tile {
+  border-radius: 16px;
+}
+@media (max-width: 650px) {
+  .bc-call-stage.is-voice:not(.is-minimized) {
+    height: 430px;
+    inset: 15vh 12px auto;
+    width: calc(100vw - 24px);
+  }
+  .bc-call-stage.is-voice .lk-participant-placeholder svg {
+    width: 60px;
+    height: 60px;
+  }
+}

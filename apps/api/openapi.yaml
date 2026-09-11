@@ -12,6 +12,11 @@ servers:
 
 components:
   securitySchemes:
+    mediaAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: LiveKit media token issued by API-152; not an API access token.
     bearerAuth:
       type: http
       scheme: bearer
@@ -24,6 +29,29 @@ components:
       schema: { type: string }
       description: slug of the active workspace
   schemas:
+    RoomCall:
+      type: object
+      required: [id,room_id,workspace_id,kind,started_by,caller_name,room_type,participants,created_at]
+      properties:
+        id: {type: string}
+        room_id: {type: string}
+        workspace_id: {type: string}
+        kind: {type: string, enum: [voice,video]}
+        started_by: {type: string}
+        caller_name: {type: string}
+        room_name: {type: [string, 'null']}
+        room_type: {type: string, enum: [dm,group]}
+        participants: {type: array, items: {type: string}}
+        created_at: {type: string, format: date-time}
+        connected_at: {type: [string, 'null'], format: date-time}
+        ended_at: {type: [string, 'null'], format: date-time}
+    CallJoin:
+      type: object
+      required: [call,token,url]
+      properties:
+        call: {$ref: '#/components/schemas/RoomCall'}
+        token: {type: string, description: 'Short-lived media JWT; never persist or log.'}
+        url: {type: string, format: uri}
     KanbanLaneInput:
       type: object
       properties:
@@ -152,6 +180,180 @@ security:
   - bearerAuth: []
 
 paths:
+  /calls:
+    get:
+      summary: API-150 — List active room calls
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: "#/components/parameters/workspaceSlug"}
+      responses:
+        '200':
+          description: Success
+        '401':
+          description: Invalid or expired authentication
+        '403':
+          description: Access denied
+        '404':
+          description: Room or call is not accessible
+        '409':
+          description: Call ended or at capacity
+        '503':
+          description: Calling is disabled or unavailable
+  /rooms/{id}/calls:
+    post:
+      summary: API-151 — Start video or dm voice call
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: "#/components/parameters/workspaceSlug"}
+        - name: id
+          in: path
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind]
+              properties:
+                kind: {type: string, enum: [voice, video]}
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: {$ref: '#/components/schemas/RoomCall'}
+        '401':
+          description: Invalid or expired authentication
+        '403':
+          description: Access denied
+        '404':
+          description: Room or call is not accessible
+        '409':
+          description: Call ended or at capacity
+        '503':
+          description: Calling is disabled or unavailable
+  /calls/{id}/join:
+    post:
+      summary: API-152 — Issue session-bound media credentials
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: "#/components/parameters/workspaceSlug"}
+        - name: id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: {$ref: '#/components/schemas/CallJoin'}
+        '401':
+          description: Invalid or expired authentication
+        '403':
+          description: Access denied
+        '404':
+          description: Room or call is not accessible
+        '409':
+          description: Call ended or at capacity
+        '503':
+          description: Calling is disabled or unavailable
+  /calls/{id}/leave:
+    post:
+      summary: API-153 — Leave call
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: "#/components/parameters/workspaceSlug"}
+        - name: id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '204':
+          description: Success
+        '401':
+          description: Invalid or expired authentication
+        '403':
+          description: Access denied
+        '404':
+          description: Room or call is not accessible
+        '409':
+          description: Call ended or at capacity
+        '503':
+          description: Calling is disabled or unavailable
+  /calls/{id}/end:
+    post:
+      summary: API-154 — Starter ends call for everyone
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: "#/components/parameters/workspaceSlug"}
+        - name: id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '204':
+          description: Success
+        '401':
+          description: Invalid or expired authentication
+        '403':
+          description: Access denied
+        '404':
+          description: Room or call is not accessible
+        '409':
+          description: Call ended or at capacity
+        '503':
+          description: Calling is disabled or unavailable
+  /calls/{id}/decline:
+    post:
+      summary: API-155 — Decline invitation
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: "#/components/parameters/workspaceSlug"}
+        - name: id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '204':
+          description: Success
+        '401':
+          description: Invalid or expired authentication
+        '403':
+          description: Access denied
+        '404':
+          description: Room or call is not accessible
+        '409':
+          description: Call ended or at capacity
+        '503':
+          description: Calling is disabled or unavailable
+  /calls/authorize-media:
+    get:
+      summary: API-156 — Authorize media signaling with LiveKit JWT
+      security: [{mediaAuth: []}]
+      responses:
+        '204':
+          description: Success
+        '401':
+          description: Invalid or expired authentication
+        '403':
+          description: Access denied
+        '404':
+          description: Room or call is not accessible
+        '409':
+          description: Call ended or at capacity
+        '503':
+          description: Calling is disabled or unavailable
   /uploads:
     post:
       summary: API-060 Create upload ticket (single PUT or multipart)

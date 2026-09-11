@@ -369,3 +369,11 @@ export interface TicketComment { id: string; body: string; author: TicketPerson 
 export interface TicketHistory { id: string; actor: TicketPerson | null; changes: Record<string,{from:unknown;to:unknown}>; created_at: string }
 export interface TicketDetail extends KanbanTicket { comments: TicketComment[]; comments_cursor: string | null; history: TicketHistory[] }
 export interface TicketInput { title: string; description?: string | null; lane_id: string; type?: TicketType; priority?: TicketPriority; assignee_id?: string | null; due_at?: string | null; labels?: string[] }
+
+/** FR-CALL-001..004 / API-150..155 */
+export interface RoomCall {
+  id: string; room_id: string; workspace_id: string; kind: 'voice' | 'video';
+  started_by: string; caller_name: string; room_name: string | null; room_type: 'dm' | 'group';
+  participants: string[]; created_at: string; connected_at: string | null; ended_at: string | null;
+}
+export interface CallJoin { call: RoomCall; token: string; url: string }

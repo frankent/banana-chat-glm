@@ -28,6 +28,11 @@ x-api-env: &api-env
   # Topology pins. Compose env beats the bind-mounted .env inside the
   # containers (EGPCS ini + clear_env=no), so the installer owns
   # DB/Redis/mail/admin in .env while container wiring stays fixed.
+  CALLS_ENABLED: ${CALLS_ENABLED:-false}
+  LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-}
+  LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-}
+  LIVEKIT_URL: ${LIVEKIT_URL:-}
+  LIVEKIT_INTERNAL_URL: http://livekit:7880
   APP_ENV: production
   APP_DEBUG: false
   CACHE_STORE: redis
@@ -60,6 +65,23 @@ x-logging: &logging
     max-file: "3"
 
 services:
+  livekit:
+    image: livekit/livekit-server:v1.13.6
+    profiles: [calls]
+    mem_limit: 768m
+    cpus: "1.0"
+    command: ["--config", "/etc/livekit.yaml"]
+    volumes:
+      - ./livekit/config.yaml:/etc/livekit.yaml:ro
+      - ./livekit/certs:/certs:ro
+    ports:
+      - "7881:7881/tcp"
+      - "7882:7882/udp"
+      - "443:443/tcp"
+      - "3478:3478/udp"
+    restart: unless-stopped
+    logging: *logging
+
   nginx:
     build:
       context: ..

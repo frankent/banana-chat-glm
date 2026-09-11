@@ -1,3 +1,4 @@
+import {CallButtons} from './calls/CallProvider';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -249,6 +250,7 @@ export function ChatView() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {room && (room.room.type === 'dm' || room.room.type === 'group') && <CallButtons roomId={roomId} type={room.room.type} />}
           <button className="bc-tool-button" onClick={() => {setNotesOpen(!notesOpen);setMediaOpen(false);}} aria-label="Room notes">Notes</button>
           {seen && <span className="text-xs font-medium text-slate-400" data-testid="seen-indicator">Seen</span>}
           <button

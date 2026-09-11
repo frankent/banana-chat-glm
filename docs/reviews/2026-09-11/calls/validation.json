@@ -1,0 +1,44 @@
+{
+  "requirements": [
+    "TASK-BE-042",
+    "TASK-WEB-042",
+    "TASK-CORE-042",
+    "TASK-INF-042",
+    "TASK-QA-042",
+    "FR-CALL-001..005",
+    "DEC-052"
+  ],
+  "api_regression": {
+    "passed": 368,
+    "skipped": 2,
+    "assertions": 1677
+  },
+  "call_api": {
+    "passed": 14,
+    "assertions": 56
+  },
+  "unit_tests": {
+    "passed": 132
+  },
+  "browser_calls": {
+    "passed": 13,
+    "capture": "synthetic audio/video/screen",
+    "transport": "real RTP across network to temporary remote SFU",
+    "gateway": "production nginx config against isolated local API/database"
+  },
+  "typecheck": "passed",
+  "web_build": "passed; existing main and lazy call chunks exceed 500 kB advisory threshold",
+  "call_ui_lint": "passed; no errors or warnings",
+  "openapi": "parsed; 43 paths",
+  "production": {
+    "customer_facing_deployment": false,
+    "activation_blocker": "OQ-018: DNS-only TURN hostname, trusted certificate and forced-relay validation",
+    "physical_capture_verified": false,
+    "temporary_media_server_removed": true
+  },
+  "cleanup": {
+    "isolated_database_removed": true,
+    "isolated_local_containers_removed": true,
+    "customer_data_modified": false
+  }
+}

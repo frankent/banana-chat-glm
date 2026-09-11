@@ -30,3 +30,7 @@ logs/*.log
 .DS_Store
 .idea/
 .vscode/
+
+# FR-CALL-005 production media secrets/certificates
+/infra/livekit/config.yaml
+/infra/livekit/certs/

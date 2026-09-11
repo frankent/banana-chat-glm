@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\AiController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\CallController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\KanbanController;
 use App\Http\Controllers\Api\V1\MeController;
@@ -82,7 +83,14 @@ Route::prefix('v1')->group(function (): void {
     });
 
     // Workspace-scoped routes — X-Workspace-Id required (FR-WS-003 isolation)
+    Route::get('/calls/authorize-media', [CallController::class, 'authorizeMedia']);
+
     Route::middleware(['auth:api', 'account.active', 'password.fresh', 'workspace.context'])->group(function (): void {
+        Route::get('/calls', [CallController::class, 'index']);
+        Route::post('/rooms/{id}/calls', [CallController::class, 'start'])->whereUlid('id')->middleware('throttle:30,1');
+        foreach (['join', 'leave', 'end', 'decline'] as $action) {
+            Route::post('/calls/{id}/'.$action, [CallController::class, $action])->whereUlid('id')->middleware('throttle:60,1');
+        }
         // API-140..148 / FR-KAN-001..005
         Route::get('/board', [KanbanController::class, 'board']);
         Route::post('/board/lanes', [KanbanController::class, 'createLane']);

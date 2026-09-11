@@ -1,3 +1,4 @@
+import type { RoomCall, CallJoin } from '@banana-chat/shared';
 import type { KanbanLane, KanbanTicket, TicketDetail, TicketInput } from '@banana-chat/shared';
 import type {
   RoomNote,
@@ -44,6 +45,12 @@ export interface RoomDetail {
 /** Typed endpoint wrappers — one method per API row in spec §8. */
 export class Endpoints {
   constructor(private readonly api: ApiClient) {}
+
+  calls(slug: string) { return this.api.request<{enabled:boolean; calls:RoomCall[]}>('/api/v1/calls', {workspaceSlug:slug}); }
+  startCall(roomId:string, kind:'voice'|'video', slug:string) { return this.api.request<RoomCall>(`/api/v1/rooms/${roomId}/calls`, {method:'POST', body:{kind}, workspaceSlug:slug}); }
+  joinCall(id:string, slug:string) { return this.api.request<CallJoin>(`/api/v1/calls/${id}/join`, {method:'POST', workspaceSlug:slug}); }
+  callAction(id:string, action:'leave'|'end'|'decline', slug:string) { return this.api.request<void>(`/api/v1/calls/${id}/${action}`, {method:'POST', workspaceSlug:slug}); }
+
   board(slug: string) { return this.api.request<{lanes: KanbanLane[]; can_manage: boolean}>('/api/v1/board', {workspaceSlug:slug}); }
   boardTickets(slug: string, filters: {q?: string; assignee?: string; priority?: string; cursor?: string} = {}) {
     return this.api.request<{tickets: KanbanTicket[]; next_cursor: string | null}>(`/api/v1/board/tickets?${new URLSearchParams(filters)}`, {workspaceSlug:slug});

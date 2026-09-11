@@ -1,0 +1,70 @@
+{
+  "fixture": {
+    "users": [
+      "callqa17891010421480",
+      "callqa17891010421481",
+      "callqa17891010421482"
+    ],
+    "slug": "callqa1789101042148",
+    "rooms": {
+      "dm": "01m27bpttb2gr4catkbmmr0kn2",
+      "group": "01m27bpttfrap6h3ja0mexchp4"
+    },
+    "workspace": "01m27bptpxhgq2dyzayapdb332"
+  },
+  "results": [
+    {
+      "test": "TC-CALL-008 two-way voice RTP with camera controls absent",
+      "status": "passed"
+    },
+    {
+      "test": "TC-CALL-004 dm leave disconnects remote",
+      "status": "passed"
+    },
+    {
+      "test": "TC-CALL-010 three-way video/audio RTP via LiveKit SFU",
+      "status": "passed"
+    },
+    {
+      "test": "TC-CALL-008 microphone toggle and synthetic screen share",
+      "status": "passed"
+    },
+    {
+      "test": "TC-CALL-008 mobile call layout",
+      "status": "passed"
+    },
+    {
+      "test": "TC-CALL-009 call survives navigation",
+      "status": "passed"
+    },
+    {
+      "test": "TC-CALL-007 SFU removes a revoked room member",
+      "status": "passed"
+    },
+    {
+      "test": "TC-CALL-004 group continues after leave and starter ends all",
+      "status": "passed"
+    },
+    {
+      "test": "TC-CALL-009 every captured track stops after leaving",
+      "status": "passed"
+    },
+    {
+      "test": "TC-CALL-008 dm video and simulated permission-error recovery",
+      "status": "passed"
+    },
+    {
+      "test": "TC-CALL-009 logout releases devices and revoked session ends dm",
+      "status": "passed"
+    },
+    {
+      "test": "TC-CALL-005 production nginx gate rejects ended call credentials",
+      "status": "passed"
+    },
+    {
+      "test": "TC-CALL-008 no JavaScript runtime errors",
+      "status": "passed"
+    }
+  ],
+  "errors": []
+}

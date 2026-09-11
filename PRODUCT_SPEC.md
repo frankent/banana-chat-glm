@@ -55,7 +55,7 @@
 ### 1.3 Non-Goals (ไม่ทำใน v1 — และเหตุผล)
 | # | ไม่ทำ | เหตุผล |
 |---|---|---|
-| NG1 | Voice/Video call | ซับซ้อน (TURN/SFU) แยกเป็นโครงการอื่น |
+| NG1 | Superseded by DEC-052 | User requested room voice/video calls; FR-CALL below defines the new scope. |
 | NG2 | End-to-end encryption | ขัดกับ requirement ให้แอดมินกำกับ/ค้นหา/retention; ใช้ encryption at rest + TLS แทน |
 | NG3 | Public sign-up / SSO / OAuth | requirement ระบุ username+password ที่แอดมินสร้างเท่านั้น (ออกแบบ `auth_provider` เผื่อ SSO ใน P2) |
 | NG4 | Threads (reply แบบซ้อนเป็นกระทู้) | ใช้ reply/quote แบบ inline แทน ลดความซับซ้อน UI |
@@ -1035,6 +1035,18 @@ Index: `(user_id, importance desc, last_used_at desc)`, GIN trgm `content`
 Data: kanban_boards(workspace_id PK,next_number); kanban_lanes(workspace_id FK,name,color,position,is_done); kanban_tickets(workspace_id FK,number unique per workspace,lane_id composite workspace FK,fields above,due_notified_at); kanban_comments(ticket_id FK,author,body); kanban_history(ticket_id FK,actor,changes). All records cascade with workspace/ticket removal; lanes with tickets cannot be deleted. Existing API-073 gains ticket_due event type; chat unread title remains message-only.
 
 API-140 GET /board; API-141 POST /board/lanes; API-142 PATCH /board/lanes/{id}; API-143 DELETE /board/lanes/{id}; API-144 GET /board/tickets?q&assignee&priority&cursor; API-145 POST /board/tickets; API-146 GET /board/tickets/{id}?before; API-147 PATCH /board/tickets/{id} (version required); API-148 POST /board/tickets/{id}/comments. All require auth + active workspace membership and X-Workspace-Id. Lane mutations additionally require workspace owner/admin. Shared client wrappers in api-client and pure ticket/deadline helpers in chat-core.
+
+### 5.9b CALL — room calls (TASK-BE/WEB/CORE/INF/QA-042)
+
+| ID | Acceptance criteria | Tests |
+|---|---|---|
+| FR-CALL-001 | Active room members start/join one shared video call in a dm/group; voice-only calls in dm. Maximum 8 participants. Concurrent starts return the existing call. | TC-CALL-001,002 |
+| FR-CALL-002 | Incoming call banner with caller/room, accept/decline; unanswered dm expires after 60 seconds. Leaving dm ends it; group continues until last participant leaves. Starter may end for everyone. | TC-CALL-003,004 |
+| FR-CALL-003 | Camera/microphone controls, participant names/grid, screen sharing for video, browser audio playback recovery, explicit device errors. Calls survive navigation; logout/leave releases devices. | TC-CALL-008,009 |
+| FR-CALL-004 | Server-issued room-specific grants; voice grants microphone-only. Current user, login session, workspace and room membership required at signaling admission. Reconcile every 10 seconds to evict revoked members/sessions; end on deleted/archived room/workspace. No guest, recording or AI participation. | TC-CALL-005,006,007 |
+| FR-CALL-005 | Self-hosted LiveKit SFU; trusted HTTPS signaling and TURN/TLS relay. Feature remains disabled until configured. Test actual two-way media and three-way video; synthetic QA is not physical-device or network capacity certification. | TC-CALL-010 |
+
+API-150 GET /calls (active calls in member rooms); API-151 POST /rooms/{id}/calls {kind:voice|video}; API-152 POST /calls/{id}/join returns short-lived media token + url; API-153 POST /calls/{id}/leave; API-154 POST /calls/{id}/end (starter only); API-155 POST /calls/{id}/decline; API-156 GET /calls/authorize-media (JWT-only signaling authorization, 204/401/403). EVT-070 call.changed private user channels (metadata only, never media tokens). All ordinary calls use existing auth/workspace middleware. Store room_calls and call_participants; session-bound opaque participant IDs. No browser-closed push ringing in this release.
 
 ### 5.10 SRCH — ค้นหา
 
@@ -2743,6 +2755,7 @@ Size: S ≤ 1 วัน · M 2–3 วัน · L 4–5 วัน · XL > 1 ส�
 | DEC-045 | **Staging เป็น overlay บน prod compose (ไม่ใช่ไฟล์ copy แยก)**: `infra/docker-compose.staging.yml` ใช้คู่กับ prod เสมอ (`-f docker-compose.prod.yml -f docker-compose.staging.yml`) — image/โทโพโลยี/flow ติดตั้ง (DEC-043) เหมือน prod เป๊ะ เพราะหน้าที่ของ staging คือ mirror prod; ต่างเฉพาะที่จำเป็นต่อการอยู่ร่วม host เดียวกับ dev/prod: project name `banana-chat-staging` (volumes/networks/state แยก), edge `${HTTP_PORT:-8081}` (80 ถูก prod ใช้ และ 8080 เป็นของ docker-desktop บนเครื่อง dev), MinIO console localhost-only 9201, app services bind `apps/api/.env.staging` แทน `.env` (`.env` ของ dev ชี้ Neon/remote Redis ต้องไม่รั่วเข้า staging) ด้วย YAML `!override`, และ `APP_NAME` ติด "(Staging)" ให้แยก admin/mail ได้; deploy vars รวมศูนย์ที่ `infra/.env.example` (gitignored เมื่อ copy) และ make targets ส่ง `--env-file` ให้อัตโนมัติเมื่อมีไฟล์ | ไฟล์ staging แบบ copy ทั้งฉบับจะล้าหลัง prod ทันทีที่ prod เปลี่ยน; compose merge ทำ per-key สำหรับ environment แต่ volumes/ports เป็น list — ไม่ใช้ `!override` จะได้ bind `.env` สองไฟล์ทับ /app/.env เดียวกัน + publish สอง port | 2026-09-09 |
 | DEC-046 | **Edge → MinIO ต้องส่ง URI ตรงตามที่ sign ไว้ (แก้ TASK-INF-003/DEC-044 ที่พังตอน deploy จริง)**: (1) bug — `proxy_pass http://$var/` ที่มี variable + URI part จะส่ง URI นั้นตามตัวอักษร (ทุก request ไปถึง MinIO เป็น `/`) แก้ด้วยรูปแบบ `rewrite … break` + `proxy_pass` ไม่มี URI part; (2) ข้อจำกัดของ SigV4 — endpoint ที่มี path (`https://host/storage`) ทำให้ SDK sign path รวม prefix แต่ MinIO ตรวจจาก path ที่มันได้รับ ซึ่งต่างกันเสมอถ้า proxy strip prefix → presigned/Signed request พังหมด ดังนั้น AWS_ENDPOINT สำหรับ presigned ต้องเป็น **host root** และให้ bucket อยู่ใน path (`/orgchat/…`) โดย edge location `/orgchat/` forward URI ตรงๆ (what was signed = what MinIO sees) เก็บ `/storage/` ไว้เฉพาะ unsigned/public-file pattern | พบตอน deploy prod จริง: health storage error + PutObject 400 "unsupported API call at '/'" เมื่อยังไม่ strip ก็ signature mismatch ทันทีเมื่อ strip — สองวิธีเดิมของ DEC-044 (`/storage` + Host passthrough) ใช้กับ S3 signed ไม่ได้จริง | 2026-09-09 (เพิ่ม `livewire` ใน fpm regex — Filament/Livewire assets ต้องผ่าน fpm ไม่ใช่ SPA fallback; เจอด้วย Playwright บน prod: `/livewire/livewire.min.js` ได้ index.html ทำ admin panel ตายหลัง login) | 2026-09-09 |
 
+| DEC-052 | User explicitly expands scope to room video/group video and dm voice calls. Self-host LiveKit, 8-person initial limit, membership-gated signaling and periodic revocation; no Google account integration. | Preserve data ownership and existing chat authorization. Production enablement requires real media/relay validation. | 2026-09-11 |
 | DEC-051 | Add workspace Kanban per user request (FR-KAN-001..005). Use existing membership, Filament and durable notification feed; Jira-like core ticket fields, comments, history, editable workflow, optimistic conflicts. No Jira integration or full Jira parity implied. | Workspace data isolation and deadline reminders share existing security/delivery boundaries. | 2026-09-11 |
 | DEC-050 | Browser sound and unread title per user request (FR-NOTI-007); use server notification eligibility and content-free EVT-063, shared client deduplication. Open mobile conversation drawer on home. Correct overnight DND weekday ownership. | Preserve existing notification preferences and browser autoplay constraints. | 2026-09-11 |
 | DEC-049 | **Admin coverage and redesign** per user request: FR-ADM-014 clarifies API-domain administration versus member-owned actions. Extend existing Filament, preserve guard/consent boundaries, audited Notes/Pins moderation and attachment retry; reserve media dimensions to preserve read viewport. | Avoid duplicating the member application or exposing personal AI data by default. | 2026-09-11 |
@@ -2756,6 +2769,7 @@ Size: S ≤ 1 วัน · M 2–3 วัน · L 4–5 วัน · XL > 1 ส�
 | Version | Date | By | Change |
 |---|---|---|---|
 | 1.6.1 | 2026-09-11 | Codex | FR-ADM-001, FR-AUTH-005, TC-ADM-079: declare password_hash as the authentication password column so Laravel admin-login rehash does not update the nonexistent password column. Reproduced during production validation. |
+| 1.8.0-draft | 2026-09-11 | Codex | TASK-BE/WEB/CORE/INF/QA-042 / FR-CALL-001..005 / DEC-052: room calls implemented and synthetic SFU/browser tests passed; production activation pending OQ-018. |
 | 1.7.0 | 2026-09-11 | Codex | TASK-BE/WEB/ADM/QA-041, FR-KAN-001..005, DEC-051, API-140..148, EVT-064, TC-KAN-001..009: workspace Kanban, editable lanes, shared tickets, comments/history and assignee deadline reminders. |
 | 1.6.2 | 2026-09-11 | Codex | FR-NOTI-007, FR-READ-003, DEC-050, EVT-063, TC-NOTI-025..028/TC-READ-013/TC-WEB-043: browser sound, tab unread count, first-login mobile room visibility and room fetch recovery. |
 | 1.6.0 | 2026-09-11 | Codex | TASK-ADM-015, FR-ADM-007..014, DEC-049; admin overview/theme, rooms/messages/notes/media/session/device/operations/AI review resources, full runtime settings and API feature directory. Fix unread after delayed image sizing (FR-READ-001, TC-WEB-041), audit export, membership management and Horizon guard. TC-ADM-070..079. |
@@ -2819,6 +2833,7 @@ Size: S ≤ 1 วัน · M 2–3 วัน · L 4–5 วัน · XL > 1 ส�
 | OQ-014 | งบประมาณ AI ต่อเดือน และ limit ต่อคนต่อวัน (default 200 ข้อความ) | PO | ไม่ (config) |
 | OQ-015 | Memory ควรแยกต่อ workspace ไหม (ตอนนี้ข้าม ws — DEC-016) และ SA ควรลบ memories ของผู้ใช้ได้ไหมนอกเหนือจาก purge user | PO/Legal | ไม่ |
 | OQ-016 | `ai.admin_review_enabled` เป็น false โดย default ตาม DEC-020 ใช่ไหม (นโยบาย HR/Legal) | PO/Legal | ไม่ |
+| OQ-018 | Provide a DNS-only TURN hostname (proposed call.gamecoms.net → 165.22.63.119) and complete trusted-certificate/forced-relay validation. Physical camera/microphone checks remain required on supported user devices. | IT | **Yes for enabling FR-CALL-005 in production** |
 | OQ-017 | System prompt ระดับองค์กร (ชื่อองค์กร, ข้อห้าม, ภาษา) ใครเขียน/อนุมัติ | PO | ก่อน PH2 AI |
 
 ### 17.2 Risks
@@ -2874,4 +2889,4 @@ AI_MOCK_PROVIDER_URL=http://mock-ai:8080/v1   # dev/CI เท่านั้น
 ```
 
 ## Appendix C — Parking Lot (ไอเดียที่ไม่ทำใน v1)
-Reactions · Pin message · Forward · Link preview · Threads · Voice message · Video call · Bots/Webhooks · SSO · Scheduled messages · Message translation · Read-only announcement rooms · Custom emoji · Room templates · Desktop app (Tauri) · Guest access · **AI**: @ai ในห้องแชท · สรุปห้องแชทด้วย AI (RAG) · แนบรูป/ไฟล์ให้ AI (FR-AI-016) · หลาย provider ให้ผู้ใช้เลือกโมเดล · tool use / function calling · แชร์ conversation เป็นลิงก์ · memory แยกต่อ workspace · Anthropic/OpenAI native provider
+Reactions · Pin message · Forward · Link preview · Threads · Voice message ·  Bots/Webhooks · SSO · Scheduled messages · Message translation · Read-only announcement rooms · Custom emoji · Room templates · Desktop app (Tauri) · Guest access · **AI**: @ai ในห้องแชท · สรุปห้องแชทด้วย AI (RAG) · แนบรูป/ไฟล์ให้ AI (FR-AI-016) · หลาย provider ให้ผู้ใช้เลือกโมเดล · tool use / function calling · แชร์ conversation เป็นลิงก์ · memory แยกต่อ workspace · Anthropic/OpenAI native provider

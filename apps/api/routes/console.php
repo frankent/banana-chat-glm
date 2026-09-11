@@ -3,6 +3,7 @@
 use App\Jobs\NotifyDueTickets;
 use App\Jobs\PurgeDeletedAiConversations;
 use App\Jobs\PurgeExpiredUploads;
+use App\Jobs\ReconcileCalls;
 use App\Jobs\RollupAiUsage;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -26,3 +27,6 @@ Schedule::command('ai:check-alerts')->everyFiveMinutes()->onOneServer();
 
 // TASK-BE-041 / FR-KAN-004 — durable reminders, one scheduler owner.
 Schedule::job(new NotifyDueTickets)->everyMinute()->onOneServer()->withoutOverlapping();
+
+// FR-CALL-004: membership/session revocation is independent of browser cooperation.
+Schedule::call(fn () => app()->call([new ReconcileCalls, 'handle']))->name('calls:reconcile')->everyTenSeconds()->onOneServer()->withoutOverlapping();

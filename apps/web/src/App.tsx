@@ -1,3 +1,4 @@
+import {CallProvider} from './components/calls/CallProvider';
 import { BoardPage } from './pages/BoardPage';
 import { unlockNotificationAudio } from './lib/notification-audio';
 import { unreadTitle } from '@banana-chat/chat-core';
@@ -37,7 +38,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <SessionGate>
-          <EchoProvider>
+          <EchoProvider><CallProvider>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/change-password" element={<ChangePasswordPage />} />
@@ -54,7 +55,7 @@ export default function App() {
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
-          </EchoProvider>
+          </CallProvider></EchoProvider>
         </SessionGate>
       </BrowserRouter>
     </QueryClientProvider>

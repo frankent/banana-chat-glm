@@ -5,6 +5,8 @@ export function Banana({ size = 30 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M34 9c2 15-7 27-24 22 5 10 22 13 29 0 4-7 2-13-2-17l-3-5Z" fill="currentColor" /><path d="m32 9 4-2 3 6-4 2" stroke="currentColor" strokeWidth="3" strokeLinejoin="round" /></svg>;
 }
 const paths = {
+  phone: <path d="M22 16.9v3a2 2 0 0 1-2.2 2A19.8 19.8 0 0 1 3.1 5.2 2 2 0 0 1 5.1 3h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.7a2 2 0 0 1-.5 2.1L9 10.8a16 16 0 0 0 4.2 4.2l1.3-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.5 2.7.6a2 2 0 0 1 1.7 2Z" />,
+  video: <><rect x="2" y="5" width="14" height="14" rx="3"/><path d="m16 10 6-4v12l-6-4"/></>,
   board: <><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 3v18M15 3v18M5 7h2M11 7h2M17 7h2M5 11h2M11 11h2"/></>,
   users: <><circle cx="9" cy="7" r="3" /><path d="M2 21v-3a7 7 0 0 1 14 0v3M17 4a3 3 0 0 1 0 6M19 14a5 5 0 0 1 3 5v2" /></>,
   chat: <path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H4l-2 2v-9.5a9.5 9.5 0 1 1 19-1Z" />,

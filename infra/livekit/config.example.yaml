@@ -1,0 +1,21 @@
+# FR-CALL-005. Copy outside version control; inject generated key/secret and certificate paths.
+port: 7880
+rtc:
+  tcp_port: 7881
+  udp_port: 7882
+  use_external_ip: false
+  node_ip: 165.22.63.119 # Replace when deploying to a different media host.
+room:
+  auto_create: false
+  max_participants: 8
+keys:
+  REPLACE_API_KEY: REPLACE_WITH_RANDOM_32_BYTE_SECRET
+turn:
+  enabled: true
+  domain: call.gamecoms.net
+  tls_port: 443
+  udp_port: 3478
+  cert_file: /certs/fullchain.pem
+  key_file: /certs/privkey.pem
+logging:
+  level: warn
