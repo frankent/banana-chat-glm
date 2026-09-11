@@ -377,3 +377,15 @@ export interface RoomCall {
   participants: string[]; created_at: string; connected_at: string | null; ended_at: string | null;
 }
 export interface CallJoin { call: RoomCall; token: string; url: string }
+
+/** FR-MEET-001..005 — public video meeting capabilities. */
+export interface PublicMeeting {
+  id: string; code: string; title: string; expires_at: string; ended_at: string | null; created_at: string;
+}
+export interface MeetingLobby {
+  title: string; expires_at: string; capacity: number; identity: {name: string; member: true} | null;
+}
+export interface MeetingJoin {
+  meeting: PublicMeeting; participant_id: string; participant_token: string;
+  url: string; token: string; can_end: boolean; workspace_slug: string | null;
+}

@@ -4,8 +4,11 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Calls\CallService;
 use App\Domain\Calls\MediaServer;
+use App\Domain\Calls\MeetingService;
 use App\Http\Controllers\Controller;
 use App\Models\CallParticipant;
+use App\Models\Meeting;
+use App\Models\MeetingParticipant;
 use App\Models\Room;
 use App\Models\RoomCall;
 use App\Support\WorkspaceContext;
@@ -90,6 +93,14 @@ class CallController extends Controller
             $claims = $media->decode($r->bearerToken() ?? '');
         } catch (\Throwable $e) {
             abort(401);
+        }
+        if (str_starts_with($claims->video->room ?? '', 'meeting-')) {
+            $participant = MeetingParticipant::find($claims->sub ?? '');
+            $meeting = $participant ? Meeting::find($participant->meeting_id) : null;
+            abort_unless($meeting && $claims->video->room === 'meeting-'.$meeting->id
+                && app(MeetingService::class)->participantAllowed($participant, $meeting), 403);
+
+            return response()->noContent();
         }
         $p = CallParticipant::find($claims->sub ?? '');
         abort_unless($p, 403);

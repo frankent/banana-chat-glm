@@ -1,0 +1,73 @@
+{
+  "fixture": {
+    "workspace": "01m27nd5r647ahnq0ygn8n609s",
+    "slug": "meetqa1789111211545",
+    "users": [
+      "meetqa17891112115450",
+      "meetqa17891112115451"
+    ]
+  },
+  "results": [
+    {
+      "test": "TC-MEET-001 create public meeting from workspace UI",
+      "status": "passed"
+    },
+    {
+      "test": "TC-MEET-010 member login returns to the shared meeting link",
+      "status": "passed"
+    },
+    {
+      "test": "TC-MEET-002/003 member detection and required guest name",
+      "status": "passed"
+    },
+    {
+      "test": "TC-MEET-010 three-way member/guest audio/video over forced TURN TLS",
+      "status": "passed",
+      "selected": [
+        [
+          {
+            "policy": "relay",
+            "relayProtocol": "tls",
+            "url": "turns:media.gamecoms.net:443?transport=tcp"
+          }
+        ],
+        [
+          {
+            "policy": "relay",
+            "relayProtocol": "tls",
+            "url": "turns:media.gamecoms.net:443?transport=tcp"
+          }
+        ],
+        [
+          {
+            "policy": "relay",
+            "relayProtocol": "tls",
+            "url": "turns:media.gamecoms.net:443?transport=tcp"
+          }
+        ]
+      ]
+    },
+    {
+      "test": "TC-MEET-010 mobile layout, microphone toggle and screen share",
+      "status": "passed"
+    },
+    {
+      "test": "TC-MEET-008 member logout evicts only that participant",
+      "status": "passed"
+    },
+    {
+      "test": "TC-MEET-005 guest leave releases devices and link remains reusable",
+      "status": "passed"
+    },
+    {
+      "test": "TC-MEET-007 creator end revokes link and media credentials for all",
+      "status": "passed"
+    },
+    {
+      "test": "TC-MEET-010 no uncaught browser errors",
+      "status": "passed"
+    }
+  ],
+  "errors": [],
+  "cleanup": true
+}

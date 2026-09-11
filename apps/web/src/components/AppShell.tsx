@@ -50,9 +50,10 @@ export function AppShell() {
         <nav className="bc-rail" aria-label="Main navigation">
           <button className="bc-brand" aria-label="Banana Chat home" onClick={() => navigate('/')}><Banana /></button>
           <div className="bc-rail-links">
-            <button className={!location.pathname.startsWith('/board') && !location.pathname.startsWith('/ai') && !location.pathname.startsWith('/search') && location.pathname !== '/members' ? 'active' : ''} aria-label="Conversations" title="Conversations" onClick={() => { navigate('/'); setSidebarOpen(true); }}><Icon name="chat" size={23} /></button>
+            <button className={!location.pathname.startsWith('/meetings') && !location.pathname.startsWith('/board') && !location.pathname.startsWith('/ai') && !location.pathname.startsWith('/search') && location.pathname !== '/members' ? 'active' : ''} aria-label="Conversations" title="Conversations" onClick={() => { navigate('/'); setSidebarOpen(true); }}><Icon name="chat" size={23} /></button>
             <button className={location.pathname.startsWith('/search') ? 'active' : ''} onClick={() => navigate('/search')} aria-label="Search (Ctrl+K)" title="Search (Ctrl+K)" data-testid="open-search"><Icon name="search" size={23} /></button>
             <button className={location.pathname === '/members' ? 'active' : ''} onClick={() => navigate('/members')} aria-label="Workspace members" title="Workspace members"><Icon name="users" /></button>
+            <button className={location.pathname.startsWith('/meetings') ? 'active' : ''} aria-label="Meetings" title="Meetings" onClick={() => navigate('/meetings')}><Icon name="video" /></button>
             <button className={location.pathname.startsWith('/board') ? 'active' : ''} aria-label="Kanban board" title="Kanban board" onClick={() => navigate('/board')}><Icon name="board" /></button>
             <div className="bc-rail-divider" />
             <button className={location.pathname.startsWith('/ai') ? 'active' : ''} aria-label="AI Assistant" title="AI Assistant" onClick={() => navigate('/ai')}><Icon name="sparkle" size={23} /></button>

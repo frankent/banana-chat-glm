@@ -1,3 +1,4 @@
+import type { PublicMeeting, MeetingLobby, MeetingJoin } from '@banana-chat/shared';
 import type { RoomCall, CallJoin } from '@banana-chat/shared';
 import type { KanbanLane, KanbanTicket, TicketDetail, TicketInput } from '@banana-chat/shared';
 import type {
@@ -46,6 +47,12 @@ export interface RoomDetail {
 export class Endpoints {
   constructor(private readonly api: ApiClient) {}
 
+  meetings(slug: string) { return this.api.request<PublicMeeting[]>('/api/v1/meetings', { workspaceSlug: slug }); }
+  createMeeting(slug: string, title: string, expires_in_hours: number) { return this.api.request<PublicMeeting>('/api/v1/meetings', { method: 'POST', workspaceSlug: slug, body: {title, expires_in_hours} }); }
+  endMeeting(slug: string, id: string) { return this.api.request<void>(`/api/v1/meetings/${id}/end`, {method:'POST', workspaceSlug:slug}); }
+  meetingLobby(code: string) { return this.api.request<MeetingLobby>(`/api/v1/public-meetings/${code}`); }
+  joinMeeting(code: string, name?: string, participant_token?: string) { return this.api.request<MeetingJoin>(`/api/v1/public-meetings/${code}/join`, {method:'POST', body:{name,participant_token}}); }
+  leaveMeeting(code: string, participant_token: string) { return this.api.request<void>(`/api/v1/public-meetings/${code}/leave`, {method:'POST',body:{participant_token}}); }
   calls(slug: string) { return this.api.request<{enabled:boolean; calls:RoomCall[]}>('/api/v1/calls', {workspaceSlug:slug}); }
   startCall(roomId:string, kind:'voice'|'video', slug:string) { return this.api.request<RoomCall>(`/api/v1/rooms/${roomId}/calls`, {method:'POST', body:{kind}, workspaceSlug:slug}); }
   joinCall(id:string, slug:string) { return this.api.request<CallJoin>(`/api/v1/calls/${id}/join`, {method:'POST', workspaceSlug:slug}); }

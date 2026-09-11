@@ -4,6 +4,7 @@ use App\Jobs\NotifyDueTickets;
 use App\Jobs\PurgeDeletedAiConversations;
 use App\Jobs\PurgeExpiredUploads;
 use App\Jobs\ReconcileCalls;
+use App\Jobs\ReconcileMeetings;
 use App\Jobs\RollupAiUsage;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -30,3 +31,6 @@ Schedule::job(new NotifyDueTickets)->everyMinute()->onOneServer()->withoutOverla
 
 // FR-CALL-004: membership/session revocation is independent of browser cooperation.
 Schedule::call(fn () => app()->call([new ReconcileCalls, 'handle']))->name('calls:reconcile')->everyTenSeconds()->onOneServer()->withoutOverlapping();
+
+// FR-MEET-004: public meeting expiry and guest/member revocation.
+Schedule::call(fn () => app()->call([new ReconcileMeetings, 'handle']))->name('meetings:reconcile')->everyTenSeconds()->onOneServer()->withoutOverlapping();

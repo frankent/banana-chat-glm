@@ -1,6 +1,7 @@
+import { meetingReturnPath } from '@banana-chat/chat-core';
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError } from '@banana-chat/api-client';
 import { useSession } from '../state/session';
 
@@ -9,6 +10,7 @@ import { Banana, Icon, Avatar } from '../components/Visual';
 export function LoginPage() {
   const { login } = useSession();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -20,7 +22,7 @@ export function LoginPage() {
     setError(null);
     try {
       const result = await login(username.trim(), password);
-      navigate(result === 'must_change_password' ? '/change-password' : '/', { replace: true });
+      navigate(result === 'must_change_password' ? '/change-password' : (meetingReturnPath(params.get('returnTo')) ?? '/'), { replace: true });
     } catch (e) {
       setError(e instanceof ApiError ? e.message : `${e instanceof Error ? e.message : String(e)}`);
     } finally {

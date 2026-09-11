@@ -4,7 +4,7 @@ Keep CALLS_ENABLED=false until media and relay checks pass. Use a pinned LiveKit
 
 Production config and keys belong in ignored infra/livekit/config.yaml and infra/.env. Use an independent trusted certificate and DNS-only hostname for TURN TLS 443, not a Cloudflare proxied hostname. TCP 7881, UDP 7882 and TURN UDP 3478 carry encrypted media. Only authenticated room participants receive TURN credentials from LiveKit.
 
-Calls require the scheduler every ten seconds for membership/session eviction and cleanup; health-check the scheduler along with the SFU. Browser ringing requires an open signed-in application and an audio-unlocked browser. There is no recording, guest access, background mobile push or Google account integration.
+Calls and public meetings require their reconciliation schedulers every ten seconds for membership/session eviction and cleanup; health-check the scheduler along with the SFU. Browser ringing requires an open signed-in application and an audio-unlocked browser. Private chat calls have no guest access. Separate public meeting links (FR-MEET-001..005) allow named guests without chat access. There is no recording, background mobile push or Google account integration.
 
 Official references: https://docs.livekit.io/transport/self-hosting/deployment/ and https://docs.livekit.io/frontends/reference/tokens-grants/.
 

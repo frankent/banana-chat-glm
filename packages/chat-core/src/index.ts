@@ -33,3 +33,4 @@ export { continuesMessage } from './message-layout.js';
 export { NotificationGate, unreadTitle } from './notification.js';
 export { ticketKey, deadlineState } from './kanban.js';
 export { CallAttempt, canRingCall } from './call.js';
+export { meetingGuestName, meetingReturnPath } from './meeting.js';

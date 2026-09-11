@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\CallController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\KanbanController;
 use App\Http\Controllers\Api\V1\MeController;
+use App\Http\Controllers\Api\V1\MeetingController;
 use App\Http\Controllers\Api\V1\MessageController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\RoomController;
@@ -83,9 +84,15 @@ Route::prefix('v1')->group(function (): void {
     });
 
     // Workspace-scoped routes — X-Workspace-Id required (FR-WS-003 isolation)
+    Route::get('/public-meetings/{code}', [MeetingController::class, 'show'])->where('code', '[a-f0-9]{64}')->middleware('throttle:120,1');
+    Route::post('/public-meetings/{code}/join', [MeetingController::class, 'join'])->where('code', '[a-f0-9]{64}')->middleware('throttle:20,1');
+    Route::post('/public-meetings/{code}/leave', [MeetingController::class, 'leave'])->where('code', '[a-f0-9]{64}')->middleware('throttle:60,1');
     Route::get('/calls/authorize-media', [CallController::class, 'authorizeMedia']);
 
     Route::middleware(['auth:api', 'account.active', 'password.fresh', 'workspace.context'])->group(function (): void {
+        Route::get('/meetings', [MeetingController::class, 'index']);
+        Route::post('/meetings', [MeetingController::class, 'create'])->middleware('throttle:10,1');
+        Route::post('/meetings/{id}/end', [MeetingController::class, 'end'])->whereUlid('id')->middleware('throttle:30,1');
         Route::get('/calls', [CallController::class, 'index']);
         Route::post('/rooms/{id}/calls', [CallController::class, 'start'])->whereUlid('id')->middleware('throttle:30,1');
         foreach (['join', 'leave', 'end', 'decline'] as $action) {

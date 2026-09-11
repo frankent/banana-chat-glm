@@ -16,7 +16,7 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: LiveKit media token issued by API-152; not an API access token.
+      description: LiveKit media token issued by API-152 or API-163; not an API access token.
     bearerAuth:
       type: http
       scheme: bearer
@@ -29,6 +29,27 @@ components:
       schema: { type: string }
       description: slug of the active workspace
   schemas:
+    PublicMeeting:
+      type: object
+      required: [id, code, title, expires_at, ended_at, created_at]
+      properties:
+        id: {type: string}
+        code: {type: string, pattern: '^[a-f0-9]{64}$'}
+        title: {type: string, maxLength: 120}
+        expires_at: {type: string, format: date-time}
+        ended_at: {type: [string, 'null'], format: date-time}
+        created_at: {type: string, format: date-time}
+    MeetingJoin:
+      type: object
+      required: [meeting, participant_id, participant_token, url, token, can_end, workspace_slug]
+      properties:
+        meeting: {$ref: '#/components/schemas/PublicMeeting'}
+        participant_id: {type: string}
+        participant_token: {type: string, description: Private browser participant capability; never an API account token.}
+        url: {type: string}
+        token: {type: string}
+        can_end: {type: boolean}
+        workspace_slug: {type: [string, 'null'], description: Only returned to the meeting creator.}
     RoomCall:
       type: object
       required: [id,room_id,workspace_id,kind,started_by,caller_name,room_type,participants,created_at]
@@ -180,6 +201,120 @@ security:
   - bearerAuth: []
 
 paths:
+  /meetings:
+    parameters:
+      - {$ref: '#/components/parameters/workspaceSlug'}
+    get:
+      summary: API-160 — List own meeting links in the workspace (latest 100)
+      responses:
+        '200':
+          description: Creator-owned links
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {type: array, items: {$ref: '#/components/schemas/PublicMeeting'}}
+    post:
+      summary: API-160 — Create a public video meeting link
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title: {type: string, minLength: 1, maxLength: 120}
+                expires_in_hours: {type: integer, minimum: 1, maximum: 168, default: 168}
+      responses:
+        '201':
+          description: Meeting created
+          content:
+            application/json:
+              schema: {type: object, properties: {data: {$ref: '#/components/schemas/PublicMeeting'}}}
+        '429': {description: Create rate limit exceeded}
+  /meetings/{id}/end:
+    post:
+      summary: API-161 — Creator ends a meeting and permanently revokes its link
+      parameters:
+        - {$ref: '#/components/parameters/workspaceSlug'}
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        '204': {description: Ended}
+        '404': {description: Not found or not creator in this workspace}
+  /public-meetings/{code}:
+    get:
+      summary: API-162 — Public lobby and optional verified account identity
+      security: [{}, {bearerAuth: []}]
+      parameters:
+        - {name: code, in: path, required: true, schema: {type: string, pattern: '^[a-f0-9]{64}$'}}
+      responses:
+        '200':
+          description: No workspace or chat content; supplied bearer credentials must be valid
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      title: {type: string}
+                      expires_at: {type: string, format: date-time}
+                      capacity: {type: integer}
+                      identity:
+                        type: [object, 'null']
+                        properties:
+                          name: {type: string}
+                          member: {type: boolean, const: true}
+        '410': {description: 'Expired, ended or creator/workspace unavailable'}
+        '401': {description: Supplied account credentials invalid}
+        '403': {description: Account suspended or password change required}
+        '404': {description: Unknown link}
+  /public-meetings/{code}/join:
+    post:
+      summary: API-163 — Join as verified member or named guest
+      security: [{}, {bearerAuth: []}]
+      parameters:
+        - {name: code, in: path, required: true, schema: {type: string, pattern: '^[a-f0-9]{64}$'}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: {type: string, maxLength: 80, description: Required for a new anonymous participant; ignored for members.}
+                participant_token: {type: string, minLength: 64, maxLength: 64, description: Optional private rejoin capability. Rotated on successful join.}
+      responses:
+        '200':
+          description: Meeting-specific media credentials; never grants workspace membership
+          content:
+            application/json:
+              schema: {type: object, properties: {data: {$ref: '#/components/schemas/MeetingJoin'}}}
+        '409': {description: Full or member active on another session}
+        '410': {description: Link unavailable}
+        '422': {description: Missing or invalid guest name}
+        '429': {description: Join rate limit exceeded}
+  /public-meetings/{code}/leave:
+    post:
+      summary: API-164 — Leave using a private participant capability
+      security: []
+      parameters:
+        - {name: code, in: path, required: true, schema: {type: string, pattern: '^[a-f0-9]{64}$'}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [participant_token]
+              properties:
+                participant_token: {type: string}
+      responses:
+        '204': {description: Participant revoked}
+        '403': {description: Wrong participant capability}
   /calls:
     get:
       summary: API-150 — List active room calls
