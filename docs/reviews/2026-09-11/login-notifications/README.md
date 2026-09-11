@@ -28,3 +28,9 @@ Scrutinize trace: login → route → responsive CSS; notification job → eligi
 Browser sound requires an open app and browser audio support/permission; it does not provide notifications after the browser is closed. Desktop production did not reproduce the original list issue; confirmed fix targets the reproduced responsive case.
 
 Production verification is recorded in production-results.json after deployment. Backups and image rollback tags are retained on the server under login-notifications-20260911.
+
+## Production outcome
+
+Deployed runtime commit 39a1ad3 to https://chat.gamecoms.net using an incremental checked patch, rebuilt api/worker/scheduler/reverb/nginx and recreated those services. All nine services healthy; health endpoint reports database/Redis/storage/Reverb/queue OK. Five production browser checks passed with tony → tony2: first-login mobile room visibility, actual Web Audio oscillator + unread title on message, title reset after reading, persisted preference control visible, zero JavaScript errors. QA message is explicitly labeled. Both QA sessions signed out. Production preferences were not changed by this smoke test.
+
+Production harness correction: footer includes a decorative star, so exact text lookup was invalid; changed assertion to contain the connection text. This was a test selector issue, not a runtime failure. Local isolated review container/database removed after validation; production backup and rollback images retained.

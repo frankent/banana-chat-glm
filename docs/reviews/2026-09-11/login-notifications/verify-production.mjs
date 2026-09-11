@@ -8,7 +8,7 @@ const receiver=await browser.newPage({viewport:{width:390,height:844}}), sender=
 const results=[], errors=[];
 for(const p of [receiver,sender]) p.on('pageerror',e=>errors.push(e.message));
 await receiver.addInitScript(()=>{window.soundStarts=0; const start=OscillatorNode.prototype.start;OscillatorNode.prototype.start=function(...args){window.soundStarts++;return start.apply(this,args)};});
-async function login(p,user){await p.goto('https://chat.gamecoms.net/login');await p.getByLabel('Username').fill(user);await p.getByLabel('Password').fill(password);await p.getByRole('button',{name:'Sign in',exact:true}).click();await p.waitForURL('https://chat.gamecoms.net/');await expect(p.locator('aside')).toBeVisible();await expect(p.getByText('Connected to your workspace',{exact:true})).toBeVisible();}
+async function login(p,user){await p.goto('https://chat.gamecoms.net/login');await p.getByLabel('Username').fill(user);await p.getByLabel('Password').fill(password);await p.getByRole('button',{name:'Sign in',exact:true}).click();await p.waitForURL('https://chat.gamecoms.net/');await expect(p.locator('aside')).toBeVisible();await expect(p.locator('.bc-sidebar-footer')).toContainText('Connected to your workspace',{timeout:30000});}
 async function check(id,fn){try{await fn();results.push({id,passed:true});}catch(e){results.push({id,passed:false,error:e.message.split('Call log:')[0]});}console.log(JSON.stringify(results.at(-1)));}
 try{
  await login(receiver,'tony2');await login(sender,'tony');

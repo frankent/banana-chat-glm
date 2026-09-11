@@ -1,0 +1,10 @@
+{
+  "results": [
+    {
+      "id": "setup",
+      "passed": false,
+      "error": "expect(locator).toBeVisible() failed\n\nLocator: getByText('Connected to your workspace', { exact: true })\nExpected: visible\nTimeout: 30000ms\nError: element(s) not found\n\n"
+    }
+  ],
+  "errors": []
+}
