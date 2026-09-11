@@ -12,9 +12,12 @@ keys:
   REPLACE_API_KEY: REPLACE_WITH_RANDOM_32_BYTE_SECRET
 turn:
   enabled: true
-  domain: call.gamecoms.net
+  domain: media.gamecoms.net
   tls_port: 443
   udp_port: 3478
+  # TURN allocations must be reachable through the Docker port mapping.
+  relay_range_start: 50000
+  relay_range_end: 50099
   cert_file: /certs/fullchain.pem
   key_file: /certs/privkey.pem
 logging:

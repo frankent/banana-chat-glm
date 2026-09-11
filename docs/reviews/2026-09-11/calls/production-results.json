@@ -1,0 +1,100 @@
+{
+  "fixture": {
+    "users": [
+      "callqa17891045882800",
+      "callqa17891045882801",
+      "callqa17891045882802"
+    ],
+    "slug": "callqa1789104588280",
+    "rooms": {
+      "dm": "01m27f32wzja5rkzh0vc7dgj3h",
+      "group": "01m27f32x9685kxdbyft6dj4c1"
+    },
+    "workspace": "01m27f325qbfwj1t5d8dyqj990"
+  },
+  "results": [
+    {
+      "test": "TC-CALL-008 two-way voice RTP with camera controls absent",
+      "status": "passed"
+    },
+    {
+      "test": "TC-CALL-004 dm leave disconnects remote",
+      "status": "passed"
+    },
+    {
+      "test": "TC-CALL-011 three production clients use forced TURN TLS",
+      "status": "passed",
+      "selected": [
+        [
+          {
+            "policy": "relay",
+            "type": "prflx",
+            "relayProtocol": "tls",
+            "url": "turns:media.gamecoms.net:443?transport=tcp"
+          }
+        ],
+        [
+          {
+            "policy": "relay",
+            "type": "prflx",
+            "relayProtocol": "tls",
+            "url": "turns:media.gamecoms.net:443?transport=tcp"
+          }
+        ],
+        [
+          {
+            "policy": "relay",
+            "type": "prflx",
+            "relayProtocol": "tls",
+            "url": "turns:media.gamecoms.net:443?transport=tcp"
+          }
+        ]
+      ]
+    },
+    {
+      "test": "TC-CALL-010 three-way video/audio RTP via LiveKit SFU",
+      "status": "passed"
+    },
+    {
+      "test": "TC-CALL-008 microphone toggle and synthetic screen share",
+      "status": "passed"
+    },
+    {
+      "test": "TC-CALL-008 mobile call layout",
+      "status": "passed"
+    },
+    {
+      "test": "TC-CALL-009 call survives navigation",
+      "status": "passed"
+    },
+    {
+      "test": "TC-CALL-007 SFU removes a revoked room member",
+      "status": "passed"
+    },
+    {
+      "test": "TC-CALL-004 group continues after leave and starter ends all",
+      "status": "passed"
+    },
+    {
+      "test": "TC-CALL-009 every captured track stops after leaving",
+      "status": "passed"
+    },
+    {
+      "test": "TC-CALL-008 dm video and simulated permission-error recovery",
+      "status": "passed"
+    },
+    {
+      "test": "TC-CALL-009 logout releases devices and revoked session ends dm",
+      "status": "passed"
+    },
+    {
+      "test": "TC-CALL-005 production nginx gate rejects ended call credentials",
+      "status": "passed"
+    },
+    {
+      "test": "TC-CALL-008 no JavaScript runtime errors",
+      "status": "passed"
+    }
+  ],
+  "errors": []
+}

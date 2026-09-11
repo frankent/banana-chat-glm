@@ -34,3 +34,5 @@ logs/*.log
 # FR-CALL-005 production media secrets/certificates
 /infra/livekit/config.yaml
 /infra/livekit/certs/
+
+/infra/livekit/acme-webroot/

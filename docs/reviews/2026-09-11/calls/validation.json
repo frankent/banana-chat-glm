@@ -6,7 +6,9 @@
     "TASK-INF-042",
     "TASK-QA-042",
     "FR-CALL-001..005",
-    "DEC-052"
+    "DEC-052",
+    "DEC-053",
+    "TC-CALL-011"
   ],
   "api_regression": {
     "passed": 368,
@@ -31,14 +33,28 @@
   "call_ui_lint": "passed; no errors or warnings",
   "openapi": "parsed; 43 paths",
   "production": {
-    "customer_facing_deployment": false,
-    "activation_blocker": "OQ-018: DNS-only TURN hostname, trusted certificate and forced-relay validation",
+    "customer_facing_deployment": true,
+    "url": "https://chat.gamecoms.net",
+    "turn_hostname": "media.gamecoms.net",
+    "forced_turn_tls": true,
+    "browser_checks_passed": 14,
+    "capture": "synthetic audio/video/screen; real production RTP",
     "physical_capture_verified": false,
-    "temporary_media_server_removed": true
+    "certificate_issuer": "Let's Encrypt YR2",
+    "certificate_expires": "2026-12-10",
+    "renewal_dry_run": "passed",
+    "certbot_timer": "active",
+    "temporary_relay_proxy_removed": true
   },
   "cleanup": {
     "isolated_database_removed": true,
     "isolated_local_containers_removed": true,
-    "customer_data_modified": false
+    "customer_data_modified": false,
+    "production_qa_users_and_workspace_removed": true
+  },
+  "infrastructure_checks": {
+    "nginx_config": "passed",
+    "compose_config": "passed",
+    "renew_hook_shell_syntax": "passed"
   }
 }

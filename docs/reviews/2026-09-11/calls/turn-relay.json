@@ -1,0 +1,29 @@
+{
+  "test": "TC-CALL-011 forced TURN TLS 443 bidirectional audio/video RTP",
+  "status": "passed",
+  "capture": "synthetic",
+  "selected": [
+    [
+      {
+        "iceTransportPolicy": "relay",
+        "candidateType": "prflx",
+        "protocol": "udp",
+        "relayProtocol": "tls",
+        "url": "turns:media.gamecoms.net:443?transport=tcp",
+        "bytesReceived": 15253,
+        "bytesSent": 37883
+      }
+    ],
+    [
+      {
+        "iceTransportPolicy": "relay",
+        "candidateType": "prflx",
+        "protocol": "udp",
+        "relayProtocol": "tls",
+        "url": "turns:media.gamecoms.net:443?transport=tcp",
+        "bytesReceived": 20404,
+        "bytesSent": 17837
+      }
+    ]
+  ]
+}

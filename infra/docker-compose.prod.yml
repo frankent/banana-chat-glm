@@ -79,6 +79,7 @@ services:
       - "7882:7882/udp"
       - "443:443/tcp"
       - "3478:3478/udp"
+      - "50000-50099:50000-50099/udp"
     restart: unless-stopped
     logging: *logging
 
@@ -98,6 +99,7 @@ services:
       # "443:443" + a certs mount + a listen 443 block in prod.conf.
     volumes:
       - api-public:/var/www/api-public:ro
+      - ./livekit/acme-webroot:/var/www/acme:ro
     depends_on:
       api-assets:
         condition: service_completed_successfully
