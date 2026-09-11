@@ -1,0 +1,25 @@
+{
+  "results": [
+    {
+      "id": "TC-KAN-008-production-create-share",
+      "passed": true
+    },
+    {
+      "id": "TC-KAN-004-production-scheduled-deadline",
+      "passed": true
+    },
+    {
+      "id": "TC-KAN-001-production-isolation",
+      "passed": true
+    },
+    {
+      "id": "TC-KAN-008-production-comment-move",
+      "passed": true
+    },
+    {
+      "id": "TC-KAN-008-production-no-errors",
+      "passed": true
+    }
+  ],
+  "errors": []
+}

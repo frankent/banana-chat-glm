@@ -23,3 +23,11 @@ The every-minute job records a durable `ticket_due` notification and its marker 
 Reuse of Filament, membership and notifications avoids a second auth or alert system. Traced API ID resolution, lane/assignee cross-workspace rejection, client workspace-key remount, stale-version errors, atomic reminder marker, completed/reopened lanes and scheduler registration. Tests also cover ticket/comment pagination beyond the first page and current-assignee-only reminders. No Jira API integration or full Jira parity claimed.
 
 Production deployment/verification will be recorded in production-results.json. Migration is additive; rollback images may keep the unused new tables without touching chat data.
+
+## Production outcome
+
+Runtime commit `8768584` deployed to https://chat.gamecoms.net. Backup/database dump and rollback image tags `before-kanban-20260911` retained under `/root/banana-chat-backups/kanban-20260911`. Checked incremental patch against existing server modifications, built api/worker/scheduler/reverb/nginx, ran the additive migration successfully, then recreated those services. All nine services healthy. Schedule inventory includes NotifyDueTickets every minute.
+
+Five production checks passed in a dedicated QA workspace with tony/tony2: create/live share; **actual scheduler** deadline notification (no manual trigger), exactly one feed row and deep link; foreign-workspace GET returns 404 and list excludes the ticket; comment/live move to Done; zero browser runtime errors. Both test browser sessions signed out. QA workspace, ticket, comments and notification were removed; existing user accounts and memberships retained.
+
+The first production harness run mixed Playwright response.status() with browser Fetch response.status, causing assertions to fail after the actual ticket was created. Corrected only the test helper, removed/recreated its isolated fixture, and reran all five checks successfully. Admin CRUD and responsive rendering were verified locally; production admin code is deployed, without using an existing user's credentials or elevating their role.
