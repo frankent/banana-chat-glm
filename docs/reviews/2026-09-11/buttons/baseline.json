@@ -1,0 +1,3976 @@
+{
+  "rows": [
+    {
+      "name": "login",
+      "buttons": [
+        {
+          "label": "Sign in",
+          "class": "w-full rounded-lg bg-yellow-400 py-2 text-sm font-semibold text-slate-900 hover:bg-yellow-300 disabled:opacity-50",
+          "w": 360,
+          "h": 48,
+          "radius": "8px",
+          "font": "12px",
+          "padding": "8px 0px",
+          "overflow": false,
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "name": "home",
+      "buttons": [
+        {
+          "label": "Banana Chat home",
+          "class": "bc-brand",
+          "w": 42,
+          "h": 42,
+          "radius": "13px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Conversations",
+          "class": "active",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search (Ctrl+K)",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Workspace members",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Meetings",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Kanban board",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI Assistant",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Sign out",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Notifications",
+          "class": "relative rounded-lg px-2 py-1 text-lg hover:bg-slate-100",
+          "w": 31,
+          "h": 31,
+          "radius": "8px",
+          "font": "18px",
+          "padding": "6px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search conversations⌘ K",
+          "class": "bc-search",
+          "w": 261,
+          "h": 44.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "11px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI AssistantA little help, a lot of possibilityAI",
+          "class": "bc-ai-entry",
+          "w": 273,
+          "h": 61.5,
+          "radius": "9px",
+          "font": "16px",
+          "padding": "12px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ DM",
+          "class": "flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700",
+          "w": 126.5,
+          "h": 33.703125,
+          "radius": "7px",
+          "font": "11px",
+          "padding": "8px 4px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ Group",
+          "class": "flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700",
+          "w": 126.5,
+          "h": 33.703125,
+          "radius": "7px",
+          "font": "11px",
+          "padding": "8px 4px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Find a conversation",
+          "class": "bc-primary",
+          "w": 188.171875,
+          "h": 44,
+          "radius": "8px",
+          "font": "12px",
+          "padding": "13px 20px",
+          "overflow": false,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "name": "chat-actions",
+      "buttons": [
+        {
+          "label": "Banana Chat home",
+          "class": "bc-brand",
+          "w": 42,
+          "h": 42,
+          "radius": "13px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Conversations",
+          "class": "active",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search (Ctrl+K)",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Workspace members",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Meetings",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Kanban board",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI Assistant",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Sign out",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Notifications",
+          "class": "relative rounded-lg px-2 py-1 text-lg hover:bg-slate-100",
+          "w": 31,
+          "h": 31,
+          "radius": "8px",
+          "font": "18px",
+          "padding": "6px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search conversations⌘ K",
+          "class": "bc-search",
+          "w": 261,
+          "h": 44.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "11px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI AssistantA little help, a lot of possibilityAI",
+          "class": "bc-ai-entry",
+          "w": 273,
+          "h": 61.5,
+          "radius": "9px",
+          "font": "16px",
+          "padding": "12px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ DM",
+          "class": "flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700",
+          "w": 126.5,
+          "h": 33.703125,
+          "radius": "7px",
+          "font": "11px",
+          "padding": "8px 4px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ Group",
+          "class": "flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700",
+          "w": 126.5,
+          "h": 33.703125,
+          "radius": "7px",
+          "font": "11px",
+          "padding": "8px 4px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Start voice call",
+          "class": "bc-tool-button",
+          "w": 46.359375,
+          "h": 50.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Start video call",
+          "class": "bc-tool-button",
+          "w": 47.671875,
+          "h": 50.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Room notes",
+          "class": "bc-tool-button",
+          "w": 47.84375,
+          "h": 34.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Media and files",
+          "class": "rounded-lg px-2 py-1 text-sm text-slate-400 hover:bg-slate-100 hover:text-slate-600",
+          "w": 36,
+          "h": 28,
+          "radius": "8px",
+          "font": "14px",
+          "padding": "4px 8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Message actions",
+          "class": "bc-message-actions-toggle",
+          "w": 28,
+          "h": 24,
+          "radius": "5px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Reply",
+          "class": "",
+          "w": 28,
+          "h": 24,
+          "radius": "0px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Pin message",
+          "class": "",
+          "w": 28,
+          "h": 24,
+          "radius": "0px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Edit message",
+          "class": "rounded-full bg-white px-2 py-0.5 text-xs shadow hover:bg-slate-100",
+          "w": 30.984375,
+          "h": 24,
+          "radius": "3.35544e+07px",
+          "font": "12px",
+          "padding": "2px 8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Delete message",
+          "class": "rounded-full bg-white px-2 py-0.5 text-xs shadow hover:bg-red-50 disabled:opacity-40",
+          "w": 30.984375,
+          "h": 24,
+          "radius": "3.35544e+07px",
+          "font": "12px",
+          "padding": "2px 8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "attach files",
+          "class": "rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-100",
+          "w": 36,
+          "h": 40,
+          "radius": "12px",
+          "font": "14px",
+          "padding": "10px 8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Send",
+          "class": "rounded-xl bg-yellow-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-yellow-300 disabled:opacity-50",
+          "w": 82.84375,
+          "h": 39,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "11px 15px",
+          "overflow": false,
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "name": "notes",
+      "buttons": [
+        {
+          "label": "Banana Chat home",
+          "class": "bc-brand",
+          "w": 42,
+          "h": 42,
+          "radius": "13px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Conversations",
+          "class": "active",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search (Ctrl+K)",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Workspace members",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Meetings",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Kanban board",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI Assistant",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Sign out",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Notifications",
+          "class": "relative rounded-lg px-2 py-1 text-lg hover:bg-slate-100",
+          "w": 31,
+          "h": 31,
+          "radius": "8px",
+          "font": "18px",
+          "padding": "6px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search conversations⌘ K",
+          "class": "bc-search",
+          "w": 261,
+          "h": 44.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "11px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI AssistantA little help, a lot of possibilityAI",
+          "class": "bc-ai-entry",
+          "w": 273,
+          "h": 61.5,
+          "radius": "9px",
+          "font": "16px",
+          "padding": "12px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ DM",
+          "class": "flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700",
+          "w": 126.5,
+          "h": 33.703125,
+          "radius": "7px",
+          "font": "11px",
+          "padding": "8px 4px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ Group",
+          "class": "flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700",
+          "w": 126.5,
+          "h": 33.703125,
+          "radius": "7px",
+          "font": "11px",
+          "padding": "8px 4px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Start voice call",
+          "class": "bc-tool-button",
+          "w": 46.359375,
+          "h": 50.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Start video call",
+          "class": "bc-tool-button",
+          "w": 47.671875,
+          "h": 50.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Room notes",
+          "class": "bc-tool-button",
+          "w": 47.84375,
+          "h": 34.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Media and files",
+          "class": "rounded-lg px-2 py-1 text-sm text-slate-400 hover:bg-slate-100 hover:text-slate-600",
+          "w": 36,
+          "h": 28,
+          "radius": "8px",
+          "font": "14px",
+          "padding": "4px 8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Message actions",
+          "class": "bc-message-actions-toggle",
+          "w": 28,
+          "h": 24,
+          "radius": "5px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "attach files",
+          "class": "rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-100",
+          "w": 36,
+          "h": 40,
+          "radius": "12px",
+          "font": "14px",
+          "padding": "10px 8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Send",
+          "class": "rounded-xl bg-yellow-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-yellow-300 disabled:opacity-50",
+          "w": 82.84375,
+          "h": 39,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "11px 15px",
+          "overflow": false,
+          "disabled": true
+        },
+        {
+          "label": "Close notes",
+          "class": "",
+          "w": 13.40625,
+          "h": 24,
+          "radius": "0px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Create note",
+          "class": "bc-primary",
+          "w": 92.515625,
+          "h": 34,
+          "radius": "8px",
+          "font": "12px",
+          "padding": "8px 12px",
+          "overflow": false,
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "name": "media",
+      "buttons": [
+        {
+          "label": "Banana Chat home",
+          "class": "bc-brand",
+          "w": 42,
+          "h": 42,
+          "radius": "13px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Conversations",
+          "class": "active",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search (Ctrl+K)",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Workspace members",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Meetings",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Kanban board",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI Assistant",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Sign out",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Notifications",
+          "class": "relative rounded-lg px-2 py-1 text-lg hover:bg-slate-100",
+          "w": 31,
+          "h": 31,
+          "radius": "8px",
+          "font": "18px",
+          "padding": "6px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search conversations⌘ K",
+          "class": "bc-search",
+          "w": 261,
+          "h": 44.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "11px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI AssistantA little help, a lot of possibilityAI",
+          "class": "bc-ai-entry",
+          "w": 273,
+          "h": 61.5,
+          "radius": "9px",
+          "font": "16px",
+          "padding": "12px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ DM",
+          "class": "flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700",
+          "w": 126.5,
+          "h": 33.703125,
+          "radius": "7px",
+          "font": "11px",
+          "padding": "8px 4px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ Group",
+          "class": "flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700",
+          "w": 126.5,
+          "h": 33.703125,
+          "radius": "7px",
+          "font": "11px",
+          "padding": "8px 4px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Start voice call",
+          "class": "bc-tool-button",
+          "w": 46.359375,
+          "h": 50.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Start video call",
+          "class": "bc-tool-button",
+          "w": 47.671875,
+          "h": 50.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Room notes",
+          "class": "bc-tool-button",
+          "w": 47.84375,
+          "h": 34.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Media and files",
+          "class": "rounded-lg px-2 py-1 text-sm text-slate-400 hover:bg-slate-100 hover:text-slate-600",
+          "w": 36,
+          "h": 28,
+          "radius": "8px",
+          "font": "14px",
+          "padding": "4px 8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Message actions",
+          "class": "bc-message-actions-toggle",
+          "w": 28,
+          "h": 24,
+          "radius": "5px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "attach files",
+          "class": "rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-100",
+          "w": 36,
+          "h": 40,
+          "radius": "12px",
+          "font": "14px",
+          "padding": "10px 8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Send",
+          "class": "rounded-xl bg-yellow-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-yellow-300 disabled:opacity-50",
+          "w": 82.84375,
+          "h": 39,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "11px 15px",
+          "overflow": false,
+          "disabled": true
+        },
+        {
+          "label": "Close media panel",
+          "class": "text-xs text-slate-400 hover:text-slate-600",
+          "w": 10.0625,
+          "h": 16,
+          "radius": "0px",
+          "font": "12px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "All",
+          "class": "flex-1 rounded-md px-2 py-1 font-medium bg-white shadow-sm",
+          "w": 66.75,
+          "h": 24,
+          "radius": "6px",
+          "font": "12px",
+          "padding": "4px 8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Images",
+          "class": "flex-1 rounded-md px-2 py-1 font-medium text-slate-500",
+          "w": 66.75,
+          "h": 24,
+          "radius": "6px",
+          "font": "12px",
+          "padding": "4px 8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Videos",
+          "class": "flex-1 rounded-md px-2 py-1 font-medium text-slate-500",
+          "w": 66.75,
+          "h": 24,
+          "radius": "6px",
+          "font": "12px",
+          "padding": "4px 8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Files",
+          "class": "flex-1 rounded-md px-2 py-1 font-medium text-slate-500",
+          "w": 66.75,
+          "h": 24,
+          "radius": "6px",
+          "font": "12px",
+          "padding": "4px 8px",
+          "overflow": false,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "name": "notifications",
+      "buttons": [
+        {
+          "label": "Banana Chat home",
+          "class": "bc-brand",
+          "w": 42,
+          "h": 42,
+          "radius": "13px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Conversations",
+          "class": "active",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search (Ctrl+K)",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Workspace members",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Meetings",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Kanban board",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI Assistant",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Sign out",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Notifications",
+          "class": "relative rounded-lg px-2 py-1 text-lg hover:bg-slate-100",
+          "w": 31,
+          "h": 31,
+          "radius": "8px",
+          "font": "18px",
+          "padding": "6px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search conversations⌘ K",
+          "class": "bc-search",
+          "w": 261,
+          "h": 44.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "11px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI AssistantA little help, a lot of possibilityAI",
+          "class": "bc-ai-entry",
+          "w": 273,
+          "h": 61.5,
+          "radius": "9px",
+          "font": "16px",
+          "padding": "12px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ DM",
+          "class": "flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700",
+          "w": 126.5,
+          "h": 33.703125,
+          "radius": "7px",
+          "font": "11px",
+          "padding": "8px 4px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ Group",
+          "class": "flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700",
+          "w": 126.5,
+          "h": 33.703125,
+          "radius": "7px",
+          "font": "11px",
+          "padding": "8px 4px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Start voice call",
+          "class": "bc-tool-button",
+          "w": 46.359375,
+          "h": 50.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Start video call",
+          "class": "bc-tool-button",
+          "w": 47.671875,
+          "h": 50.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Room notes",
+          "class": "bc-tool-button",
+          "w": 47.84375,
+          "h": 34.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Media and files",
+          "class": "rounded-lg px-2 py-1 text-sm text-slate-400 hover:bg-slate-100 hover:text-slate-600",
+          "w": 36,
+          "h": 28,
+          "radius": "8px",
+          "font": "14px",
+          "padding": "4px 8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Message actions",
+          "class": "bc-message-actions-toggle",
+          "w": 28,
+          "h": 24,
+          "radius": "5px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "attach files",
+          "class": "rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-100",
+          "w": 36,
+          "h": 40,
+          "radius": "12px",
+          "font": "14px",
+          "padding": "10px 8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Send",
+          "class": "rounded-xl bg-yellow-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-yellow-300 disabled:opacity-50",
+          "w": 82.84375,
+          "h": 39,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "11px 15px",
+          "overflow": false,
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "name": "search",
+      "buttons": [
+        {
+          "label": "Banana Chat home",
+          "class": "bc-brand",
+          "w": 42,
+          "h": 42,
+          "radius": "13px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Conversations",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search (Ctrl+K)",
+          "class": "active",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Workspace members",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Meetings",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Kanban board",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI Assistant",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Sign out",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Notifications",
+          "class": "relative rounded-lg px-2 py-1 text-lg hover:bg-slate-100",
+          "w": 31,
+          "h": 31,
+          "radius": "8px",
+          "font": "18px",
+          "padding": "6px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search conversations⌘ K",
+          "class": "bc-search",
+          "w": 261,
+          "h": 44.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "11px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI AssistantA little help, a lot of possibilityAI",
+          "class": "bc-ai-entry",
+          "w": 273,
+          "h": 61.5,
+          "radius": "9px",
+          "font": "16px",
+          "padding": "12px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ DM",
+          "class": "flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700",
+          "w": 126.5,
+          "h": 33.703125,
+          "radius": "7px",
+          "font": "11px",
+          "padding": "8px 4px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ Group",
+          "class": "flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700",
+          "w": 126.5,
+          "h": 33.703125,
+          "radius": "7px",
+          "font": "11px",
+          "padding": "8px 4px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search",
+          "class": "shrink-0 rounded-lg bg-yellow-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-yellow-300",
+          "w": 78.9375,
+          "h": 36,
+          "radius": "8px",
+          "font": "14px",
+          "padding": "8px 16px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "messages",
+          "class": "rounded-md px-3 py-1 font-medium capitalize bg-white shadow-sm",
+          "w": 79.84375,
+          "h": 24,
+          "radius": "6px",
+          "font": "12px",
+          "padding": "4px 12px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "files",
+          "class": "rounded-md px-3 py-1 font-medium capitalize text-slate-500",
+          "w": 49.453125,
+          "h": 24,
+          "radius": "6px",
+          "font": "12px",
+          "padding": "4px 12px",
+          "overflow": false,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "name": "members",
+      "buttons": [
+        {
+          "label": "Banana Chat home",
+          "class": "bc-brand",
+          "w": 42,
+          "h": 42,
+          "radius": "13px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Conversations",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search (Ctrl+K)",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Workspace members",
+          "class": "active",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Meetings",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Kanban board",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI Assistant",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Sign out",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Notifications",
+          "class": "relative rounded-lg px-2 py-1 text-lg hover:bg-slate-100",
+          "w": 31,
+          "h": 31,
+          "radius": "8px",
+          "font": "18px",
+          "padding": "6px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search conversations⌘ K",
+          "class": "bc-search",
+          "w": 261,
+          "h": 44.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "11px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI AssistantA little help, a lot of possibilityAI",
+          "class": "bc-ai-entry",
+          "w": 273,
+          "h": 61.5,
+          "radius": "9px",
+          "font": "16px",
+          "padding": "12px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ DM",
+          "class": "flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700",
+          "w": 126.5,
+          "h": 33.703125,
+          "radius": "7px",
+          "font": "11px",
+          "padding": "8px 4px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ Group",
+          "class": "flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700",
+          "w": 126.5,
+          "h": 33.703125,
+          "radius": "7px",
+          "font": "11px",
+          "padding": "8px 4px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "BMButton Member@btnqa17891258915441",
+          "class": "",
+          "w": 242,
+          "h": 69,
+          "radius": "12px",
+          "font": "16px",
+          "padding": "15px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "BQButton QA (you)@btnqa17891258915440",
+          "class": "",
+          "w": 242,
+          "h": 69,
+          "radius": "12px",
+          "font": "16px",
+          "padding": "15px",
+          "overflow": false,
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "name": "meetings",
+      "buttons": [
+        {
+          "label": "Banana Chat home",
+          "class": "bc-brand",
+          "w": 42,
+          "h": 42,
+          "radius": "13px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Conversations",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search (Ctrl+K)",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Workspace members",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Meetings",
+          "class": "active",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Kanban board",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI Assistant",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Sign out",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Notifications",
+          "class": "relative rounded-lg px-2 py-1 text-lg hover:bg-slate-100",
+          "w": 31,
+          "h": 31,
+          "radius": "8px",
+          "font": "18px",
+          "padding": "6px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search conversations⌘ K",
+          "class": "bc-search",
+          "w": 261,
+          "h": 44.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "11px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI AssistantA little help, a lot of possibilityAI",
+          "class": "bc-ai-entry",
+          "w": 273,
+          "h": 61.5,
+          "radius": "9px",
+          "font": "16px",
+          "padding": "12px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ DM",
+          "class": "flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700",
+          "w": 126.5,
+          "h": 33.703125,
+          "radius": "7px",
+          "font": "11px",
+          "padding": "8px 4px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ Group",
+          "class": "flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700",
+          "w": 126.5,
+          "h": 33.703125,
+          "radius": "7px",
+          "font": "11px",
+          "padding": "8px 4px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Create meeting",
+          "class": "bc-primary",
+          "w": 165.9375,
+          "h": 44,
+          "radius": "8px",
+          "font": "12px",
+          "padding": "13px 20px",
+          "overflow": false,
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "name": "board",
+      "buttons": [
+        {
+          "label": "Banana Chat home",
+          "class": "bc-brand",
+          "w": 42,
+          "h": 42,
+          "radius": "13px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Conversations",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search (Ctrl+K)",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Workspace members",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Meetings",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Kanban board",
+          "class": "active",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI Assistant",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Sign out",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Notifications",
+          "class": "relative rounded-lg px-2 py-1 text-lg hover:bg-slate-100",
+          "w": 31,
+          "h": 31,
+          "radius": "8px",
+          "font": "18px",
+          "padding": "6px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search conversations⌘ K",
+          "class": "bc-search",
+          "w": 261,
+          "h": 44.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "11px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI AssistantA little help, a lot of possibilityAI",
+          "class": "bc-ai-entry",
+          "w": 273,
+          "h": 61.5,
+          "radius": "9px",
+          "font": "16px",
+          "padding": "12px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ DM",
+          "class": "flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700",
+          "w": 126.5,
+          "h": 33.703125,
+          "radius": "7px",
+          "font": "11px",
+          "padding": "8px 4px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ Group",
+          "class": "flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700",
+          "w": 126.5,
+          "h": 33.703125,
+          "radius": "7px",
+          "font": "11px",
+          "padding": "8px 4px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Manage lanes",
+          "class": "bc-board-secondary",
+          "w": 101.4375,
+          "h": 68,
+          "radius": "8px",
+          "font": "12px",
+          "padding": "9px 12px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ Create ticket",
+          "class": "bc-primary",
+          "w": 115.625,
+          "h": 38,
+          "radius": "8px",
+          "font": "12px",
+          "padding": "10px 15px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Assigned to me",
+          "class": "",
+          "w": 99.171875,
+          "h": 36.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "9px",
+          "overflow": false,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "name": "ticket-editor",
+      "buttons": [
+        {
+          "label": "Banana Chat home",
+          "class": "bc-brand",
+          "w": 42,
+          "h": 42,
+          "radius": "13px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Conversations",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search (Ctrl+K)",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Workspace members",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Meetings",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Kanban board",
+          "class": "active",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI Assistant",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Sign out",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Notifications",
+          "class": "relative rounded-lg px-2 py-1 text-lg hover:bg-slate-100",
+          "w": 31,
+          "h": 31,
+          "radius": "8px",
+          "font": "18px",
+          "padding": "6px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search conversations⌘ K",
+          "class": "bc-search",
+          "w": 261,
+          "h": 44.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "11px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI AssistantA little help, a lot of possibilityAI",
+          "class": "bc-ai-entry",
+          "w": 273,
+          "h": 61.5,
+          "radius": "9px",
+          "font": "16px",
+          "padding": "12px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ DM",
+          "class": "flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700",
+          "w": 126.5,
+          "h": 33.703125,
+          "radius": "7px",
+          "font": "11px",
+          "padding": "8px 4px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ Group",
+          "class": "flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700",
+          "w": 126.5,
+          "h": 33.703125,
+          "radius": "7px",
+          "font": "11px",
+          "padding": "8px 4px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Manage lanes",
+          "class": "bc-board-secondary",
+          "w": 101.4375,
+          "h": 68,
+          "radius": "8px",
+          "font": "12px",
+          "padding": "9px 12px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ Create ticket",
+          "class": "bc-primary",
+          "w": 115.625,
+          "h": 38,
+          "radius": "8px",
+          "font": "12px",
+          "padding": "10px 15px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Assigned to me",
+          "class": "",
+          "w": 99.171875,
+          "h": 36.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "9px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Cancel create ticket",
+          "class": "bc-ticket-shade",
+          "w": 1440,
+          "h": 1000,
+          "radius": "0px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Bold",
+          "class": "",
+          "w": 32,
+          "h": 32,
+          "radius": "6px",
+          "font": "16px",
+          "padding": "4px 8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Italic",
+          "class": "",
+          "w": 32,
+          "h": 32,
+          "radius": "6px",
+          "font": "16px",
+          "padding": "4px 8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Heading",
+          "class": "",
+          "w": 32,
+          "h": 32,
+          "radius": "6px",
+          "font": "16px",
+          "padding": "4px 8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Bullet list",
+          "class": "",
+          "w": 32,
+          "h": 32,
+          "radius": "6px",
+          "font": "16px",
+          "padding": "4px 8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Quote",
+          "class": "",
+          "w": 32,
+          "h": 32,
+          "radius": "6px",
+          "font": "16px",
+          "padding": "4px 8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Insert link",
+          "class": "",
+          "w": 32,
+          "h": 32,
+          "radius": "6px",
+          "font": "16px",
+          "padding": "4px 8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Code block",
+          "class": "",
+          "w": 40.953125,
+          "h": 32,
+          "radius": "6px",
+          "font": "16px",
+          "padding": "4px 8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Preview",
+          "class": "bc-md-preview-toggle",
+          "w": 76.125,
+          "h": 32,
+          "radius": "6px",
+          "font": "16px",
+          "padding": "4px 8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ Add images",
+          "class": "bc-board-secondary",
+          "w": 97.125,
+          "h": 36.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "9px 12px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Cancel",
+          "class": "bc-board-secondary",
+          "w": 64.390625,
+          "h": 68,
+          "radius": "8px",
+          "font": "12px",
+          "padding": "9px 12px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Save ticket",
+          "class": "bc-primary",
+          "w": 93.859375,
+          "h": 38,
+          "radius": "8px",
+          "font": "12px",
+          "padding": "10px 15px",
+          "overflow": false,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "name": "ai",
+      "buttons": [
+        {
+          "label": "Banana Chat home",
+          "class": "bc-brand",
+          "w": 42,
+          "h": 42,
+          "radius": "13px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Conversations",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search (Ctrl+K)",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Workspace members",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Meetings",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Kanban board",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI Assistant",
+          "class": "active",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Sign out",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Notifications",
+          "class": "relative rounded-lg px-2 py-1 text-lg hover:bg-slate-100",
+          "w": 31,
+          "h": 31,
+          "radius": "8px",
+          "font": "18px",
+          "padding": "6px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search conversations⌘ K",
+          "class": "bc-search",
+          "w": 261,
+          "h": 44.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "11px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ DM",
+          "class": "flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700",
+          "w": 126.5,
+          "h": 33.703125,
+          "radius": "7px",
+          "font": "11px",
+          "padding": "8px 4px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ Group",
+          "class": "flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700",
+          "w": 126.5,
+          "h": 33.703125,
+          "radius": "7px",
+          "font": "11px",
+          "padding": "8px 4px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ แชทใหม่",
+          "class": "rounded bg-amber-400 px-2 py-1 text-xs font-semibold text-slate-900 hover:bg-amber-300",
+          "w": 66.171875,
+          "h": 24,
+          "radius": "4px",
+          "font": "12px",
+          "padding": "4px 8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "🧠 ความจำของฉัน",
+          "class": "w-full rounded border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50",
+          "w": 263,
+          "h": 26,
+          "radius": "4px",
+          "font": "12px",
+          "padding": "4px 8px",
+          "overflow": false,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "name": "rooms-01m283d975rh59x8393ted563x-768",
+      "buttons": [
+        {
+          "label": "Banana Chat home",
+          "class": "bc-brand",
+          "w": 42,
+          "h": 42,
+          "radius": "13px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Conversations",
+          "class": "active",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search (Ctrl+K)",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Workspace members",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Meetings",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Kanban board",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI Assistant",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Sign out",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Notifications",
+          "class": "relative rounded-lg px-2 py-1 text-lg hover:bg-slate-100",
+          "w": 31,
+          "h": 31,
+          "radius": "8px",
+          "font": "18px",
+          "padding": "6px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search conversations⌘ K",
+          "class": "bc-search",
+          "w": 231,
+          "h": 44.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "11px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI AssistantA little help, a lot of possibilityAI",
+          "class": "bc-ai-entry",
+          "w": 243,
+          "h": 61.5,
+          "radius": "9px",
+          "font": "16px",
+          "padding": "12px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ DM",
+          "class": "flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700",
+          "w": 111.5,
+          "h": 33.703125,
+          "radius": "7px",
+          "font": "11px",
+          "padding": "8px 4px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ Group",
+          "class": "flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700",
+          "w": 111.5,
+          "h": 33.703125,
+          "radius": "7px",
+          "font": "11px",
+          "padding": "8px 4px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Room notes",
+          "class": "bc-tool-button",
+          "w": 47.84375,
+          "h": 34.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Media and files",
+          "class": "rounded-lg px-2 py-1 text-sm text-slate-400 hover:bg-slate-100 hover:text-slate-600",
+          "w": 36,
+          "h": 28,
+          "radius": "8px",
+          "font": "14px",
+          "padding": "4px 8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Message actions",
+          "class": "bc-message-actions-toggle",
+          "w": 28,
+          "h": 24,
+          "radius": "5px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "attach files",
+          "class": "rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-100",
+          "w": 36,
+          "h": 40,
+          "radius": "12px",
+          "font": "14px",
+          "padding": "10px 8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Send",
+          "class": "rounded-xl bg-yellow-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-yellow-300 disabled:opacity-50",
+          "w": 82.84375,
+          "h": 39,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "11px 15px",
+          "overflow": false,
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "name": "search-768",
+      "buttons": [
+        {
+          "label": "Banana Chat home",
+          "class": "bc-brand",
+          "w": 42,
+          "h": 42,
+          "radius": "13px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Conversations",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search (Ctrl+K)",
+          "class": "active",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Workspace members",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Meetings",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Kanban board",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI Assistant",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Sign out",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Notifications",
+          "class": "relative rounded-lg px-2 py-1 text-lg hover:bg-slate-100",
+          "w": 31,
+          "h": 31,
+          "radius": "8px",
+          "font": "18px",
+          "padding": "6px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search conversations⌘ K",
+          "class": "bc-search",
+          "w": 231,
+          "h": 44.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "11px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI AssistantA little help, a lot of possibilityAI",
+          "class": "bc-ai-entry",
+          "w": 243,
+          "h": 61.5,
+          "radius": "9px",
+          "font": "16px",
+          "padding": "12px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ DM",
+          "class": "flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700",
+          "w": 111.5,
+          "h": 33.703125,
+          "radius": "7px",
+          "font": "11px",
+          "padding": "8px 4px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ Group",
+          "class": "flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700",
+          "w": 111.5,
+          "h": 33.703125,
+          "radius": "7px",
+          "font": "11px",
+          "padding": "8px 4px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search",
+          "class": "shrink-0 rounded-lg bg-yellow-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-yellow-300",
+          "w": 78.9375,
+          "h": 36,
+          "radius": "8px",
+          "font": "14px",
+          "padding": "8px 16px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "messages",
+          "class": "rounded-md px-3 py-1 font-medium capitalize bg-white shadow-sm",
+          "w": 79.84375,
+          "h": 24,
+          "radius": "6px",
+          "font": "12px",
+          "padding": "4px 12px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "files",
+          "class": "rounded-md px-3 py-1 font-medium capitalize text-slate-500",
+          "w": 49.453125,
+          "h": 24,
+          "radius": "6px",
+          "font": "12px",
+          "padding": "4px 12px",
+          "overflow": false,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "name": "meetings-768",
+      "buttons": [
+        {
+          "label": "Banana Chat home",
+          "class": "bc-brand",
+          "w": 42,
+          "h": 42,
+          "radius": "13px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Conversations",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search (Ctrl+K)",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Workspace members",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Meetings",
+          "class": "active",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Kanban board",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI Assistant",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Sign out",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Notifications",
+          "class": "relative rounded-lg px-2 py-1 text-lg hover:bg-slate-100",
+          "w": 31,
+          "h": 31,
+          "radius": "8px",
+          "font": "18px",
+          "padding": "6px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search conversations⌘ K",
+          "class": "bc-search",
+          "w": 231,
+          "h": 44.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "11px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI AssistantA little help, a lot of possibilityAI",
+          "class": "bc-ai-entry",
+          "w": 243,
+          "h": 61.5,
+          "radius": "9px",
+          "font": "16px",
+          "padding": "12px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ DM",
+          "class": "flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700",
+          "w": 111.5,
+          "h": 33.703125,
+          "radius": "7px",
+          "font": "11px",
+          "padding": "8px 4px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ Group",
+          "class": "flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700",
+          "w": 111.5,
+          "h": 33.703125,
+          "radius": "7px",
+          "font": "11px",
+          "padding": "8px 4px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Create meeting",
+          "class": "bc-primary",
+          "w": 165.9375,
+          "h": 44,
+          "radius": "8px",
+          "font": "12px",
+          "padding": "13px 20px",
+          "overflow": false,
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "name": "board-768",
+      "buttons": [
+        {
+          "label": "Banana Chat home",
+          "class": "bc-brand",
+          "w": 42,
+          "h": 42,
+          "radius": "13px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Conversations",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search (Ctrl+K)",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Workspace members",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Meetings",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Kanban board",
+          "class": "active",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI Assistant",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Sign out",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Notifications",
+          "class": "relative rounded-lg px-2 py-1 text-lg hover:bg-slate-100",
+          "w": 31,
+          "h": 31,
+          "radius": "8px",
+          "font": "18px",
+          "padding": "6px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search conversations⌘ K",
+          "class": "bc-search",
+          "w": 231,
+          "h": 44.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "11px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI AssistantA little help, a lot of possibilityAI",
+          "class": "bc-ai-entry",
+          "w": 243,
+          "h": 61.5,
+          "radius": "9px",
+          "font": "16px",
+          "padding": "12px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ DM",
+          "class": "flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700",
+          "w": 111.5,
+          "h": 33.703125,
+          "radius": "7px",
+          "font": "11px",
+          "padding": "8px 4px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ Group",
+          "class": "flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700",
+          "w": 111.5,
+          "h": 33.703125,
+          "radius": "7px",
+          "font": "11px",
+          "padding": "8px 4px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Manage lanes",
+          "class": "bc-board-secondary",
+          "w": 101.4375,
+          "h": 38,
+          "radius": "8px",
+          "font": "12px",
+          "padding": "9px 12px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ Create ticket",
+          "class": "bc-primary",
+          "w": 115.625,
+          "h": 38,
+          "radius": "8px",
+          "font": "12px",
+          "padding": "10px 15px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Assigned to me",
+          "class": "",
+          "w": 99.171875,
+          "h": 36.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "9px",
+          "overflow": false,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "name": "ai-768",
+      "buttons": [
+        {
+          "label": "Banana Chat home",
+          "class": "bc-brand",
+          "w": 42,
+          "h": 42,
+          "radius": "13px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Conversations",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search (Ctrl+K)",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Workspace members",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Meetings",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Kanban board",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI Assistant",
+          "class": "active",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Sign out",
+          "class": "",
+          "w": 43,
+          "h": 43,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Notifications",
+          "class": "relative rounded-lg px-2 py-1 text-lg hover:bg-slate-100",
+          "w": 31,
+          "h": 31,
+          "radius": "8px",
+          "font": "18px",
+          "padding": "6px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search conversations⌘ K",
+          "class": "bc-search",
+          "w": 231,
+          "h": 44.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "11px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ DM",
+          "class": "flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700",
+          "w": 111.5,
+          "h": 33.703125,
+          "radius": "7px",
+          "font": "11px",
+          "padding": "8px 4px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ Group",
+          "class": "flex-1 rounded-lg bg-slate-800 py-2 text-sm font-medium text-white hover:bg-slate-700",
+          "w": 111.5,
+          "h": 33.703125,
+          "radius": "7px",
+          "font": "11px",
+          "padding": "8px 4px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ แชทใหม่",
+          "class": "rounded bg-amber-400 px-2 py-1 text-xs font-semibold text-slate-900 hover:bg-amber-300",
+          "w": 66.171875,
+          "h": 24,
+          "radius": "4px",
+          "font": "12px",
+          "padding": "4px 8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "🧠 ความจำของฉัน",
+          "class": "w-full rounded border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50",
+          "w": 263,
+          "h": 26,
+          "radius": "4px",
+          "font": "12px",
+          "padding": "4px 8px",
+          "overflow": false,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "name": "rooms-01m283d975rh59x8393ted563x-390",
+      "buttons": [
+        {
+          "label": "Banana Chat home",
+          "class": "bc-brand",
+          "w": 36,
+          "h": 36,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Conversations",
+          "class": "active",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search (Ctrl+K)",
+          "class": "",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Workspace members",
+          "class": "",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Meetings",
+          "class": "",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Kanban board",
+          "class": "",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI Assistant",
+          "class": "",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Sign out",
+          "class": "",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Show conversations",
+          "class": "",
+          "w": 32,
+          "h": 32,
+          "radius": "0px",
+          "font": "12px",
+          "padding": "6px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Start voice call",
+          "class": "bc-tool-button",
+          "w": 34,
+          "h": 34,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Start video call",
+          "class": "bc-tool-button",
+          "w": 34,
+          "h": 34,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Room notes",
+          "class": "bc-tool-button",
+          "w": 47.84375,
+          "h": 34.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Media and files",
+          "class": "rounded-lg px-2 py-1 text-sm text-slate-400 hover:bg-slate-100 hover:text-slate-600",
+          "w": 36,
+          "h": 28,
+          "radius": "8px",
+          "font": "14px",
+          "padding": "4px 8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Reply",
+          "class": "",
+          "w": 32,
+          "h": 32,
+          "radius": "0px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Pin message",
+          "class": "",
+          "w": 32,
+          "h": 32,
+          "radius": "0px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Edit message",
+          "class": "rounded-full bg-white px-2 py-0.5 text-xs shadow hover:bg-slate-100",
+          "w": 32,
+          "h": 32,
+          "radius": "3.35544e+07px",
+          "font": "12px",
+          "padding": "2px 8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Delete message",
+          "class": "rounded-full bg-white px-2 py-0.5 text-xs shadow hover:bg-red-50 disabled:opacity-40",
+          "w": 32,
+          "h": 32,
+          "radius": "3.35544e+07px",
+          "font": "12px",
+          "padding": "2px 8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "attach files",
+          "class": "rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-100",
+          "w": 36,
+          "h": 40,
+          "radius": "12px",
+          "font": "14px",
+          "padding": "10px 8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Send",
+          "class": "rounded-xl bg-yellow-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-yellow-300 disabled:opacity-50",
+          "w": 39,
+          "h": 39,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "11px",
+          "overflow": false,
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "name": "search-390",
+      "buttons": [
+        {
+          "label": "Banana Chat home",
+          "class": "bc-brand",
+          "w": 36,
+          "h": 36,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Conversations",
+          "class": "",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search (Ctrl+K)",
+          "class": "active",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Workspace members",
+          "class": "",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Meetings",
+          "class": "",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Kanban board",
+          "class": "",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI Assistant",
+          "class": "",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Sign out",
+          "class": "",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Show conversations",
+          "class": "",
+          "w": 32,
+          "h": 32,
+          "radius": "0px",
+          "font": "12px",
+          "padding": "6px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search",
+          "class": "shrink-0 rounded-lg bg-yellow-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-yellow-300",
+          "w": 78.9375,
+          "h": 36,
+          "radius": "8px",
+          "font": "14px",
+          "padding": "8px 16px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "messages",
+          "class": "rounded-md px-3 py-1 font-medium capitalize bg-white shadow-sm",
+          "w": 79.84375,
+          "h": 24,
+          "radius": "6px",
+          "font": "12px",
+          "padding": "4px 12px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "files",
+          "class": "rounded-md px-3 py-1 font-medium capitalize text-slate-500",
+          "w": 49.453125,
+          "h": 24,
+          "radius": "6px",
+          "font": "12px",
+          "padding": "4px 12px",
+          "overflow": false,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "name": "meetings-390",
+      "buttons": [
+        {
+          "label": "Banana Chat home",
+          "class": "bc-brand",
+          "w": 36,
+          "h": 36,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Conversations",
+          "class": "",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search (Ctrl+K)",
+          "class": "",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Workspace members",
+          "class": "",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Meetings",
+          "class": "active",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Kanban board",
+          "class": "",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI Assistant",
+          "class": "",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Sign out",
+          "class": "",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Show conversations",
+          "class": "",
+          "w": 32,
+          "h": 32,
+          "radius": "0px",
+          "font": "12px",
+          "padding": "6px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Create meeting",
+          "class": "bc-primary",
+          "w": 165.9375,
+          "h": 44,
+          "radius": "8px",
+          "font": "12px",
+          "padding": "13px 20px",
+          "overflow": false,
+          "disabled": true
+        }
+      ]
+    },
+    {
+      "name": "board-390",
+      "buttons": [
+        {
+          "label": "Banana Chat home",
+          "class": "bc-brand",
+          "w": 36,
+          "h": 36,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Conversations",
+          "class": "",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search (Ctrl+K)",
+          "class": "",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Workspace members",
+          "class": "",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Meetings",
+          "class": "",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Kanban board",
+          "class": "active",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI Assistant",
+          "class": "",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Sign out",
+          "class": "",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Show conversations",
+          "class": "",
+          "w": 32,
+          "h": 32,
+          "radius": "0px",
+          "font": "12px",
+          "padding": "6px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Manage lanes",
+          "class": "bc-board-secondary",
+          "w": 101.4375,
+          "h": 68,
+          "radius": "8px",
+          "font": "12px",
+          "padding": "9px 12px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ Create ticket",
+          "class": "bc-primary",
+          "w": 115.625,
+          "h": 38,
+          "radius": "8px",
+          "font": "12px",
+          "padding": "10px 15px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Assigned to me",
+          "class": "",
+          "w": 99.171875,
+          "h": 36.5,
+          "radius": "8px",
+          "font": "11px",
+          "padding": "9px",
+          "overflow": false,
+          "disabled": false
+        }
+      ]
+    },
+    {
+      "name": "ai-390",
+      "buttons": [
+        {
+          "label": "Banana Chat home",
+          "class": "bc-brand",
+          "w": 36,
+          "h": 36,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Conversations",
+          "class": "",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Search (Ctrl+K)",
+          "class": "",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Workspace members",
+          "class": "",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Meetings",
+          "class": "",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Kanban board",
+          "class": "",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "AI Assistant",
+          "class": "active",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Sign out",
+          "class": "",
+          "w": 37,
+          "h": 37,
+          "radius": "11px",
+          "font": "16px",
+          "padding": "0px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "Show conversations",
+          "class": "",
+          "w": 32,
+          "h": 32,
+          "radius": "0px",
+          "font": "12px",
+          "padding": "6px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "+ แชทใหม่",
+          "class": "rounded bg-amber-400 px-2 py-1 text-xs font-semibold text-slate-900 hover:bg-amber-300",
+          "w": 66.171875,
+          "h": 24,
+          "radius": "4px",
+          "font": "12px",
+          "padding": "4px 8px",
+          "overflow": false,
+          "disabled": false
+        },
+        {
+          "label": "🧠 ความจำของฉัน (ปิดอยู่)",
+          "class": "w-full rounded border border-slate-200 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50",
+          "w": 263,
+          "h": 26,
+          "radius": "4px",
+          "font": "12px",
+          "padding": "4px 8px",
+          "overflow": false,
+          "disabled": false
+        }
+      ]
+    }
+  ],
+  "errors": []
+}

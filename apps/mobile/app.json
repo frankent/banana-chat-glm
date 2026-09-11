@@ -32,7 +32,10 @@
       ]
     ],
     "extra": {
-      "apiBaseUrl": "http://localhost:8000"
+      "apiBaseUrl": "https://chat.gamecoms.net",
+      "reverbAppKey": "2b0d4e9ab132bdfa2983f4a96e3af3ec",
+      "reverbHost": "chat.gamecoms.net",
+      "reverbPort": 443
     }
   }
 }

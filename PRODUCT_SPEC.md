@@ -2782,6 +2782,10 @@ Size: S ≤ 1 วัน · M 2–3 วัน · L 4–5 วัน · XL > 1 ส�
 
 ## 16. Changelog
 
+2026-09-11 - TASK-WEB-018: shared system-wide button dimensions (40px desktop, 44px touch, compact formatting toolbar), uniform SVG message actions, responsive chat action rows and AI controls. Size and visual regression evidence: docs/reviews/2026-09-11/buttons/.
+
+2026-09-11 - TASK-WEB-018, FR-MSG-005/006, FR-SRCH-001/002: fix disappearing message actions with an explicit persistent menu, keyboard access and direct touch controls; constrain mobile search filters; resolve sent processing attachments to ready/failed without reloading (FR-MEDIA-004). Playwright regressions: TC-WEB-UI-keyboard-message-actions, TC-MSG-UI-persistent-actions, TC-WEB-UI-tablet-touch-actions, TC-WEB-UI-search-mobile. Production deployment and verification are required for this change.
+
 | Version | Date | By | Change |
 |---|---|---|---|
 | 1.6.1 | 2026-09-11 | Codex | FR-ADM-001, FR-AUTH-005, TC-ADM-079: declare password_hash as the authentication password column so Laravel admin-login rehash does not update the nonexistent password column. Reproduced during production validation. |
@@ -2908,3 +2912,14 @@ AI_MOCK_PROVIDER_URL=http://mock-ai:8080/v1   # dev/CI เท่านั้น
 
 ## Appendix C — Parking Lot (ไอเดียที่ไม่ทำใน v1)
 Reactions · Pin message · Forward · Link preview · Threads · Voice message ·  Bots/Webhooks · SSO · Scheduled messages · Message translation · Read-only announcement rooms · Custom emoji · Room templates · Desktop app (Tauri) · Guest access · **AI**: @ai ในห้องแชท · สรุปห้องแชทด้วย AI (RAG) · แนบรูป/ไฟล์ให้ AI (FR-AI-016) · หลาย provider ให้ผู้ใช้เลือกโมเดล · tool use / function calling · แชร์ conversation เป็นลิงก์ · memory แยกต่อ workspace · Anthropic/OpenAI native provider
+
+### DEC-RING-001 / Changelog 2026-09-11: recipient ringtone
+
+FR-CALL-001: incoming 1-to-1 voice/video calls use a repeating recipient
+ringtone for the existing 60-second eligibility window. Outgoing/group calls
+remain unchanged. Silence, answer, decline, cancellation and session teardown
+stop ringing. Browser playback requires a trusted gesture; expose Enable
+ringtone when blocked. Native foreground playback respects silent mode and
+stops when backgrounded. Native answering and background/terminated-app call
+push remain unimplemented and are not included in this delivery. Mobile
+production API/Reverb defaults use TLS. See docs/reviews/2026-09-11/ringtone.

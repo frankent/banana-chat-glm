@@ -91,8 +91,8 @@ export function AiAssistantView() {
   }
 
   return (
-    <div className="flex h-full min-h-0">
-      <div className="flex w-72 shrink-0 flex-col border-r border-slate-200 bg-white">
+    <div className="bc-ai-view flex h-full min-h-0">
+      <div className="bc-ai-sidebar flex w-72 shrink-0 flex-col border-r border-slate-200 bg-white">
         <div className="space-y-2 border-b border-slate-100 p-3">
           <div className="flex items-center justify-between">
             <span className="text-sm font-bold text-slate-700">✨ AI Assistant</span>
@@ -177,7 +177,7 @@ export function AiAssistantView() {
           )}
         </div>
       </div>
-      <div className="min-w-0 flex-1">
+      <div className="bc-ai-content min-w-0 flex-1">
         {showMemories ? (
           <AiMemoriesPanel memories={memories?.memories ?? []} slug={slug} />
         ) : conversationId !== undefined ? (

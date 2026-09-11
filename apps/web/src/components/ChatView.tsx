@@ -251,7 +251,7 @@ export function ChatView() {
         </div>
         <div className="flex items-center gap-2">
           {room && (room.room.type === 'dm' || room.room.type === 'group') && <CallButtons roomId={roomId} type={room.room.type} />}
-          <button className="bc-tool-button" onClick={() => {setNotesOpen(!notesOpen);setMediaOpen(false);}} aria-label="Room notes">Notes</button>
+          <button className="bc-tool-button" onClick={() => {setNotesOpen(!notesOpen);setMediaOpen(false);}} aria-label="Room notes"><Icon name="notes" size={18} /><span className="bc-call-label">Notes</span></button>
           {seen && <span className="text-xs font-medium text-slate-400" data-testid="seen-indicator">Seen</span>}
           <button
             onClick={() => {setMediaOpen((v) => !v);setNotesOpen(false);}}

@@ -20,3 +20,59 @@ export function playNotificationAudio() {
   oscillator.start(now); oscillator.stop(now + .25);
   oscillator.onended = () => { oscillator.disconnect(); gain.disconnect(); };
 }
+
+let stopRingtone: (() => void) | undefined;
+
+export function stopIncomingRingtone() {
+  stopRingtone?.();
+}
+
+/** FR-CALL-001: incoming DM only; never unlock audio without a user gesture. */
+export function startIncomingRingtone(expiresAt: number, onBlocked: (blocked: boolean) => void) {
+  stopIncomingRingtone();
+  const voices = new Set<OscillatorNode>();
+  let stopped = false;
+  let nextRing = 0;
+  let timer: ReturnType<typeof setInterval> | undefined;
+  const stop = () => {
+    if (stopped) return;
+    stopped = true;
+    clearInterval(timer);
+    for (const voice of voices) {
+      try { voice.stop(); } catch { /* Already ended. */ }
+      voice.disconnect();
+    }
+    voices.clear();
+    if (stopRingtone === stop) stopRingtone = undefined;
+  };
+  const tick = () => {
+    if (Date.now() >= expiresAt) { stop(); return; }
+    const audio = context;
+    onBlocked(!audio || audio.state !== 'running');
+    if (!audio || audio.state !== 'running' || Date.now() < nextRing) return;
+    nextRing = Date.now() + 2400;
+    // Two short dual-frequency pulses, followed by a quiet interval.
+    for (const delay of [0, .45]) {
+      for (const frequency of [440, 480]) {
+        const voice = audio.createOscillator();
+        const gain = audio.createGain();
+        const start = audio.currentTime + delay;
+        voice.frequency.value = frequency;
+        gain.gain.setValueAtTime(0, start);
+        gain.gain.linearRampToValueAtTime(.045, start + .02);
+        gain.gain.setValueAtTime(.045, start + .28);
+        gain.gain.linearRampToValueAtTime(0, start + .32);
+        voice.connect(gain);
+        gain.connect(audio.destination);
+        voices.add(voice);
+        voice.onended = () => { voices.delete(voice); voice.disconnect(); gain.disconnect(); };
+        voice.start(start);
+        voice.stop(start + .33);
+      }
+    }
+  };
+  stopRingtone = stop;
+  timer = setInterval(tick, 200);
+  tick();
+  return stop;
+}

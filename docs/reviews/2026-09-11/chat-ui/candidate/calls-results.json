@@ -1,0 +1,115 @@
+{
+  "results": [
+    {
+      "id": "TC-CALL-UI-voice-controls",
+      "passed": true,
+      "details": {
+        "joined": 2,
+        "controls": [
+          {
+            "text": "Minimize",
+            "label": "Minimize call",
+            "source": null,
+            "pressed": null
+          },
+          {
+            "text": "Microphone",
+            "label": null,
+            "source": "microphone",
+            "pressed": "true"
+          },
+          {
+            "text": "",
+            "label": null,
+            "source": null,
+            "pressed": "false"
+          },
+          {
+            "text": "Leave",
+            "label": null,
+            "source": null,
+            "pressed": null
+          },
+          {
+            "text": "End for everyone",
+            "label": null,
+            "source": null,
+            "pressed": null
+          }
+        ],
+        "minimize": true,
+        "expand": true,
+        "endForEveryone": true
+      }
+    },
+    {
+      "id": "TC-CALL-UI-video-controls",
+      "passed": true,
+      "details": {
+        "joined": 2,
+        "controls": [
+          {
+            "text": "Minimize",
+            "label": "Minimize call",
+            "source": null,
+            "pressed": null
+          },
+          {
+            "text": "Microphone",
+            "label": null,
+            "source": "microphone",
+            "pressed": "true"
+          },
+          {
+            "text": "",
+            "label": null,
+            "source": null,
+            "pressed": "false"
+          },
+          {
+            "text": "Camera",
+            "label": null,
+            "source": "camera",
+            "pressed": "true"
+          },
+          {
+            "text": "",
+            "label": null,
+            "source": null,
+            "pressed": "false"
+          },
+          {
+            "text": "Share screen",
+            "label": null,
+            "source": "screen_share",
+            "pressed": "false"
+          },
+          {
+            "text": "Leave",
+            "label": null,
+            "source": null,
+            "pressed": null
+          },
+          {
+            "text": "End for everyone",
+            "label": null,
+            "source": null,
+            "pressed": null
+          }
+        ],
+        "minimize": true,
+        "expand": true,
+        "endForEveryone": true
+      }
+    },
+    {
+      "id": "TC-CALL-UI-decline-and-leave",
+      "passed": true
+    },
+    {
+      "id": "TC-CALL-UI-runtime",
+      "passed": true
+    }
+  ],
+  "errors": []
+}

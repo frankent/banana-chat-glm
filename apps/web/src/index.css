@@ -214,3 +214,15 @@ h1,h2,h3 { font-family:Manrope,'DM Sans',system-ui,sans-serif; }
 .bc-ticket-image small {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .bc-ticket-image span {font-size:11px;}.bc-ticket-image [role=alert] {color:#a63b32;}
 .bc-ticket-image>button {font-size:12px;align-self:flex-start;}.bc-ticket-image-grid>button {min-width:0;}
+
+/* TASK-WEB-018 / FR-MSG-005/006: stable pointer, keyboard and touch actions. */
+.bc-message-footer {display:flex;align-items:center;justify-content:flex-end;gap:6px;}
+.bc-message-actions-toggle {min-width:28px;min-height:24px;border-radius:5px;font-size:16px;font-weight:700;line-height:1;}
+.bc-message-actions-toggle:hover,.bc-message-actions-toggle[aria-expanded="true"] {background:#29372f12;}
+.bc-message-bubble [data-testid="message-actions"] {display:flex;visibility:hidden;opacity:0;pointer-events:none;top:auto;bottom:calc(100% - 4px);}
+.bc-message-bubble [data-testid="message-actions"][data-open="true"] {visibility:visible;opacity:1;pointer-events:auto;}
+@media (hover:none), (pointer:coarse), (max-width:760px) {
+  .bc-message-actions-toggle {display:none;}
+  .bc-message-bubble [data-testid="message-actions"] {position:static;visibility:visible;opacity:1;pointer-events:auto;justify-content:flex-end;flex-wrap:wrap;margin-top:3px;border:0;box-shadow:none;background:transparent;padding:0;}
+  .bc-message-bubble [data-testid="message-actions"] button {min-width:32px;min-height:32px;}
+}
