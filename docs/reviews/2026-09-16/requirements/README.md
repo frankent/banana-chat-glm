@@ -90,3 +90,51 @@ byte-identical before and after the run.
   production, not the device behaviour. Needs a physical iOS device to close.
 - `TC-CALL-032` has no component test asserting the camera is never enabled on join; `apps/web`
   has no vitest/jsdom harness. The behaviour is covered by the two production scripts above.
+
+---
+
+## Public Chat (FR-PCHAT-*) — production verification, 2026-09-16
+
+Deployed as `fc07350`. Feature ships DISABLED (`publicchat.enabled = false`, DEC-071).
+
+`verify-public-chat.mjs` (run with `PCHAT_QA_PRODUCTION=1`) exercises all three tiers against
+`https://chat.gamecoms.net` from a throwaway workspace, then restores the flag and removes every
+fixture. **19 checks, all passed**:
+
+| Tier | Covered |
+|---|---|
+| Kill switch | a correctly HMAC-signed partner create returns `503 PCHAT_DISABLED` while the flag is off — and again after it is restored |
+| API key | plaintext returned exactly once; the row stores ciphertext + last4 only; the audit row carries `key_id`, never the secret |
+| HMAC | correct signature accepted; missing headers, ±400s skew, unknown key, tampered body and replayed nonce each rejected with the documented code; a nonce burned by a bad-signature attempt is still usable, proving replay is checked *after* signature |
+| Partner | `API-200` returns a `/support/<64-hex>` link; replaying `external_ref` is idempotent (same room id) |
+| Visitor | opens the link with no login, sees customer + provider names, sends a message; **zero** call/meeting controls in the DOM; `sender_kind=visitor` with a NULL user |
+| Agent | Public Chat rail entry; room lists as `new`/unassigned; server-side filtering by status and assignee; replying **auto-claims** (assignee set, status → in progress) and survives a reload |
+| External identity | the agent's message renders to the visitor as exactly `provider name (admin username)`; the visitor wire carries neither the agent's ULID nor display name |
+| `problem` never leaks | page text, `API-210` and `API-211` are all free of `problem` / `in_progress` / `มีปัญหา`; `status_public` stays `open`; the zero-delta system row is absent (DEC-074) |
+| Isolation (DEC-064) | the public chat room is absent from `GET /rooms` and the sidebar; a real production room id is rejected `404 PCHAT_ROOM_NOT_FOUND` by every public-chat tier |
+| Edge (DEC-063) | the 64-hex code appears in no response header; `/support/<code>` answers `Referrer-Policy: no-referrer` + `Cache-Control: no-store` |
+
+**Verified independently from the database, not just by the script:** the ten production room ids were
+byte-identical before and after; messages stayed at 108 and users at 9; `publicchat.enabled` is back to
+`false`; and `public_chat_rooms`, `public_chat_api_keys` and `pchatqa%` workspaces are all at zero.
+
+Also confirmed on the live edge: a request carrying a 64-hex code appears **0 times** in nginx's logs —
+the `/support/` and `/api/v1/public-chat/` locations emit no log line at all, with the redacting
+`log_format` as the backstop for fall-throughs.
+
+### Test-environment correction
+
+The "115 pre-existing failures" recorded earlier in this file were **never a code defect**. Port 8088 was
+held by a QA Reverb serving app `qa` while `apps/api/phpunit.xml` inherits `REVERB_APP_ID=784046` from
+`.env`, so every broadcasting write 500'd with `Pusher error: No matching application for ID [784046]`.
+With Reverb restarted from `.env`, the full suite is **535 passed / 2 skipped / 0 failed** (3046
+assertions) — including `TC-ROOM-074` and every channel-authorisation test, which no earlier run in this
+session had actually verified under either broadcaster.
+
+### Known gap
+
+One result row in `production-public-chat-results.json` for FR-PCHAT-009 shows `"status": "in_progress"`
+instead of `"passed"`: the evidence object passed to `pass()` carried a `status` key that overwrote the
+row's own pass/fail field. The check itself passed — every assertion ahead of it (the "In progress" pill,
+the assignee cell, the filter flips) would have thrown otherwise, and the run exited 0. Fixed in the
+script by renaming the evidence key to `room_status`.

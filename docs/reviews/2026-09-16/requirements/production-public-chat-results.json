@@ -1,0 +1,208 @@
+{
+  "run": "pchatqa1789555578086",
+  "base": "https://chat.gamecoms.net",
+  "production": true,
+  "results": [
+    {
+      "test": "PROD-SAFETY baseline captured for rooms/messages/users/workspaces outside the fixture",
+      "status": "passed",
+      "counts": {
+        "rooms": 10,
+        "messages": 108,
+        "users": 9,
+        "workspaces": 1,
+        "public_chat_rooms": 0,
+        "public_chat_api_keys": 0
+      }
+    },
+    {
+      "test": "FR-PCHAT-030 API key issued: plaintext returned once, row stores ciphertext + last4 only",
+      "status": "passed",
+      "key_id": "pck_54ea9ead7721f8089fdf681ceb75",
+      "stored_last4": "c545"
+    },
+    {
+      "test": "FR-PCHAT-034 kill switch gates a correctly signed partner create with 503 PCHAT_DISABLED",
+      "status": "passed"
+    },
+    {
+      "test": "API-200 create returns a /support/<64-hex> link and replaying external_ref is idempotent",
+      "status": "passed",
+      "room_id": "01m2mx6ay1cmm1hwh10zh10qp3",
+      "replay_status": 200
+    },
+    {
+      "test": "FR-PCHAT-031 HMAC accepts a correct signature and rejects missing headers / skew / unknown key / tampered body / replayed nonce with the documented codes",
+      "status": "passed",
+      "accepted": 200,
+      "missing:X-PChat-Key": 401,
+      "missing:X-PChat-Timestamp": 401,
+      "missing:X-PChat-Nonce": 401,
+      "missing:X-PChat-Signature": 401,
+      "skew:-400": 401,
+      "skew:400": 401,
+      "unknown_key": 401,
+      "tampered_body": 401,
+      "nonce_survives_bad_signature": 200,
+      "replayed_nonce": 409
+    },
+    {
+      "test": "FR-PCHAT-007 visitor opens the link with no login, sees customer + provider names, sends a message, and no call/meeting control exists anywhere on the page",
+      "status": "passed"
+    },
+    {
+      "test": "FR-PCHAT-004/005 the Public Chat rail entry exists, the room lists as status 'new' with no assignee, and status + assignee filters run server-side (API-220)",
+      "status": "passed"
+    },
+    {
+      "test": "FR-PCHAT-009 an agent reply auto-claims the room (assignee set, status 'new' -> 'in progress'), and the claim survives a reload",
+      "status": "in_progress",
+      "assigned_to": "01m2mx67fs14g6v974bc853ewp"
+    },
+    {
+      "test": "FR-PCHAT-014 the agent reply renders to the visitor as `provider name (admin username)`",
+      "status": "passed",
+      "rendered": "QA Support Desk pchatqa1789555578086 (pchatqa1789555578086a)"
+    },
+    {
+      "test": "MANDATORY graft 1 / DEC-074 the visitor never sees `problem` in the page or in any reachable API response, and the zero-delta status row is suppressed; `done` closes the composer",
+      "status": "passed"
+    },
+    {
+      "test": "DEC-064 the public chat room is absent from the ordinary room list and sidebar, and a real production room id is rejected by every public-chat endpoint on all three tiers",
+      "status": "passed",
+      "ordinary_room_list": 200,
+      "tier3 GET /api/v1/public-chat/rooms/01m28g8075x76pqcc2sjfrzpf7": 404,
+      "tier3 GET /api/v1/public-chat/rooms/01m28g8075x76pqcc2sjfrzpf7/messages": 404,
+      "tier3 POST /api/v1/public-chat/rooms/01m28g8075x76pqcc2sjfrzpf7/messages": 404,
+      "tier3 PATCH /api/v1/public-chat/rooms/01m28g8075x76pqcc2sjfrzpf7": 404,
+      "tier3 DELETE /public-chat/messages/<real message id>": 404,
+      "tier1 GET /partner/.../rooms/<real room id>": 404,
+      "tier1 POST /partner/.../rooms/<real room id>/close": 404,
+      "tier2 GET /public-chat/<real room id>": 404
+    },
+    {
+      "test": "DEC-063 the 64-hex code appears in no response header, and /support/<code> answers with Referrer-Policy: no-referrer and Cache-Control: no-store",
+      "status": "passed",
+      "referrer-policy": "no-referrer",
+      "cache-control": "no-store",
+      "responses_inspected": 42
+    },
+    {
+      "test": "FR-PCHAT-006/007 no uncaught browser errors on the visitor, queue or room pages",
+      "status": "passed"
+    },
+    {
+      "test": "FR-PCHAT-034 publicchat.enabled restored to its ORIGINAL value",
+      "status": "passed"
+    },
+    {
+      "test": "FR-PCHAT-034 a signed partner create is gated again once the flag is restored",
+      "status": "passed"
+    },
+    {
+      "test": "FR-PCHAT-032 the QA API key is revoked and deleted",
+      "status": "passed"
+    },
+    {
+      "test": "browser closed",
+      "status": "passed"
+    },
+    {
+      "test": "fixture workspace, rooms, messages and user removed",
+      "status": "passed"
+    },
+    {
+      "test": "PROD-SAFETY no pre-existing room, message, user or workspace disappeared",
+      "status": "passed"
+    }
+  ],
+  "evidence": {
+    "original_flag": {
+      "row": null,
+      "effective": false
+    },
+    "baseline_counts": {
+      "rooms": 10,
+      "messages": 108,
+      "users": 9,
+      "workspaces": 1,
+      "public_chat_rooms": 0,
+      "public_chat_api_keys": 0
+    },
+    "fixture": {
+      "workspace": "01m2mx676cczqwy2en9fqkfmyd",
+      "slug": "pchatqa1789555578086",
+      "user": "01m2mx67fs14g6v974bc853ewp",
+      "username": "pchatqa1789555578086a",
+      "display_name": "Dana Agent"
+    },
+    "feature_off_create": {
+      "status": 503,
+      "code": "PCHAT_DISABLED"
+    },
+    "room": {
+      "id": "01m2mx6ay1cmm1hwh10zh10qp3",
+      "url": "https://chat.gamecoms.net/support/7a6c37c83d7618f11e409e977ed32d15cfc1a29e0a95bec5d9f89d2a8bb4341f"
+    },
+    "hmac": {
+      "accepted": 200,
+      "missing:X-PChat-Key": 401,
+      "missing:X-PChat-Timestamp": 401,
+      "missing:X-PChat-Nonce": 401,
+      "missing:X-PChat-Signature": 401,
+      "skew:-400": 401,
+      "skew:400": 401,
+      "unknown_key": 401,
+      "tampered_body": 401,
+      "nonce_survives_bad_signature": 200,
+      "replayed_nonce": 409
+    },
+    "external_display_name": "QA Support Desk pchatqa1789555578086 (pchatqa1789555578086a)",
+    "probe_targets_untouched": {
+      "room": 1,
+      "room_deleted_at": null,
+      "message": 1,
+      "message_deleted_at": null
+    },
+    "isolation": {
+      "ordinary_room_list": 200,
+      "tier3 GET /api/v1/public-chat/rooms/01m28g8075x76pqcc2sjfrzpf7": 404,
+      "tier3 GET /api/v1/public-chat/rooms/01m28g8075x76pqcc2sjfrzpf7/messages": 404,
+      "tier3 POST /api/v1/public-chat/rooms/01m28g8075x76pqcc2sjfrzpf7/messages": 404,
+      "tier3 PATCH /api/v1/public-chat/rooms/01m28g8075x76pqcc2sjfrzpf7": 404,
+      "tier3 DELETE /public-chat/messages/<real message id>": 404,
+      "tier1 GET /partner/.../rooms/<real room id>": 404,
+      "tier1 POST /partner/.../rooms/<real room id>/close": 404,
+      "tier2 GET /public-chat/<real room id>": 404
+    },
+    "support_headers": {
+      "referrer-policy": "no-referrer",
+      "cache-control": "no-store",
+      "responses_inspected": 42
+    },
+    "restored_flag": {
+      "row": null,
+      "effective": false
+    },
+    "post_restore_create": {
+      "status": 503,
+      "code": "PCHAT_DISABLED"
+    },
+    "key_revoked_at": "2026-09-16T10:46:46+00:00",
+    "after_counts": {
+      "rooms": 10,
+      "messages": 108,
+      "users": 9,
+      "workspaces": 1,
+      "public_chat_rooms": 0,
+      "public_chat_api_keys": 0
+    }
+  },
+  "screenshots": [
+    "/Users/kiattirat/trycatch/banana-chat-glm/docs/reviews/2026-09-16/requirements/production-public-chat-visitor.png",
+    "/Users/kiattirat/trycatch/banana-chat-glm/docs/reviews/2026-09-16/requirements/production-public-chat-queue.png"
+  ],
+  "errors": [],
+  "exit_code": 0
+}
