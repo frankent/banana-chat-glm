@@ -53,11 +53,24 @@ byte-identical before and after the run.
    container removal and left `api` stopped. Fixed by force-removing the stale containers and
    bringing the stack up again. The retry was removed from the helper. No data loss.
 2. **`rsync --delete` removed production-only files.** `infra/livekit/config.yaml` and
-   `infra/livekit/certs/` (the TURN TLS certificate) were deleted, which broke TURN TLS —
-   `TC-CALL-011` failed with zero relayed bytes while host-candidate calls still worked. The
-   certificate directory is a directory bind mount, so removing it on the host empties the
-   container's view. Restored from `/root/banana-chat-backups/extra-reqs-20260916`, after which
-   `TC-CALL-011` passed again. The same `--delete` also removed `IncomingRingtone.tsx`,
+   `infra/livekit/certs/` (the TURN TLS certificate) were deleted and restored from
+   `/root/banana-chat-backups/extra-reqs-20260916`.
+
+   The first hypothesis — that this deletion caused the `TC-CALL-011` forced-TURN-TLS failure —
+   was **wrong, and was checked rather than assumed**. `docker exec livekit ls -la /certs`
+   showed the container's mount was an empty orphaned inode *after* the host-side restore, yet
+   `TC-CALL-011` passed on the re-run: LiveKit loads `cert_file`/`key_file` into memory at
+   startup and does not re-read them per handshake, so the running SFU never noticed. The single
+   `TC-CALL-011` failure was therefore transient (three relay-forced Chrome contexts from one
+   laptop against a 45 s timeout), not caused by the deletion.
+
+   The deletion was still a latent outage: the restore did not reach the running container, so
+   the **next** LiveKit restart would have found `/certs` empty and failed to serve TURN TLS.
+   `docker compose up -d --force-recreate --no-deps livekit` was run to re-resolve the bind
+   mount; `/certs` is now populated inside the container and the full 15-check private-call
+   suite, `TC-CALL-011` included, passes from that cold start.
+
+   The same `--delete` also removed `IncomingRingtone.tsx`,
    `notification-audio.ts` and `buttons.css`, which existed on `origin/main` but not on the
    deploying branch, so the rebuilt SPA shipped without the FR-CALL-001 ringtone for about an
    hour; the merge above restored it and the live bundle was re-checked.
