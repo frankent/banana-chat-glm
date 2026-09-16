@@ -136,12 +136,12 @@ export function SearchPage() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="ค้นหาข้อความหรือไฟล์… (minimum 2 characters)"
-            className="w-full max-w-xl rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-yellow-400 focus:outline-none"
+            className="min-w-0 w-full max-w-xl rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-yellow-400 focus:outline-none"
             data-testid="search-input"
           />
           <button
             type="submit"
-            className="rounded-lg bg-yellow-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-yellow-300"
+            className="shrink-0 rounded-lg bg-yellow-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-yellow-300"
           >
             Search
           </button>
@@ -167,7 +167,7 @@ export function SearchPage() {
             id="search-room"
             value={roomId}
             onChange={(e) => setRoomId(e.target.value)}
-            className="rounded-lg border border-slate-300 px-2 py-1"
+            className="min-w-0 max-w-full rounded-lg border border-slate-300 px-2 py-1"
             data-testid="search-room-filter"
           >
             <option value="">All rooms</option>
@@ -187,7 +187,7 @@ export function SearchPage() {
                 id="search-kind"
                 value={kind}
                 onChange={(e) => setKind(e.target.value as typeof kind)}
-                className="rounded-lg border border-slate-300 px-2 py-1"
+                className="min-w-0 max-w-full rounded-lg border border-slate-300 px-2 py-1"
               >
                 <option value="">All kinds</option>
                 <option value="image">Images</option>

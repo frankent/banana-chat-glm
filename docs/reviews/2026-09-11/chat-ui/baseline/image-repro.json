@@ -1,0 +1,10 @@
+{
+  "initialStatus": "uploaded",
+  "apiStatus": "ready",
+  "spinner": 1,
+  "image": 0,
+  "events": [
+    "attachment.ready"
+  ],
+  "imageAfterReload": true
+}

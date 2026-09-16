@@ -16,12 +16,15 @@ import { useSession } from "../../state/session";
 import { useEcho } from "../../echo/EchoProvider";
 import { endpoints } from "../../lib/api";
 import { registerSessionCleanup } from "../../lib/session-resources";
+import { stopIncomingRingtone } from "../../lib/notification-audio";
+import { IncomingRingtone } from "./IncomingRingtone";
 import "./calls.css";
 const CallPanel = lazy(() => import("./CallPanel"));
 type Active = CallJoin & { slug: string };
 const attempts = new CallAttempt();
 let closeMedia: (() => void) | null = null;
 registerSessionCleanup(() => {
+  stopIncomingRingtone();
   attempts.cancel();
   closeMedia?.();
   closeMedia = null;
@@ -76,7 +79,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
     }
   }, [status]);
   const incoming = calls.filter(
-    (c) => me && canRingCall(c, me.id) && !dismissed.includes(c.id),
+    (c) => status === "authenticated" && me && !c.ended_at && canRingCall(c, me.id) && !dismissed.includes(c.id),
   );
 
   async function join(call: RoomCall) {
@@ -171,6 +174,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
                 {c.room_name ? ` · ${c.room_name}` : ""}
               </p>
             </div>
+            {c.room_type === "dm" && <IncomingRingtone createdAt={c.created_at} />}
             <button onClick={() => void join(c)}>Join</button>
             <button
               className="bc-call-decline"

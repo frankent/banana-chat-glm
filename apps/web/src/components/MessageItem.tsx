@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { endpoints } from '../lib/api';
+import { useSession } from '../state/session';
 import { MediaViewer } from './MediaViewer';
 import { Markdown } from './ai/Markdown';
-import { Avatar } from './Visual';
+import { Avatar, Icon } from './Visual';
 import type { Attachment, Message } from '@banana-chat/shared';
 
 function formatTime(iso: string): string {
@@ -34,7 +37,21 @@ function systemText(message: Message): string {
 }
 
 /** FR-MEDIA-004 — thumbnails inline, originals open in a new tab on click. */
-export function AttachmentView({ attachment }: { attachment: Attachment }) {
+export function AttachmentView({ attachment: initialAttachment }: { attachment: Attachment }) {
+  const { me, currentWorkspace } = useSession();
+  const slug = currentWorkspace?.workspace.slug;
+  const processing = (status: Attachment['status']) => ['pending', 'uploaded', 'processing'].includes(status);
+  const refresh = processing(initialAttachment.status);
+  // FR-MEDIA-004: sending clears the composer's upload polling. Both sender
+  // and recipient must still resolve a processing attachment without reload,
+  // including when its user-scoped attachment.ready event was missed.
+  const statusQuery = useQuery({
+    queryKey: ['attachment-status', me?.id, slug, initialAttachment.id],
+    queryFn: () => endpoints.attachment(initialAttachment.id, slug!),
+    enabled: refresh && !!slug && !!me,
+    refetchInterval: query => query.state.error ? false : processing(query.state.data?.attachment.status ?? initialAttachment.status) ? 1500 : false,
+  });
+  const attachment = refresh ? statusQuery.data?.attachment ?? initialAttachment : initialAttachment;
   const [viewing, setViewing] = useState(false);
   const viewer = viewing ? <MediaViewer attachment={attachment} onClose={() => setViewing(false)} /> : null;
   const thumb = attachment.urls.thumb_md ?? attachment.urls.thumb_sm ?? attachment.urls.original;
@@ -123,6 +140,32 @@ export function MessageItem({ message, mine, canModerate = false, grouped = fals
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const bubbleRef = useRef<HTMLDivElement>(null);
+  const actionsRef = useRef<HTMLDivElement>(null);
+  const actionsToggleRef = useRef<HTMLButtonElement>(null);
+
+  // TASK-WEB-018: explicit, keyboard-accessible actions must not disappear
+  // while the pointer crosses the space between a message and its controls.
+  useEffect(() => {
+    if (!actionsOpen) return;
+    actionsRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
+    const dismiss = (event: PointerEvent) => {
+      if (!bubbleRef.current?.contains(event.target as Node)) setActionsOpen(false);
+    };
+    const escape = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setActionsOpen(false);
+        actionsToggleRef.current?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', dismiss);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('pointerdown', dismiss);
+      document.removeEventListener('keydown', escape);
+    };
+  }, [actionsOpen]);
 
   useEffect(() => {
     if (editing) inputRef.current?.focus();
@@ -140,6 +183,7 @@ export function MessageItem({ message, mine, canModerate = false, grouped = fals
   const deleted = message.deleted_at !== null;
   const mayEdit = mine && !deleted && !pending && onEdit !== undefined;
   const mayDelete = !pending && !deleted && (mayEdit || (canModerate && onDelete !== undefined));
+  const hasActions = !pending && !editing && !deleted && Boolean(mayEdit || mayDelete || onReply || onPin);
 
   const submitEdit = async () => {
     const body = draft.trim();
@@ -171,7 +215,7 @@ export function MessageItem({ message, mine, canModerate = false, grouped = fals
   return (
     <div className={`bc-message group flex ${mine ? 'justify-end' : 'justify-start'}`} data-testid="message" data-mine={mine} data-grouped={grouped}>
       {!mine && <Avatar name={message.sender?.display_name ?? 'Member'} className="bc-message-avatar" />}
-      <div className={`bc-message-bubble relative max-w-[70%] rounded-2xl px-3 py-1.5 ${mine ? 'bg-yellow-300' : 'bg-white'} ${pending ? 'opacity-60' : ''} shadow-sm`}>
+      <div ref={bubbleRef} className={`bc-message-bubble relative max-w-[70%] rounded-2xl px-3 py-1.5 ${mine ? 'bg-yellow-300' : 'bg-white'} ${pending ? 'opacity-60' : ''} shadow-sm`}>
         {!mine && message.sender !== null && (
           <p className="text-xs font-semibold text-slate-600">{message.sender.display_name}</p>
         )}
@@ -223,44 +267,54 @@ export function MessageItem({ message, mine, canModerate = false, grouped = fals
             {message.body !== null && <div className="bc-markdown"><Markdown content={message.body} /></div>}
           </>
         )}
-        <p className="mt-0.5 text-right text-[10px] text-slate-500">
+        <div className="bc-message-footer mt-0.5 text-right text-[10px] text-slate-500">
+        <p>
           {pending ? 'sending…' : formatTime(message.created_at)}
           {!deleted && message.edit_count > 0 && <span className="ml-1 italic" data-testid="edited-flag">(แก้ไขแล้ว)</span>}
         </p>
+        {hasActions && <button ref={actionsToggleRef} type="button" className="bc-message-actions-toggle" aria-label="Message actions" aria-expanded={actionsOpen} onClick={() => setActionsOpen(value => !value)}><Icon name="more" size={18} /></button>}
+        </div>
 
-        {/* hover actions — edit (sender), delete (sender or moderator) */}
-        {!pending && !editing && !deleted && (mayEdit || mayDelete || onReply || onPin) && (
+        {/* FR-MSG-005/006: persistent desktop menu; direct actions on touch. */}
+        {hasActions && (
           <div
-            className={`absolute top-0 ${mine ? '-left-16' : '-right-16'} hidden gap-1 group-hover:flex`}
+            ref={actionsRef}
+            className="absolute top-0 flex gap-1"
             data-testid="message-actions"
+            data-open={actionsOpen}
+            role="group"
+            aria-label="Message actions"
           >
-            {onReply && <button aria-label="Reply" title="Reply" onClick={() => onReply(message)}>↩</button>}
-            {onPin && <button aria-label="Pin message" title="Pin message" onClick={() => onPin(message)}>⌖</button>}
+            {onReply && <button aria-label="Reply" title="Reply" onClick={() => {setActionsOpen(false);onReply(message);}}><Icon name="reply" size={18} /></button>}
+            {onPin && <button aria-label="Pin message" title="Pin message" onClick={() => {setActionsOpen(false);onPin(message);}}><Icon name="pin" size={18} /></button>}
             {mayEdit && (
               <button
                 type="button"
                 title="แก้ไข"
+                aria-label="Edit message"
                 className="rounded-full bg-white px-2 py-0.5 text-xs shadow hover:bg-slate-100"
                 onClick={() => {
+                  setActionsOpen(false);
                   setDraft(message.body ?? '');
                   setError(null);
                   setEditing(true);
                 }}
                 data-testid="edit-button"
               >
-                ✏️
+                <Icon name="edit" size={18} />
               </button>
             )}
             {mayDelete && (
               <button
                 type="button"
                 title="ลบ"
+                aria-label="Delete message"
                 disabled={busy}
                 className="rounded-full bg-white px-2 py-0.5 text-xs shadow hover:bg-red-50 disabled:opacity-40"
-                onClick={() => void confirmDelete()}
+                onClick={() => {setActionsOpen(false);void confirmDelete();}}
                 data-testid="delete-button"
               >
-                🗑️
+                <Icon name="trash" size={18} />
               </button>
             )}
           </div>

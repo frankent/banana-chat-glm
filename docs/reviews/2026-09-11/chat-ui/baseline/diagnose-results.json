@@ -1,0 +1,38 @@
+[
+  {
+    "id": "TC-MSG-UI-pin-after-settled-edit",
+    "passed": true
+  },
+  {
+    "id": "TC-WEB-UI-keyboard-message-actions",
+    "passed": false,
+    "error": "expect(received).toBe(expected) // Object.is equality\n\nExpected: true\nReceived: false"
+  },
+  {
+    "id": "TC-MSG-UI-hover-traverse",
+    "passed": false,
+    "error": "expect(locator).toBeVisible() failed\n\nLocator: getByTestId('message').filter({ hasText: 'Action repro 1789121883576' }).getByRole('button', { name: 'Reply', exact: true })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n  - Expect \"to.be.visible\" with timeout 5000ms\n  - waiting for getByTestId('message').filter({ hasText: 'Action repro 1789121883576' }).getByRole('button', { name: 'Reply', exact: true })\n"
+  },
+  {
+    "id": "TC-WEB-UI-search-mobile",
+    "passed": false,
+    "error": "expect(received).toBeLessThanOrEqual(expected)\n\nExpected: <= 320\nReceived:    398"
+  },
+  {
+    "id": "TC-WEB-UI-tablet-media-layout",
+    "passed": true
+  },
+  {
+    "id": "TC-MSG-UI-mention-keyboard",
+    "passed": true
+  },
+  {
+    "id": "TC-NOTI-UI-sound-toggle",
+    "passed": true
+  },
+  {
+    "id": "TC-WEB-UI-tablet-touch-actions",
+    "passed": false,
+    "error": "expect(locator).toBeVisible() failed\n\nLocator: getByTestId('message').filter({ hasText: 'Action repro 1789121883576' }).getByRole('button', { name: 'Reply', exact: true })\nExpected: visible\nTimeout: 5000ms\nError: element(s) not found\n\nCall log:\n  - Expect \"to.be.visible\" with timeout 5000ms\n  - waiting for getByTestId('message').filter({ hasText: 'Action repro 1789121883576' }).getByRole('button', { name: 'Reply', exact: true })\n"
+  }
+]

@@ -1,0 +1,126 @@
+/* TASK-WEB-018: one control geometry across chat, AI, boards and meetings.
+ * Content cards, image previews and overlay backdrops are not action buttons.
+ * Root scoping overrides legacy per-screen utilities without affecting Filament.
+ */
+:root {
+  --bc-button-size: 40px;
+  --bc-button-compact: 32px;
+  --bc-button-radius: 8px;
+  --bc-button-padding: 12px;
+  --bc-button-icon: 18px;
+}
+
+#root :is(button, a.bc-primary, label.bc-board-secondary):not(:where(
+  .bc-brand, .bc-sidebar-shade, .bc-ticket-shade, .bc-ticket-open,
+  .bc-ai-entry, .bc-search, .bc-reply-quote, .bc-file-preview,
+  [data-testid="attachment-file"], [data-testid="search-result-message"],
+  [data-testid="search-result-file"], [class~="text-left"],
+  .bc-people > button, .bc-ticket-image-grid > button, button:has(> img)
+)) {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: var(--bc-button-size);
+  min-height: var(--bc-button-size);
+  min-width: var(--bc-button-size);
+  flex-shrink: 0;
+  padding: 0 var(--bc-button-padding);
+  margin-block: 0;
+  border-radius: var(--bc-button-radius);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+#root :is(.bc-chat-header button, [data-testid="message-actions"] button) {
+  border: 1px solid var(--bc-line);
+  background: #fff;
+  color: var(--bc-ink);
+  box-shadow: none;
+}
+#root :is(.bc-chat-header button, [data-testid="message-actions"] button):hover {
+  background: #f0f2eb;
+}
+#root [data-testid="delete-button"]:hover {background: #fff1ee; color: #a13e32;}
+
+#root :is(
+  .bc-rail-links button, .bc-rail-bottom button, .bc-mobile-top button,
+  [data-testid="notification-bell"], [data-testid="attach-button"],
+  [data-testid="room-media-toggle"], [data-testid="message-actions"] button,
+  .bc-message-actions-toggle, .bc-notes > header > button,
+  [aria-label="Close media panel"], [aria-label="Close viewer"],
+  [aria-label="Cancel reply"], [aria-label="Unpin message"]
+) {
+  width: var(--bc-button-size);
+  min-width: var(--bc-button-size);
+  padding: 0;
+}
+#root :is(.bc-tool-button, .bc-chat-header button, [data-testid="message-actions"] button, .bc-compose-box button) > svg {
+  width: var(--bc-button-icon);
+  height: var(--bc-button-icon);
+  flex-shrink: 0;
+}
+#root .bc-md-toolbar button {
+  height: var(--bc-button-compact);
+  min-height: var(--bc-button-compact);
+  min-width: var(--bc-button-compact);
+  padding: 0 8px;
+}
+#root .bc-chat-header {gap: 12px;}
+#root .bc-chat-identity {flex: 1;}
+#root .bc-chat-identity > div {min-width: 0;}
+#root .bc-chat-identity h2 {overflow: hidden; text-overflow: ellipsis; white-space: nowrap;}
+#root .bc-chat-header > div:last-child {flex-shrink: 0; gap: 8px;}
+#root .bc-compose-box {align-items: center;}
+#root .bc-compose-box textarea {min-width: 0;}
+#root .bc-welcome > .bc-primary {margin-top: 30px;}
+#root .bc-login-form button[type="submit"] {width: 100%;}
+#root .bc-meeting-actions .bc-primary {border: 1px solid transparent;}
+#root .bc-board-actions, #root .bc-ticket-form footer {align-items: center;}
+#root .bc-lane-editor {align-items: center;}
+#root .bc-message-bubble [data-testid="message-actions"] {gap: 4px;}
+
+#root input[type="file"]::file-selector-button {
+  box-sizing: border-box;
+  height: var(--bc-button-size);
+  padding: 0 var(--bc-button-padding);
+  margin-right: 8px;
+  border: 1px solid var(--bc-line);
+  border-radius: var(--bc-button-radius);
+  background: #fff;
+  color: var(--bc-ink);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  cursor: pointer;
+}
+#root input[type="file"]::file-selector-button:hover {background: #f0f2eb;}
+
+@media (max-width: 1050px) {
+  #root .bc-chat-header .bc-call-label {display: none;}
+  #root .bc-chat-header button {width: var(--bc-button-size); padding: 0;}
+  #root .bc-ai-view {flex-direction: column;}
+  #root .bc-ai-sidebar {width: 100%; max-height: 45%; border-right: 0; border-bottom: 1px solid var(--bc-line);}
+  #root .bc-ai-content {min-height: 0; overflow: auto;}
+}
+@media (hover: none), (pointer: coarse), (max-width: 760px) {
+  :root {--bc-button-size: 44px; --bc-button-compact: 40px;}
+  #root .bc-message-bubble .bc-message-actions-toggle {display: none;}
+  #root [data-testid="send-button"] {width: var(--bc-button-size); padding: 0;}
+  #root .bc-chat-header > div:last-child {gap: 4px;}
+  #root .bc-meeting-create label:first-child {min-width: 0; width: 100%; flex-basis: 100%;}
+}
+@media (max-width: 480px) {
+  #root .bc-chat-header {height: auto; min-height: 104px; flex-wrap: wrap; padding: 8px 10px; gap: 6px;}
+  #root .bc-chat-identity {flex-basis: 100%;}
+  #root .bc-chat-identity h2 {max-width: none;}
+  #root .bc-chat-header > div:last-child {width: 100%;}
+  #root .bc-chat-header button {flex: 1; width: auto;}
+  #root .bc-call-stage footer {gap: 4px;}
+  #root .bc-call-stage footer button {padding-inline: 8px;}
+}

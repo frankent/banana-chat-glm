@@ -1,0 +1,13 @@
+{
+  "results": [
+    "Incoming voice repeats; caller stays silent",
+    "Caller cancellation stops ringing",
+    "Incoming video rings; decline stops ringing",
+    "Silence stops sound without dismissing call",
+    "Answer stops ringing",
+    "Public meeting creation screenshot captured",
+    "60-second ring window stops audio"
+  ],
+  "errors": [],
+  "cleaned": true
+}

@@ -32,6 +32,11 @@ let echo: Echo<'reverb'> | null = null;
 type RoomWatcher = { roomId: string; event: (name: string, data: Record<string, unknown>) => void; connection: (connected: boolean) => void };
 const watchers = new Set<RoomWatcher>();
 const listWatchers = new Set<() => void>();
+const callWatchers = new Set<() => void>();
+export function watchCalls(callback: () => void) {
+  callWatchers.add(callback);
+  return () => { callWatchers.delete(callback); };
+}
 export function watchRoomList(callback: () => void) { listWatchers.add(callback); return () => { listWatchers.delete(callback); }; }
 function bindRoom(watcher: RoomWatcher) {
   if (!echo) return;
@@ -73,7 +78,7 @@ export function connectRealtime(onRoomsChanged: () => void): void {
     wsHost: cfg.host,
     wsPort: cfg.port,
     wssPort: cfg.port,
-    forceTLS: false,
+    forceTLS: API_BASE_URL.startsWith('https://'),
     enabledTransports: ['ws', 'wss'],
     authorizer: (channel: { name: string }) => ({
       authorize: (socketId: string, callback: (error: unknown, response: unknown) => void) => {
@@ -94,6 +99,9 @@ export function connectRealtime(onRoomsChanged: () => void): void {
   });
 
   const user = echo.private(`user.${me.id}`);
+  user.listen('.call.changed', () => {
+    for (const callback of callWatchers) callback();
+  });
   user.listen('.session.revoked', (envelope: EventEnvelope<{ reason: string }>) => {
     if (envelope.data?.reason !== 'logout') {
       // another device's logout must not kill this one (FR-AUTH-011)

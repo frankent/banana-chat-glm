@@ -1,0 +1,303 @@
+{
+  "candidateAssets": true,
+  "results": [
+    {
+      "id": "TC-ROOM-UI-create-dm-and-realtime-list",
+      "passed": true,
+      "ms": 3615
+    },
+    {
+      "id": "TC-MSG-UI-send-and-realtime-delivery",
+      "passed": true,
+      "ms": 1842
+    },
+    {
+      "id": "TC-MSG-UI-persistent-actions",
+      "passed": true,
+      "ms": 640
+    },
+    {
+      "id": "TC-WEB-UI-keyboard-message-actions",
+      "passed": true,
+      "ms": 47
+    },
+    {
+      "id": "TC-MSG-UI-edit-cancel-save",
+      "passed": true,
+      "ms": 2561
+    },
+    {
+      "id": "TC-MSG-UI-pin-jump-return-unpin",
+      "passed": true,
+      "ms": 1958
+    },
+    {
+      "id": "TC-MSG-UI-reply-send-and-jump",
+      "passed": true,
+      "ms": 1151
+    },
+    {
+      "id": "TC-MSG-UI-delete",
+      "passed": true,
+      "ms": 2857
+    },
+    {
+      "id": "TC-MSG-UI-enter-newline-and-typing",
+      "passed": true,
+      "ms": 2951
+    },
+    {
+      "id": "TC-MSG-UI-mention-keyboard",
+      "passed": true,
+      "ms": 55
+    },
+    {
+      "id": "TC-NOTE-UI-create-edit-cancel-delete",
+      "passed": true,
+      "ms": 2019
+    },
+    {
+      "id": "TC-MEDIA-UI-upload-text-preview-download",
+      "passed": true,
+      "ms": 2239
+    },
+    {
+      "id": "TC-MEDIA-UI-upload-image-zoom-fit-close",
+      "passed": false,
+      "error": "expect(locator).toBeVisible() failed\n\nLocator: getByTestId('message').filter({ hasText: 'UI image attachment' }).getByRole('button', { name: 'View ui-preview.png' })\nExpected: visible\nTimeout: 45000ms\nError: element(s) not found\n\nCall log:\n  - Expect \"to.be.visible\" with timeout 45000ms\n  - waiting for getByTestId('message').filter({ hasText: 'UI image attachment' }).getByRole('button', { name: 'View ui-preview.png' })\n",
+      "ms": 46042
+    },
+    {
+      "id": "TC-MEDIA-UI-panel-filters-jump",
+      "passed": true,
+      "ms": 1790
+    },
+    {
+      "id": "TC-ROOM-UI-create-long-name-group",
+      "passed": true,
+      "ms": 1425
+    },
+    {
+      "id": "TC-MSG-UI-draft-room-switch",
+      "passed": true,
+      "ms": 122
+    },
+    {
+      "id": "TC-WEB-UI-responsive-controls-1440",
+      "passed": true,
+      "details": {
+        "width": 1440,
+        "controls": [
+          {
+            "name": "Start video call",
+            "right": 1320.15625,
+            "hit": true
+          },
+          {
+            "name": "Room notes",
+            "right": 1376,
+            "hit": true
+          },
+          {
+            "name": "Media and files",
+            "right": 1420,
+            "hit": true
+          }
+        ]
+      },
+      "ms": 192
+    },
+    {
+      "id": "TC-WEB-UI-responsive-controls-1024",
+      "passed": true,
+      "details": {
+        "width": 1024,
+        "controls": [
+          {
+            "name": "Start video call",
+            "right": 904.15625,
+            "hit": true
+          },
+          {
+            "name": "Room notes",
+            "right": 960,
+            "hit": true
+          },
+          {
+            "name": "Media and files",
+            "right": 1004,
+            "hit": true
+          }
+        ]
+      },
+      "ms": 75
+    },
+    {
+      "id": "TC-WEB-UI-responsive-controls-820",
+      "passed": true,
+      "details": {
+        "width": 820,
+        "controls": [
+          {
+            "name": "Start video call",
+            "right": 700.15625,
+            "hit": true
+          },
+          {
+            "name": "Room notes",
+            "right": 756,
+            "hit": true
+          },
+          {
+            "name": "Media and files",
+            "right": 800,
+            "hit": true
+          }
+        ]
+      },
+      "ms": 68
+    },
+    {
+      "id": "TC-WEB-UI-side-panels-820",
+      "passed": true,
+      "ms": 307
+    },
+    {
+      "id": "TC-WEB-UI-responsive-controls-768",
+      "passed": true,
+      "details": {
+        "width": 768,
+        "controls": [
+          {
+            "name": "Start video call",
+            "right": 648.15625,
+            "hit": true
+          },
+          {
+            "name": "Room notes",
+            "right": 704,
+            "hit": true
+          },
+          {
+            "name": "Media and files",
+            "right": 748,
+            "hit": true
+          }
+        ]
+      },
+      "ms": 165
+    },
+    {
+      "id": "TC-WEB-UI-responsive-controls-760",
+      "passed": true,
+      "details": {
+        "width": 760,
+        "controls": [
+          {
+            "name": "Start video call",
+            "right": 660.15625,
+            "hit": true
+          },
+          {
+            "name": "Room notes",
+            "right": 711,
+            "hit": true
+          },
+          {
+            "name": "Media and files",
+            "right": 750,
+            "hit": true
+          }
+        ]
+      },
+      "ms": 58
+    },
+    {
+      "id": "TC-WEB-UI-responsive-controls-390",
+      "passed": true,
+      "details": {
+        "width": 390,
+        "controls": [
+          {
+            "name": "Start video call",
+            "right": 290.15625,
+            "hit": true
+          },
+          {
+            "name": "Room notes",
+            "right": 341,
+            "hit": true
+          },
+          {
+            "name": "Media and files",
+            "right": 380,
+            "hit": true
+          }
+        ]
+      },
+      "ms": 49
+    },
+    {
+      "id": "TC-WEB-UI-side-panels-390",
+      "passed": true,
+      "ms": 278
+    },
+    {
+      "id": "TC-WEB-UI-responsive-controls-320",
+      "passed": true,
+      "details": {
+        "width": 320,
+        "controls": [
+          {
+            "name": "Start video call",
+            "right": 220.15625,
+            "hit": true
+          },
+          {
+            "name": "Room notes",
+            "right": 271,
+            "hit": true
+          },
+          {
+            "name": "Media and files",
+            "right": 310,
+            "hit": true
+          }
+        ]
+      },
+      "ms": 74
+    },
+    {
+      "id": "TC-WEB-UI-side-panels-320",
+      "passed": true,
+      "ms": 275
+    },
+    {
+      "id": "TC-WEB-UI-search-mobile",
+      "passed": true,
+      "ms": 857
+    },
+    {
+      "id": "TC-WEB-UI-mobile-navigation-and-actions",
+      "passed": true,
+      "ms": 1559
+    },
+    {
+      "id": "TC-NOTI-UI-sound-and-dismiss",
+      "passed": true,
+      "ms": 950
+    },
+    {
+      "id": "TC-WEB-UI-tablet-touch-actions",
+      "passed": true,
+      "ms": 629
+    },
+    {
+      "id": "TC-WEB-UI-runtime-errors",
+      "passed": true,
+      "ms": 1
+    }
+  ],
+  "errors": [],
+  "cleanup": true
+}

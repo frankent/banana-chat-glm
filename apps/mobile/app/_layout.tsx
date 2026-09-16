@@ -12,6 +12,7 @@ import { connectRealtime, disconnectRealtime } from '../src/realtime/echo';
 import { ANDROID_CHANNELS, badgeNumber, parseDeepLink, shouldShowForegroundBanner } from '../src/push/routing';
 import { getCurrentRoomId } from '../src/push/current-room';
 import { endpoints } from '../src/lib/api';
+import { IncomingCallAlert } from '../src/calls/IncomingCallAlert';
 
 /**
  * TASK-MOB-001/008 — root layout: primes SecureStore, bootstraps the session,
@@ -172,6 +173,13 @@ export default function RootLayout() {
         <Stack.Screen name="settings/notifications" options={{ title: '' }} />
         <Stack.Screen name="force-update" options={{ headerShown: false, gestureEnabled: false }} />
       </Stack>
+      {status === 'authenticated' && me && currentWorkspace && (
+        <IncomingCallAlert
+          key={`${me.id}:${currentWorkspace.workspace.slug}`}
+          userId={me.id}
+          slug={currentWorkspace.workspace.slug}
+        />
+      )}
     </SafeAreaProvider>
   );
 }

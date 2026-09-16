@@ -1,0 +1,18 @@
+{
+  "applicationCommit": "79f3cf7",
+  "url": "https://chat.gamecoms.net",
+  "image": "sha256:77e4e81c788b2580552d710be91d06a04e4e364ff4ba51a46fd499ff37325109",
+  "rollbackImage": "banana-ringtone-rollback:20260911",
+  "candidateChatChecks": 34,
+  "candidateRingtoneAndScreenshotChecks": 7,
+  "productionRingtoneAndScreenshotChecks": 7,
+  "mobileTypecheck": "passed",
+  "mobileJavaScriptTests": 28,
+  "mobileJavaScriptSuites": 8,
+  "excludedMobileSuite": "sqlite-cache.test.ts: native test dependency requires missing make",
+  "nativeDeviceTested": false,
+  "nativeBinaryReleased": false,
+  "apiHealth": "healthy",
+  "containerHealth": "healthy",
+  "qaCleaned": true
+}
