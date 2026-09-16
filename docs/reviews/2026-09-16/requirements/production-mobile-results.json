@@ -1,0 +1,188 @@
+{
+  "requirement": "FR-WEB-001 / DEC-058",
+  "target": "https://chat.gamecoms.net",
+  "production": true,
+  "device": "iPhone 13 emulation (Chromium, channel=chrome), hasTouch",
+  "limitations": [
+    "Chromium cannot reproduce iOS Safari's real focus auto-zoom; no physical iOS device is driven here.",
+    "This proves the DEC-058 CSS floor and viewport meta are LIVE ON PRODUCTION, not the device behaviour itself.",
+    "window.visualViewport.scale is trivially 1 in Chromium, so check 4 is a regression tripwire, not evidence of iOS behaviour.",
+    "Only the surfaces listed in `surfaces` were swept; controls that render only behind unvisited states are not covered.",
+    "`.bc-app` is height:100dvh;overflow:hidden, so the scrollWidth overflow check only catches overflow ESCAPING the app shell — a widened control that overflows inside a clipped pane is not detected.",
+    "`expect(errors).toEqual([])` fails on ANY uncaught page error, including benign production noise unrelated to DEC-058; read `errors` before calling it a defect."
+  ],
+  "fixture": {
+    "workspace": "01m2m6t5gs1gxhdxkr70r9zbqc",
+    "slug": "mobileqa1789532115888",
+    "users": [
+      "mobileqa17895321158880",
+      "mobileqa17895321158881"
+    ],
+    "room": "01m2m6t5x554ynmec6ky187qz5"
+  },
+  "results": [
+    {
+      "test": "TC-WEB-071 production viewport meta enables interactive-widget=resizes-content and keeps pinch zoom",
+      "status": "passed",
+      "meta": "width=device-width, initial-scale=1.0, interactive-widget=resizes-content"
+    },
+    {
+      "test": "TC-WEB-071 login, new-room dialog and room composer editable controls are all >= 16px",
+      "status": "passed"
+    },
+    {
+      "test": "TC-WEB-071 negative probe — the 16px floor is live on production and the sweep can fail",
+      "status": "passed",
+      "floored": {
+        "control": "input[data-testid=\"dec058-floor-probe\"]",
+        "fontSize": "16px"
+      },
+      "offender": {
+        "control": "input[data-testid=\"dec058-negative-probe\"]",
+        "fontSize": "11px"
+      }
+    },
+    {
+      "test": "TC-WEB-071 focusing the composer keeps visualViewport.scale at 1 and a >= 16px font-size",
+      "status": "passed",
+      "scaleBefore": 1,
+      "scaleAfter": 1,
+      "focusedFontSize": "16px"
+    },
+    {
+      "test": "TC-WEB-071 room view has no horizontal overflow at phone width",
+      "status": "passed",
+      "scrollWidth": 390,
+      "innerWidth": 390
+    },
+    {
+      "test": "TC-WEB-071 search and members page editable controls are all >= 16px",
+      "status": "passed"
+    },
+    {
+      "test": "TC-WEB-071 no uncaught browser errors on the emulated phone",
+      "status": "passed"
+    }
+  ],
+  "surfaces": [
+    {
+      "surface": "login page",
+      "checked": 2,
+      "offenders": [],
+      "controls": [
+        {
+          "control": "input(label: Username).mt-1",
+          "fontSize": "16px"
+        },
+        {
+          "control": "input[type=password](label: Password).mt-1",
+          "fontSize": "16px"
+        }
+      ]
+    },
+    {
+      "surface": "new room dialog",
+      "checked": 3,
+      "offenders": [],
+      "controls": [
+        {
+          "control": "select[aria-label=\"Workspace\"].w-full",
+          "fontSize": "16px"
+        },
+        {
+          "control": "input[placeholder=\"Group name\"].w-full",
+          "fontSize": "16px"
+        },
+        {
+          "control": "input[placeholder=\"Search people…\"].w-full",
+          "fontSize": "16px"
+        }
+      ]
+    },
+    {
+      "surface": "room view composer",
+      "checked": 1,
+      "offenders": [],
+      "controls": [
+        {
+          "control": "textarea[data-testid=\"composer-input\"][placeholder=\"Message… (Enter to send, Shift+Enter for newline)\"].flex-1",
+          "fontSize": "16px"
+        }
+      ]
+    },
+    {
+      "surface": "room view composer (probes removed)",
+      "checked": 1,
+      "offenders": [],
+      "controls": [
+        {
+          "control": "textarea[data-testid=\"composer-input\"][placeholder=\"Message… (Enter to send, Shift+Enter for newline)\"].flex-1",
+          "fontSize": "16px"
+        }
+      ]
+    },
+    {
+      "surface": "search page",
+      "checked": 2,
+      "offenders": [],
+      "controls": [
+        {
+          "control": "input#search-q[data-testid=\"search-input\"][placeholder=\"ค้นหาข้อความหรือไฟล์… (minimum 2 characters)\"].min-w-0",
+          "fontSize": "16px"
+        },
+        {
+          "control": "select#search-room[data-testid=\"search-room-filter\"].min-w-0",
+          "fontSize": "16px"
+        }
+      ]
+    },
+    {
+      "surface": "members page",
+      "checked": 1,
+      "offenders": [],
+      "controls": [
+        {
+          "control": "input[aria-label=\"Search workspace members\"][placeholder=\"Search by name or username\"]",
+          "fontSize": "16px"
+        }
+      ]
+    }
+  ],
+  "evidence": {
+    "servedViewportMeta": "width=device-width, initial-scale=1.0, interactive-widget=resizes-content",
+    "viewport": {
+      "innerWidth": 410,
+      "innerHeight": 699,
+      "dpr": 3
+    },
+    "domViewportMeta": "width=device-width, initial-scale=1.0, interactive-widget=resizes-content",
+    "login": [
+      {
+        "attempt": 1,
+        "status": 200,
+        "ok": true
+      }
+    ],
+    "probes": {
+      "floored": {
+        "control": "input[data-testid=\"dec058-floor-probe\"]",
+        "fontSize": "16px"
+      },
+      "offender": {
+        "control": "input[data-testid=\"dec058-negative-probe\"]",
+        "fontSize": "11px"
+      }
+    },
+    "focus": {
+      "scaleBefore": 1,
+      "scaleAfter": 1,
+      "focusedFontSize": "16px"
+    },
+    "overflow": {
+      "scrollWidth": 390,
+      "innerWidth": 390
+    }
+  },
+  "errors": [],
+  "cleanup": "removed"
+}

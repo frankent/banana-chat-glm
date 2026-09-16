@@ -1,0 +1,9 @@
+{
+  "results": [
+    {
+      "test": "TC-CALL-020 admin capacity control and active-session policy visible",
+      "status": "passed"
+    }
+  ],
+  "cleanup": true
+}

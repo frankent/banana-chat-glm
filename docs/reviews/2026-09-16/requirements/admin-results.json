@@ -1,0 +1,13 @@
+{
+  "results": [
+    {
+      "test": "TC-CALL-020 admin capacity control and active-session policy visible",
+      "status": "passed"
+    },
+    {
+      "test": "TC-CALL-020 admin saves capacity and rejects out-of-range value",
+      "status": "passed"
+    }
+  ],
+  "cleanup": true
+}

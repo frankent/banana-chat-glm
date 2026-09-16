@@ -1,0 +1,85 @@
+{
+  "fixture": {
+    "workspace": "01m2m21fb5mjt7q5f5a9jq046m",
+    "slug": "meetqa1789527112203",
+    "users": [
+      "meetqa17895271122030",
+      "meetqa17895271122031"
+    ]
+  },
+  "results": [
+    {
+      "test": "TC-MEET-001 create public meeting from workspace UI",
+      "status": "passed"
+    },
+    {
+      "test": "TC-MEET-010 member login returns to the shared meeting link",
+      "status": "passed"
+    },
+    {
+      "test": "TC-MEET-002/003 member detection and required guest name",
+      "status": "passed"
+    },
+    {
+      "test": "TC-CALL-032 member and guest cameras are off on entry",
+      "status": "passed"
+    },
+    {
+      "test": "TC-MEET-010 three-way member/guest audio/video over forced TURN TLS",
+      "status": "passed",
+      "selected": [
+        [
+          {
+            "policy": "relay",
+            "relayProtocol": "tls",
+            "url": "turns:media.gamecoms.net:443?transport=tcp"
+          }
+        ],
+        [
+          {
+            "policy": "relay",
+            "relayProtocol": "tls",
+            "url": "turns:media.gamecoms.net:443?transport=tcp"
+          }
+        ],
+        [
+          {
+            "policy": "relay",
+            "relayProtocol": "tls",
+            "url": "turns:media.gamecoms.net:443?transport=tcp"
+          }
+        ]
+      ]
+    },
+    {
+      "test": "TC-CALL-031 remote playback gain defaults to 150% and adjusts to 200%",
+      "status": "passed"
+    },
+    {
+      "test": "TC-CALL-030 concurrent shares auto-focus, manual guest focus, fullscreen and fallback",
+      "status": "passed"
+    },
+    {
+      "test": "TC-MEET-010 mobile layout, microphone toggle and screen share",
+      "status": "passed"
+    },
+    {
+      "test": "TC-MEET-008 member logout evicts only that participant",
+      "status": "passed"
+    },
+    {
+      "test": "TC-MEET-005 guest leave releases devices and link remains reusable",
+      "status": "passed"
+    },
+    {
+      "test": "TC-MEET-007 creator end revokes link and media credentials for all",
+      "status": "passed"
+    },
+    {
+      "test": "TC-MEET-010 no uncaught browser errors",
+      "status": "passed"
+    }
+  ],
+  "errors": [],
+  "cleanup": true
+}

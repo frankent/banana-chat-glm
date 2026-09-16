@@ -1,0 +1,21 @@
+{
+  "test": "TC-CALL-031 rendered audio boosts quiet input by 50%, compresses loud steady input, and mutes",
+  "status": "passed",
+  "normal": {
+    "rms": 0.04304752574575587,
+    "peak": 0.06087840348482132
+  },
+  "boosted": {
+    "rms": 0.0645712882840423,
+    "peak": 0.09131760895252228
+  },
+  "loud": {
+    "rms": 0.6797278227778325,
+    "peak": 0.9629765152931213
+  },
+  "muted": {
+    "rms": 0,
+    "peak": 0
+  },
+  "ratio": 1.4999999922273928
+}
