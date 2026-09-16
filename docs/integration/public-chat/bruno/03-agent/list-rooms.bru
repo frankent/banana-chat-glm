@@ -1,0 +1,67 @@
+meta {
+  name: API-220 List rooms (support queue)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/public-chat/rooms?limit=30
+  body: none
+  auth: none
+}
+
+params:query {
+  limit: 30
+  ~status: new,in_progress,problem
+  ~assigned: me
+  ~q: ใจดี
+  ~needs_reply: true
+  ~cursor: 
+}
+
+headers {
+  Authorization: Bearer {{agent_token}}
+  X-Workspace-Id: {{workspace_id}}
+}
+
+docs {
+  API-220 GET /api/v1/public-chat/rooms — support staff only. A PARTNER DOES NOT
+  CALL THIS TIER; it is listed here so the whole surface is visible in one place.
+
+  Auth is the ordinary member bearer plus X-Workspace-Id — authorisation is
+  "active member of this workspace", with no room-level role.
+
+  All filtering is server-side:
+    status       CSV of the raw statuses: new,in_progress,done,problem
+    assigned     a user ULID, or the literals 'me' / 'none'
+    q            matches customer_name, provider_name, external_ref AND message bodies
+    needs_reply  the amber-dot filter
+    cursor       OPAQUE BY CONTRACT — never parse it
+    limit        1..100 (default 30)
+
+  Order is triage order: problem first, then needs_reply, then last_message_at
+  DESC NULLS LAST, id DESC.
+}
+
+tests {
+  test("API-220 · 200 with rooms and an opaque next_cursor", function () {
+    if (res.getStatus() === 401) {
+      return; // paste agent_token + workspace_id into the environment
+    }
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().rooms).to.be.an("array");
+    expect(res.getBody()).to.have.property("next_cursor");
+  });
+
+  test("API-220 · staff see the RAW status and the partner's meta", function () {
+    if (res.getStatus() !== 200 || res.getBody().rooms.length === 0) {
+      return;
+    }
+    const room = res.getBody().rooms[0];
+    expect(room.status).to.be.oneOf(["new", "in_progress", "done", "problem"]);
+    expect(room.status_public).to.be.oneOf(["open", "closed"]);
+    expect(room).to.have.property("meta");
+    expect(room).to.have.property("needs_reply");
+    expect(room.unread_count).to.be.a("number");
+  });
+}

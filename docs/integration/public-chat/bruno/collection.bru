@@ -1,0 +1,307 @@
+auth {
+  mode: none
+}
+
+headers {
+  Accept: application/json
+}
+
+script:pre-request {
+  // ===========================================================================
+  // Banana Chat — Public Chat · COLLECTION-LEVEL HMAC SIGNER (FR-PCHAT-031)
+  //
+  // Signs every Tier-1 request under /api/v1/partner/public-chat/ and leaves
+  // Tier-2 (visitor) and Tier-3 (agent) requests completely untouched — those
+  // two tiers are NOT HMAC-signed and a stray X-PChat-* header on them is at
+  // best noise.
+  //
+  // Mirror of apps/api/app/Http/Middleware/VerifyPublicChatSignature.php.
+  // The canonical string is EXACTLY six lines joined with "\n":
+  //
+  //   v1
+  //   <HTTP METHOD, uppercase>
+  //   <request path, leading slash, INCLUDES /api/v1, EXCLUDES the query>
+  //   <X-PChat-Timestamp>
+  //   <X-PChat-Nonce>
+  //   <lowercase hex sha256 of the RAW request body bytes>
+  //
+  //   signature = "v1=" + hex(hmac_sha256(canonical, secret))
+  //
+  // THE ONE RULE: sign the exact bytes that go on the wire. See §"WIRE BYTES"
+  // below for why this script re-serialises the body itself instead of trusting
+  // that Bruno will produce the same JSON we hashed.
+  // ===========================================================================
+  
+  const VERSION = 'v1';
+  const TIER1_PREFIX = '/partner/public-chat/';
+  
+  // ---------------------------------------------------------------------------
+  // 1. CRYPTO SHIM
+  //
+  // Bruno runs scripts in one of two sandboxes. Developer Mode is real Node and
+  // has require('crypto'); Safe Mode is QuickJS and does NOT — but it does bundle
+  // crypto-js in both modes. Try Node first, fall back, and fail loudly rather
+  // than silently signing with something wrong.
+  // ---------------------------------------------------------------------------
+  let sha256Hex;
+  let hmacSha256Hex;
+  let randomHex;
+  
+  try {
+    const nodeCrypto = require('crypto');
+    if (typeof nodeCrypto.createHash !== 'function') {
+      throw new Error('node crypto unavailable');
+    }
+    sha256Hex = (s) => nodeCrypto.createHash('sha256').update(s, 'utf8').digest('hex');
+    hmacSha256Hex = (s, k) => nodeCrypto.createHmac('sha256', k).update(s, 'utf8').digest('hex');
+    randomHex = (n) => nodeCrypto.randomBytes(n).toString('hex');
+  } catch (nodeErr) {
+    try {
+      const CryptoJS = require('crypto-js');
+      // crypto-js treats a plain JS string as UTF-8 and returns lowercase hex,
+      // which is exactly what hash_hmac('sha256', ...) produces in PHP.
+      sha256Hex = (s) => CryptoJS.SHA256(s).toString(CryptoJS.enc.Hex);
+      hmacSha256Hex = (s, k) => CryptoJS.HmacSHA256(s, k).toString(CryptoJS.enc.Hex);
+      randomHex = (n) => CryptoJS.lib.WordArray.random(n).toString(CryptoJS.enc.Hex);
+    } catch (cjsErr) {
+      throw new Error(
+        'Public Chat signer: no crypto module available. Open the collection ' +
+        'settings and switch Script Execution to "Developer Mode" (Safe Mode ' +
+        'needs crypto-js, which this Bruno build does not bundle).'
+      );
+    }
+  }
+  
+  // ---------------------------------------------------------------------------
+  // 2. INTERPOLATION — the trap that produces "random" 401s
+  //
+  // Bruno substitutes {{vars}} AFTER pre-request scripts run. So req.getUrl()
+  // hands us the literal template ".../rooms/{{room_id}}" and req.getBody()
+  // hands us a body still containing "{{code}}". Hashing those signs a path and
+  // a body that are NOT what leaves the machine, and the API answers 401
+  // API_SIGNATURE_INVALID — intermittently, because it only bites the requests
+  // that actually carry a variable. We therefore interpolate ourselves, here,
+  // before anything is hashed.
+  // ---------------------------------------------------------------------------
+  const lookupVar = (name) => {
+    const sources = [
+      () => bru.getVar(name),
+      () => bru.getEnvVar(name),
+      () => (typeof bru.getProcessEnv === 'function' ? bru.getProcessEnv(name) : undefined)
+    ];
+    for (const read of sources) {
+      try {
+        const value = read();
+        if (value !== undefined && value !== null && value !== '') {
+          return value;
+        }
+      } catch (e) {
+        // A var that does not exist throws in some Bruno builds; keep looking.
+      }
+    }
+    return undefined;
+  };
+  
+  // Same lookup without the empty-string coercion, for "is this var set at all?"
+  const lookupVarRaw = (name) => {
+    try {
+      const v = bru.getVar(name);
+      if (v !== undefined && v !== null) {
+        return v;
+      }
+    } catch (e) {
+      // not set
+    }
+    return undefined;
+  };
+  
+  const interpolate = (input) => {
+    if (typeof input !== 'string') {
+      return input;
+    }
+    let out = input;
+    if (typeof bru.interpolate === 'function') {
+      try {
+        out = bru.interpolate(out);
+      } catch (e) {
+        out = input;
+      }
+    }
+    // Second pass for anything bru.interpolate did not resolve (and for builds
+    // that do not expose it at all). Left as-is when the var is unknown, so an
+    // unresolved {{placeholder}} shows up in the request rather than silently
+    // becoming an empty string.
+    return out.replace(/\{\{\s*([A-Za-z0-9_.\-]+)\s*\}\}/g, (match, name) => {
+      const value = lookupVar(name);
+      return value === undefined ? match : String(value);
+    });
+  };
+  
+  // Deep-interpolate an object BEFORE serialising it. Interpolating the
+  // serialised string instead would let a value containing a quote or a
+  // backslash break the JSON we are about to hash and send.
+  const interpolateDeep = (node) => {
+    if (typeof node === 'string') {
+      return interpolate(node);
+    }
+    if (Array.isArray(node)) {
+      return node.map(interpolateDeep);
+    }
+    if (node && typeof node === 'object') {
+      const copy = {};
+      for (const k of Object.keys(node)) {
+        copy[interpolate(k)] = interpolateDeep(node[k]);
+      }
+      return copy;
+    }
+    return node;
+  };
+  
+  // ---------------------------------------------------------------------------
+  // 3. TIER GATE — sign Tier 1 only
+  //
+  // Matched on the RAW url: the "/partner/public-chat/" segment is literal in
+  // every Tier-1 request file, so this check is correct before interpolation and
+  // costs nothing when it fails.
+  // ---------------------------------------------------------------------------
+  const rawUrl = String(req.getUrl() || '');
+  const isTier1 = rawUrl.indexOf(TIER1_PREFIX) !== -1;
+  
+  // ---------------------------------------------------------------------------
+  // 3b. FRESH IDEMPOTENCY KEYS FOR TIER 2 / TIER 3
+  //
+  // Both message endpoints require client_message_id to be a UUID, and the
+  // idempotency unique is (room_id, sender_kind, client_message_id): reusing one
+  // replays the original message with 200 instead of creating a new one with
+  // 201. Minted here, at collection level, so no Tier-1 request file needs a
+  // pre-request script of its own — a request-level script runs AFTER this one
+  // and any body it touched would no longer match the signature.
+  // ---------------------------------------------------------------------------
+  const uuidV4 = () => 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : ((r & 0x3) | 0x8);
+    return v.toString(16);
+  });
+  
+  bru.setVar('visitor_client_message_id', uuidV4());
+  bru.setVar('agent_client_message_id', uuidV4());
+  
+  // API-228 takes a bare integer seq. Seed it so mark-read still sends valid
+  // JSON when it is run before API-222 has captured a real last_seq.
+  if (lookupVarRaw('last_seq') === undefined) {
+    bru.setVar('last_seq', 0);
+  }
+  
+  
+  // Tier 2 (visitor) and Tier 3 (agent) are not HMAC-signed — everything below
+  // this line is Tier 1 only.
+  if (isTier1) {
+    // ---------------------------------------------------------------------------
+    // 4. CREDENTIALS
+    // ---------------------------------------------------------------------------
+    const keyId = String(lookupVar('key_id') || '').trim();
+    const secret = String(lookupVar('secret') || '').trim();
+  
+    if (!keyId || !secret) {
+      throw new Error(
+        'Public Chat signer: key_id and/or secret are empty. Open the environment ' +
+        '(top right) and paste the credentials the admin issued in Settings -> ' +
+        'Public Chat. The secret is shown EXACTLY ONCE at issuance and can never ' +
+        'be retrieved again — if you lost it, issue a new key.'
+      );
+    }
+  
+    // ---------------------------------------------------------------------------
+    // 5. CANONICAL LINE 3 — the path
+    //
+    // Must match Laravel's $request->getPathInfo(): leading slash, the /api/v1
+    // prefix INCLUDED, the query string EXCLUDED. (Laravel's $request->path()
+    // drops the leading slash — signing that breaks every request.)
+    // ---------------------------------------------------------------------------
+    const url = interpolate(rawUrl);
+    let path;
+  
+    try {
+      path = new URL(url).pathname;
+    } catch (e) {
+      // No URL global, or a relative url. Strip scheme+host by hand, then query
+      // and fragment.
+      const withoutOrigin = url.replace(/^[A-Za-z][A-Za-z0-9+.\-]*:\/\/[^/]*/, '');
+      path = withoutOrigin.split('?')[0].split('#')[0];
+    }
+  
+    if (!path) {
+      path = '/';
+    }
+    if (path.charAt(0) !== '/') {
+      path = '/' + path;
+    }
+  
+    // ---------------------------------------------------------------------------
+    // 6. WIRE BYTES — hash what we are about to send, by construction
+    //
+    // We do not hash the body and hope Bruno serialises the object the same way.
+    // We serialise it ONCE here, hash that exact string, and push the same string
+    // back with req.setBody(). Bruno sends a string body verbatim, so the bytes on
+    // the wire and the bytes in line 6 of the canonical string cannot drift.
+    //
+    // No body (GET, and the POSTs that take none) hashes the empty string, whose
+    // sha256 is e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 —
+    // exactly what the middleware computes for sha256('').
+    // ---------------------------------------------------------------------------
+    const body = req.getBody();
+    let rawBody = '';
+  
+    if (typeof body === 'string') {
+      rawBody = interpolate(body);
+      req.setBody(rawBody);
+    } else if (body !== undefined && body !== null) {
+      rawBody = JSON.stringify(interpolateDeep(body));
+      req.setBody(rawBody);
+    }
+  
+    if (rawBody !== '') {
+      // Set explicitly: the digest we just took is of JSON, so say so, rather than
+      // depending on the body mode to add the header for us.
+      req.setHeader('Content-Type', 'application/json');
+    }
+  
+    // ---------------------------------------------------------------------------
+    // 7. TIMESTAMP + NONCE
+    //
+    // timestamp: unix SECONDS, integer. Accepted within +/-300s of server time
+    // (MAX_SKEW_SECONDS) — a laptop with a drifting clock is the second most
+    // common cause of 401 API_TIMESTAMP_SKEW.
+    //
+    // nonce: must match [A-Za-z0-9_-]{16,64} and be unique for 600s
+    // (NONCE_TTL_SECONDS). 16 random bytes as hex is 32 chars and is always in the
+    // allowed alphabet. NEVER base64 — '+', '/' and '=' fail the header shape
+    // check and come back as 401 API_KEY_INVALID, which reads like a bad key.
+    // ---------------------------------------------------------------------------
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const nonce = randomHex(16);
+  
+    // ---------------------------------------------------------------------------
+    // 8. SIGN
+    // ---------------------------------------------------------------------------
+    const canonical = [
+      VERSION,
+      String(req.getMethod() || 'GET').toUpperCase(),
+      path,
+      timestamp,
+      nonce,
+      sha256Hex(rawBody)
+    ].join('\n');
+  
+    const signature = VERSION + '=' + hmacSha256Hex(canonical, secret);
+  
+    req.setHeader('X-PChat-Key', keyId);
+    req.setHeader('X-PChat-Timestamp', timestamp);
+    req.setHeader('X-PChat-Nonce', nonce);
+    req.setHeader('X-PChat-Signature', signature);
+  
+    // Kept for debugging: if a request comes back 401 API_SIGNATURE_INVALID, read
+    // this var and compare it line by line with what the server built.
+    bru.setVar('last_canonical_string', canonical);
+  }
+}

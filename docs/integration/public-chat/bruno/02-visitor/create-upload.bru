@@ -1,0 +1,68 @@
+meta {
+  name: API-213 Create upload
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/public-chat/{{code}}/uploads
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "kind": "image",
+    "filename": "receipt.png",
+    "mime_type": "image/png",
+    "size_bytes": 20480
+  }
+}
+
+vars:post-response {
+  attachment_id: res.body?.attachment?.id
+  upload_url: res.body?.upload_url
+}
+
+docs {
+  API-213 POST /api/v1/public-chat/{code}/uploads — 10/min per code.
+
+  Step 1 of 3. Returns a presigned `upload_url` (and `multipart` for large files).
+
+    1. POST here            -> {attachment: {id, status}, upload_url}
+    2. PUT the bytes to upload_url   (do this OUTSIDE Bruno, or with a raw PUT)
+    3. POST API-214 complete
+    4. pass the attachment id in API-212's attachment_ids
+
+  kind is one of image|video|file. `avatar` is rejected 422 — an avatar is an
+  account-level artefact and has no meaning for a visitor. sha256 is optional and
+  must be exactly 64 chars when present.
+
+  Chat + file + video only. There is never a call and never a meeting on this
+  surface.
+
+  Stores attachment_id and upload_url as runtime vars.
+}
+
+tests {
+  test("API-213 · 201 with an attachment id and an upload url", function () {
+    if ([403, 404, 409, 410, 503].indexOf(res.getStatus()) !== -1) {
+      return;
+    }
+    expect(res.getStatus()).to.equal(201);
+    expect(res.getBody().attachment.id).to.be.a("string");
+    expect(res.getBody().attachment.status).to.be.a("string");
+    expect(res.getBody()).to.have.property("upload_url");
+  });
+
+  test("API-213 · a write, so the kill switch stops it with 503 PCHAT_DISABLED", function () {
+    if (res.getStatus() !== 503) {
+      return;
+    }
+    expect(res.getBody().error.code).to.equal("PCHAT_DISABLED");
+  });
+}

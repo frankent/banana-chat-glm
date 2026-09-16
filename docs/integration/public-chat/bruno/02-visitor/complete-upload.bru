@@ -1,0 +1,50 @@
+meta {
+  name: API-214 Complete upload
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/public-chat/{{code}}/uploads/{{attachment_id}}/complete
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {}
+}
+
+docs {
+  API-214 POST /api/v1/public-chat/{code}/uploads/{attachment}/complete — 10/min per code.
+
+  Step 3 of 3. Send an empty object for a single-part upload; for a multipart
+  upload send the parts you collected from the PUTs:
+
+    {"parts": [{"part_number": 1, "etag": "\"abc123\""}]}
+
+  EXPECT THIS TO FAIL IN A STRAIGHT COLLECTION RUN. Step 2 — the actual PUT of
+  the bytes to upload_url — happens outside Bruno, so with no object in storage
+  the completion check has nothing to confirm. The test below is deliberately
+  lenient: it asserts the error envelope is well-formed rather than that the
+  upload succeeded.
+
+  Ownership is ROOM-scoped, not uploader-scoped: a visitor upload has
+  uploader_id NULL by design, so the room partition column IS the ownership test.
+}
+
+tests {
+  test("API-214 · either completes, or fails with a well-formed error envelope", function () {
+    if (res.getStatus() === 200) {
+      expect(res.getBody().attachment.id).to.be.a("string");
+      expect(res.getBody().attachment.status).to.be.a("string");
+      return;
+    }
+    // No bytes were ever PUT, so anything from 4xx here is expected.
+    expect(res.getBody().error.code).to.be.a("string");
+    expect(res.getBody().error).to.have.property("request_id");
+  });
+}

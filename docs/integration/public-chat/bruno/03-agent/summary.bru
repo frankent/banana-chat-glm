@@ -1,0 +1,40 @@
+meta {
+  name: API-227 Queue summary
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/public-chat/summary
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{agent_token}}
+  X-Workspace-Id: {{workspace_id}}
+}
+
+docs {
+  API-227 GET /api/v1/public-chat/summary — the rail badge counts.
+
+  A read: it keeps answering with the feature off, so the rail shows a "paused"
+  chip instead of vanishing.
+}
+
+tests {
+  test("API-227 · 200 with per-status counts", function () {
+    if (res.getStatus() === 401) {
+      return;
+    }
+    expect(res.getStatus()).to.equal(200);
+    const s = res.getBody().summary;
+    expect(s.new).to.be.a("number");
+    expect(s.in_progress).to.be.a("number");
+    expect(s.problem).to.be.a("number");
+    expect(s.done).to.be.a("number");
+    expect(s.mine).to.be.a("number");
+    expect(s.needs_reply).to.be.a("number");
+    expect(res.getBody()).to.have.property("feature_enabled");
+  });
+}

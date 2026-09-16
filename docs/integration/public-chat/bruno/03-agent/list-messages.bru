@@ -1,0 +1,62 @@
+meta {
+  name: API-222 List messages
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/api/v1/public-chat/rooms/{{room_id}}/messages?limit=50
+  body: none
+  auth: none
+}
+
+params:query {
+  limit: 50
+  ~after_seq: 0
+  ~before_seq: 0
+}
+
+headers {
+  Authorization: Bearer {{agent_token}}
+  X-Workspace-Id: {{workspace_id}}
+}
+
+vars:post-response {
+  last_seq: res.body?.last_seq
+}
+
+docs {
+  API-222 GET /api/v1/public-chat/rooms/{id}/messages?after_seq=&before_seq=&limit=
+
+  after_seq pages forward (catch-up), before_seq pages backward (scrollback).
+  limit is 1..100.
+
+  The staff projection carries the internal sender, client_message_id and
+  deletion metadata — none of which the visitor projection (API-211) includes.
+
+  Stores last_seq for API-228.
+}
+
+tests {
+  test("API-222 · 200 with messages and last_seq", function () {
+    if ([401, 404].indexOf(res.getStatus()) !== -1) {
+      return;
+    }
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().messages).to.be.an("array");
+    expect(res.getBody().last_seq).to.be.a("number");
+  });
+
+  test("API-222 · staff projection includes sender identity and client_message_id", function () {
+    if (res.getStatus() !== 200 || res.getBody().messages.length === 0) {
+      return;
+    }
+    const m = res.getBody().messages[0];
+    expect(m.room_id).to.be.a("string");
+    expect(m.sender_kind).to.be.oneOf(["visitor", "agent", "system"]);
+    expect(m).to.have.property("sender");
+    expect(m).to.have.property("client_message_id");
+    expect(m).to.have.property("external_display_name");
+    expect(m).to.have.property("visitor_display_name");
+  });
+}

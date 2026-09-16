@@ -1,0 +1,66 @@
+meta {
+  name: API-223 Send message (auto-claims the room)
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/api/v1/public-chat/rooms/{{room_id}}/messages
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{agent_token}}
+  X-Workspace-Id: {{workspace_id}}
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "client_message_id": "{{agent_client_message_id}}",
+    "body": "สวัสดีครับ กำลังตรวจสอบเลขพัสดุให้นะครับ สักครู่ครับ"
+  }
+}
+
+docs {
+  API-223 POST /api/v1/public-chat/rooms/{id}/messages — throttle pchat-agent-write, 60/min per user.
+
+  THE FIRST AGENT REPLY AUTO-CLAIMS THE ROOM: assignee is set to the sender and
+  status moves new -> in_progress, inside the same locked transaction as the
+  write, so exactly one agent claims a room under concurrent replies.
+
+  This message shows to the visitor as `provider name (admin username)` — the
+  agent's real display name never crosses to the customer.
+
+  Returns both the message and the (possibly just-claimed) room, which is why
+  this runs before API-224 below: the status guard there requires an assignee.
+}
+
+tests {
+  test("API-223 · 201 created (200 on an idempotent replay)", function () {
+    if ([401, 404, 409, 503].indexOf(res.getStatus()) !== -1) {
+      return;
+    }
+    expect([200, 201]).to.include(res.getStatus());
+    expect(res.getBody().message.sender_kind).to.equal("agent");
+    expect(res.getBody().message.seq).to.be.a("number");
+  });
+
+  test("API-223 · the reply auto-claimed the room", function () {
+    if ([200, 201].indexOf(res.getStatus()) === -1) {
+      return;
+    }
+    const room = res.getBody().room;
+    expect(room.status).to.be.oneOf(["in_progress", "problem", "done"]);
+    expect(room.assigned_to).to.not.equal(null);
+    expect(room.claimed_at).to.be.a("string");
+  });
+
+  test("API-223 · a write, so 503 is PCHAT_DISABLED", function () {
+    if (res.getStatus() !== 503) {
+      return;
+    }
+    expect(res.getBody().error.code).to.equal("PCHAT_DISABLED");
+  });
+}

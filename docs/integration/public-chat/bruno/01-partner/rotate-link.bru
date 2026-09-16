@@ -1,0 +1,66 @@
+meta {
+  name: API-203 Rotate link
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/partner/public-chat/rooms/{{room_id}}/rotate-link
+  body: none
+  auth: none
+}
+
+vars:post-response {
+  code: res.body?.room?.code
+  support_url: res.body?.url
+}
+
+docs {
+  API-203 POST /api/v1/partner/public-chat/rooms/{id}/rotate-link — throttle pchat-partner.
+
+  The remedy for a leaked capability URL short of ending the conversation. The
+  OLD CODE STOPS RESOLVING IMMEDIATELY — every Tier-2 route 404s for it at once.
+  Messages, status and assignment are unchanged.
+
+  TWO BOUNDS THE PARTNER OWNS:
+    1. You MUST re-deliver the new url. A rotation the visitor never learns about
+       is just a broken conversation.
+    2. An already-connected websocket is NOT evicted — the realtime channel is
+       keyed by the room ULID, not by the code.
+
+  409 PCHAT_ROOM_CLOSED if the room is already closed, which is why this sits
+  BEFORE close-room in the run order. Running it after close-room is expected to
+  409.
+
+  Overwrites the `code` runtime var, so any Tier-2 request you re-run afterwards
+  uses the new link.
+}
+
+tests {
+  test("API-203 · the signature verified (a 409 here is PCHAT_ROOM_CLOSED, not a nonce replay)", function () {
+    // Do NOT blanket-reject 409: rotating an already-closed room is a
+    // legitimate 409 PCHAT_ROOM_CLOSED, and this request is expected to return
+    // it whenever it runs after API-202. Only API_NONCE_REPLAYED would mean the
+    // signer is broken, so distinguish on error.code rather than on status.
+    if (res.getStatus() === 409) {
+      expect(res.getBody().error.code).to.equal("PCHAT_ROOM_CLOSED");
+      return;
+    }
+    expect(res.getStatus()).to.not.equal(401);
+  });
+
+  test("API-203 · 200 with a fresh 64-hex code and url", function () {
+    if (res.getStatus() !== 200) {
+      return;
+    }
+    expect(res.getBody().room.code).to.match(/^[a-f0-9]{64}$/);
+    expect(res.getBody().url).to.match(/\/support\/[a-f0-9]{64}$/);
+  });
+
+  test("API-203 · 503 is PCHAT_DISABLED (a write; the kill switch stops it)", function () {
+    if (res.getStatus() !== 503) {
+      return;
+    }
+    expect(res.getBody().error.code).to.equal("PCHAT_DISABLED");
+  });
+}

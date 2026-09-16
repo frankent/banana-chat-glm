@@ -1,0 +1,31 @@
+meta {
+  name: API-216 Typing
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/api/v1/public-chat/{{code}}/typing
+  body: none
+  auth: none
+}
+
+docs {
+  API-216 POST /api/v1/public-chat/{code}/typing — 20/min per code.
+
+  Fire-and-forget. Broadcasts "the customer is typing" to the staff queue and to
+  the room channel. 202 Accepted, body {"ok": true}.
+
+  A write, so it needs the feature enabled, the link live, the room open, and no
+  bearer attached.
+}
+
+tests {
+  test("API-216 · 202 accepted", function () {
+    if ([403, 404, 409, 410, 503].indexOf(res.getStatus()) !== -1) {
+      return;
+    }
+    expect(res.getStatus()).to.equal(202);
+    expect(res.getBody().ok).to.equal(true);
+  });
+}

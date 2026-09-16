@@ -1,0 +1,52 @@
+meta {
+  name: API-201 Get room status
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/partner/public-chat/rooms/{{room_id}}
+  body: none
+  auth: none
+}
+
+docs {
+  API-201 GET /api/v1/partner/public-chat/rooms/{id} — throttle pchat-partner, 120/min per key.
+
+  {id} is the room ULID, never the 64-hex code: a code in a partner path would
+  put the VISITOR'S credential into the partner's outbound HTTP logs and every
+  proxy in between. A 64-hex value here is a plain 404.
+
+  Returns status and counts. THE TRANSCRIPT IS NEVER RETURNED TO A PARTNER.
+
+  This is a read, so it keeps answering 200 even while the feature is switched
+  off — a partner polling ticket status must not break because an admin paused
+  new conversations.
+}
+
+tests {
+  test("API-201 · the signature verified", function () {
+    expect([401, 409]).to.not.include(res.getStatus());
+  });
+
+  test("API-201 · 200 with the raw status and a message count", function () {
+    if (res.getStatus() === 404) {
+      return; // no room_id yet — run API-200 first
+    }
+    expect(res.getStatus()).to.equal(200);
+    const room = res.getBody().room;
+    expect(room.id).to.be.a("string");
+    expect(room.status).to.be.oneOf(["new", "in_progress", "done", "problem"]);
+    expect(room.message_count).to.be.a("number");
+    expect(room).to.have.property("assigned_display_name");
+    expect(room).to.have.property("last_message_at");
+  });
+
+  test("API-201 · never returns message bodies or partner meta", function () {
+    if (res.getStatus() !== 200) {
+      return;
+    }
+    expect(res.getBody()).to.not.have.property("messages");
+    expect(res.getBody().room).to.not.have.property("meta");
+  });
+}

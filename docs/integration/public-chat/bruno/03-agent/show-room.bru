@@ -1,0 +1,38 @@
+meta {
+  name: API-221 Show room
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{baseUrl}}/api/v1/public-chat/rooms/{{room_id}}
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{agent_token}}
+  X-Workspace-Id: {{workspace_id}}
+}
+
+docs {
+  API-221 GET /api/v1/public-chat/rooms/{id} — the staff view of the room created
+  by API-200. Same ULID, a much wider projection: raw status, assignee, read
+  pointers, and room.meta (the partner's private payload).
+}
+
+tests {
+  test("API-221 · 200 with the staff projection", function () {
+    if ([401, 404].indexOf(res.getStatus()) !== -1) {
+      return;
+    }
+    expect(res.getStatus()).to.equal(200);
+    const room = res.getBody().room;
+    expect(room.id).to.be.a("string");
+    expect(room.status).to.be.oneOf(["new", "in_progress", "done", "problem"]);
+    expect(room).to.have.property("assigned_to");
+    expect(room).to.have.property("meta");
+    expect(room.last_seq).to.be.a("number");
+    expect(room.my_last_read_seq).to.be.a("number");
+  });
+}

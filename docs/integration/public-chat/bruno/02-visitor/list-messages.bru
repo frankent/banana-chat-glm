@@ -1,0 +1,56 @@
+meta {
+  name: API-211 List messages
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/public-chat/{{code}}/messages?limit=50
+  body: none
+  auth: none
+}
+
+params:query {
+  limit: 50
+  ~after_seq: 0
+}
+
+docs {
+  API-211 GET /api/v1/public-chat/{code}/messages?after_seq=&limit= — 120/min per code.
+
+  Reconnect catch-up and the 5s polling fallback for when the websocket will not
+  connect. after_seq is an integer >= 0; limit is 1..100 (default 100).
+
+  A read, so it answers with the feature off.
+
+  An agent's message shows here as `provider name (admin username)` in
+  display_name. A visitor's shows as the customer_name the partner supplied.
+}
+
+tests {
+  test("API-211 · 200 with messages and last_seq", function () {
+    if (res.getStatus() === 404 || res.getStatus() === 410) {
+      return;
+    }
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().messages).to.be.an("array");
+    expect(res.getBody().last_seq).to.be.a("number");
+  });
+
+  test("API-211 · message shape (sender_kind, seq, display_name, attachments)", function () {
+    if (res.getStatus() !== 200 || res.getBody().messages.length === 0) {
+      return;
+    }
+    const m = res.getBody().messages[0];
+    expect(m.id).to.be.a("string");
+    expect(m.seq).to.be.a("number");
+    expect(m.sender_kind).to.be.oneOf(["visitor", "agent", "system"]);
+    expect(m).to.have.property("display_name");
+    expect(m).to.have.property("body");
+    expect(m.attachments).to.be.an("array");
+    expect(m.deleted).to.be.a("boolean");
+    // No internal identity ever reaches the visitor.
+    expect(m).to.not.have.property("sender");
+    expect(m).to.not.have.property("client_message_id");
+  });
+}

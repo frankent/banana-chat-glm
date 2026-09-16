@@ -1,0 +1,9 @@
+{
+  "version": "1",
+  "name": "Banana Chat — Public Chat",
+  "type": "collection",
+  "ignore": [
+    "node_modules",
+    ".git"
+  ]
+}

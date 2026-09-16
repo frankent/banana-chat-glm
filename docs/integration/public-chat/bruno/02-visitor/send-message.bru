@@ -1,0 +1,75 @@
+meta {
+  name: API-212 Send message
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/public-chat/{{code}}/messages
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "client_message_id": "{{visitor_client_message_id}}",
+    "body": "สวัสดีครับ ผมสั่งของไปเมื่อวานแล้วยังไม่ได้เลขพัสดุครับ"
+  }
+}
+
+docs {
+  API-212 POST /api/v1/public-chat/{code}/messages — 20/min per code.
+
+  client_message_id is REQUIRED and must be a UUID. The idempotency unique is
+  (room_id, sender_kind, client_message_id): resend the same one and you get 200
+  with the original message instead of 201 with a new one. The collection
+  pre-request script mints a fresh {{visitor_client_message_id}} on every run.
+
+  Optional: reply_to_message_id (ULID) and attachment_ids (array of ULID, max 10)
+  from API-213/214.
+
+  sender_kind is set SERVER-SIDE from the tier and is never read from the
+  payload, which is what makes visitor -> agent impersonation structurally
+  impossible.
+
+  A visitor message NEVER auto-reopens a `done` room (DEC-069) — it is 409
+  PCHAT_ROOM_CLOSED.
+}
+
+tests {
+  test("API-212 · 201 created (or 200 on an idempotent replay)", function () {
+    if ([403, 404, 409, 410, 503].indexOf(res.getStatus()) !== -1) {
+      return; // covered by the branch tests below
+    }
+    expect([200, 201]).to.include(res.getStatus());
+    expect(res.getBody().message.sender_kind).to.equal("visitor");
+    expect(res.getBody().message.seq).to.be.a("number");
+  });
+
+  test("API-212 · 403 means you sent a bearer — this tier must be anonymous", function () {
+    if (res.getStatus() !== 403) {
+      return;
+    }
+    expect(res.getBody().error.code).to.equal("PCHAT_SIGNED_IN");
+  });
+
+  test("API-212 · branch on error.code, never on error.message (messages may be Thai)", function () {
+    const known = {
+      403: "PCHAT_SIGNED_IN",
+      404: "PCHAT_ROOM_NOT_FOUND",
+      409: "PCHAT_ROOM_CLOSED",
+      410: "PCHAT_LINK_EXPIRED",
+      503: "PCHAT_DISABLED"
+    };
+    const expected = known[res.getStatus()];
+    if (!expected) {
+      return;
+    }
+    expect(res.getBody().error.code).to.equal(expected);
+    expect(res.getBody().error).to.have.property("request_id");
+  });
+}

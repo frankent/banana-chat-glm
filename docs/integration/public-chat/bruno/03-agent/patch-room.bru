@@ -1,0 +1,65 @@
+meta {
+  name: API-224 Patch room (status / assignee)
+  type: http
+  seq: 6
+}
+
+patch {
+  url: {{baseUrl}}/api/v1/public-chat/rooms/{{room_id}}
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{agent_token}}
+  X-Workspace-Id: {{workspace_id}}
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "status": "problem"
+  }
+}
+
+docs {
+  API-224 PATCH /api/v1/public-chat/rooms/{id} — status and/or assignment.
+
+  status     one of new | in_progress | done | problem
+  assigned_to  a member ULID, or null to unassign
+
+  THE KEY'S PRESENCE IS THE SIGNAL. {"assigned_to": null} is an explicit
+  unassign; omitting the key leaves the current assignee alone.
+
+  THE INVARIANT, ENFORCED AGAINST THE LOCKED ROW: any status other than `new`
+  requires a non-null assignee. So this request only succeeds after API-223 has
+  auto-claimed the room (or alongside an explicit assigned_to) — otherwise it is
+  422 PCHAT_INVALID_TRANSITION, which is correct behaviour, not a bug. To set a
+  status on an unclaimed room, send both keys at once:
+
+    {"status": "problem", "assigned_to": "<member ULID>"}
+
+  `problem` is INTERNAL TRIAGE ONLY. The visitor keeps seeing status_public
+  'open' and is never told (DEC-074).
+
+  A write: the kill switch stops it with 503 PCHAT_DISABLED.
+}
+
+tests {
+  test("API-224 · 200 and the status changed", function () {
+    if ([401, 404, 422, 503].indexOf(res.getStatus()) !== -1) {
+      return;
+    }
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().room.status).to.equal("problem");
+    // The customer still sees 'open' — 'problem' is never disclosed downward.
+    expect(res.getBody().room.status_public).to.equal("open");
+  });
+
+  test("API-224 · 422 here is PCHAT_INVALID_TRANSITION — the room has no assignee yet", function () {
+    if (res.getStatus() !== 422) {
+      return;
+    }
+    expect(res.getBody().error.code).to.be.oneOf(["PCHAT_INVALID_TRANSITION", "VALIDATION_FAILED"]);
+  });
+}

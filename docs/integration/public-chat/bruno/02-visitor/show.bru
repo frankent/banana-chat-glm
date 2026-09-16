@@ -1,0 +1,63 @@
+meta {
+  name: API-210 Show conversation
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/public-chat/{{code}}
+  body: none
+  auth: none
+}
+
+docs {
+  API-210 GET /api/v1/public-chat/{code} — 120/min per code.
+
+  UNAUTHENTICATED. No API key, no bearer. The 64-hex code IS the credential, and
+  the route is ->where('code','[a-f0-9]{64}') so a malformed code 404s at routing
+  before it ever reaches the database.
+
+  DO NOT SEND AN Authorization HEADER ON THIS TIER. A valid bearer makes reads
+  succeed but every write 403 PCHAT_SIGNED_IN; an expired one is a flat 401.
+
+  THE VISITOR NEVER SEES THE REAL STATUS. This returns `status_public`
+  (open|closed) — new, in_progress and problem all project to `open`, so a
+  customer can never discover that support flagged their conversation as a
+  problem (DEC-074). `room.meta` is never serialised here either.
+
+  Deliberately 200 — not 503 — while the feature is off, so the page can show a
+  calm banner over a still-readable transcript. `can_send` carries the real
+  answer.
+}
+
+tests {
+  test("API-210 · 200 even when the feature is disabled", function () {
+    if (res.getStatus() === 404 || res.getStatus() === 410) {
+      return; // no code yet, or the link was rotated/expired
+    }
+    expect(res.getStatus()).to.equal(200);
+  });
+
+  test("API-210 · returns the projected status only, never the raw one", function () {
+    if (res.getStatus() !== 200) {
+      return;
+    }
+    const body = res.getBody();
+    expect(body.room.status_public).to.be.oneOf(["open", "closed"]);
+    expect(body.room).to.not.have.property("status");
+    expect(body.room).to.not.have.property("meta");
+    expect(body.room).to.not.have.property("assigned_to");
+    expect(body.room.id).to.be.a("string");
+    expect(body.room.last_seq).to.be.a("number");
+    expect(body).to.have.property("feature_enabled");
+    expect(body.can_send).to.be.a("boolean");
+    expect(body).to.have.property("closed_reason");
+  });
+
+  test("API-210 · the response is never cacheable — the URL is a capability", function () {
+    if (res.getStatus() !== 200) {
+      return;
+    }
+    expect(String(res.getHeader("cache-control"))).to.contain("no-store");
+  });
+}

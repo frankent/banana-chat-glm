@@ -1,0 +1,48 @@
+meta {
+  name: API-202 Close room
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/partner/public-chat/rooms/{{room_id}}/close
+  body: none
+  auth: none
+}
+
+docs {
+  API-202 POST /api/v1/partner/public-chat/rooms/{id}/close — throttle pchat-partner.
+
+  Sets status to `done`. The visitor keeps READ-ONLY access to the transcript —
+  the link is their receipt — but can no longer send. A double close is a 409
+  PCHAT_ROOM_CLOSED, deliberately: it is a partner bug worth reporting, not a
+  silent no-op.
+
+  RUN THIS LAST. Every visitor and agent write after it is 409 PCHAT_ROOM_CLOSED,
+  and rotate-link on a closed room is 409 too.
+}
+
+tests {
+  test("API-202 · the signature verified (a 409 here is PCHAT_ROOM_CLOSED, not a nonce replay)", function () {
+    if (res.getStatus() !== 409) {
+      expect(res.getStatus()).to.not.equal(401);
+      return;
+    }
+    expect(res.getBody().error.code).to.equal("PCHAT_ROOM_CLOSED");
+  });
+
+  test("API-202 · 200 and the room is done", function () {
+    if (res.getStatus() !== 200) {
+      return;
+    }
+    expect(res.getBody().room.status).to.equal("done");
+    expect(res.getBody().room.closed_at).to.be.a("string");
+  });
+
+  test("API-202 · 503 is PCHAT_DISABLED", function () {
+    if (res.getStatus() !== 503) {
+      return;
+    }
+    expect(res.getBody().error.code).to.equal("PCHAT_DISABLED");
+  });
+}

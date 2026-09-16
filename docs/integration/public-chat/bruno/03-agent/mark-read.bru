@@ -1,0 +1,49 @@
+meta {
+  name: API-228 Mark read
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/api/v1/public-chat/rooms/{{room_id}}/read
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{agent_token}}
+  X-Workspace-Id: {{workspace_id}}
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "seq": {{last_seq}}
+  }
+}
+
+docs {
+  API-228 POST /api/v1/public-chat/rooms/{id}/read {"seq": n}
+
+  seq is a required integer >= 0; {{last_seq}} comes from API-222 above.
+
+  MONOTONIC AT THE DATABASE LEVEL: the upsert takes GREATEST(existing, sent), so
+  a lower seq is a no-op rather than a rewind and two tabs of the same agent
+  cannot race each other backwards. The response reports the pointer ACTUALLY in
+  force, so a client that sent a stale value learns the truth.
+
+  A read pointer never affects queue order — every agent sees the same queue.
+}
+
+tests {
+  test("API-228 · 200 with the effective pointer and unread count", function () {
+    if ([401, 404, 422].indexOf(res.getStatus()) !== -1) {
+      return;
+    }
+    expect(res.getStatus()).to.equal(200);
+    expect(res.getBody().room_id).to.be.a("string");
+    expect(res.getBody().last_read_seq).to.be.a("number");
+    expect(res.getBody().unread_count).to.be.a("number");
+    expect(res.getBody().unread_count).to.be.at.least(0);
+  });
+}

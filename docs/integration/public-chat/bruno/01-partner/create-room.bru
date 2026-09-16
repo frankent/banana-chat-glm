@@ -1,0 +1,105 @@
+meta {
+  name: API-200 Create room
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/partner/public-chat/rooms
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "customer_name": "สมชาย ใจดี",
+    "provider_name": "Acme Support",
+    "external_ref": "bruno-demo-0001",
+    "locale": "th",
+    "meta": {
+      "plan": "gold",
+      "order_id": "SO-99123",
+      "note": "meta is partner-private: stored, shown to staff and admin, NEVER served to the visitor"
+    }
+  }
+}
+
+vars:post-response {
+  room_id: res.body?.room?.id
+  code: res.body?.room?.code
+  support_url: res.body?.url
+}
+
+docs {
+  API-200 POST /api/v1/partner/public-chat/rooms — throttle pchat-create, 60/min per key.
+
+  Signed by the collection-level pre-request script. 201 on create; 200 on a
+  replay of the same external_ref (idempotent, NOT an error) — which is why
+  external_ref here is a fixed string: run this twice and the second run is a
+  200 carrying the SAME room id and the SAME code.
+
+  Stores room_id, code and support_url as runtime vars for every later request.
+
+  If the feature is switched off (publicchat.enabled=false, the shipped default,
+  DEC-071) this returns 503 PCHAT_DISABLED. That is SUCCESS for signing purposes:
+  the feature gate runs inside the controller, AFTER the HMAC middleware, so a
+  503 can only be reached by a request whose signature already verified.
+}
+
+tests {
+  test("API-200 · the signature verified (never 401 API_* or 409 API_NONCE_REPLAYED)", function () {
+    const status = res.getStatus();
+    if (status === 401 || status === 409) {
+      const code = res.getBody() && res.getBody().error ? res.getBody().error.code : "(no envelope)";
+      throw new Error(
+        "HMAC rejected with " + status + " " + code + ". " +
+        "API_SIGNATURE_INVALID = the canonical string is wrong (check bru.getVar('last_canonical_string')). " +
+        "API_TIMESTAMP_SKEW = this machine's clock is more than 300s off. " +
+        "API_KEY_INVALID = key_id is empty, malformed, or revoked."
+      );
+    }
+    expect([401, 409]).to.not.include(status);
+  });
+
+  test("API-200 · 503 here is PCHAT_DISABLED — the expected proof the signature verified", function () {
+    if (res.getStatus() !== 503) {
+      return;
+    }
+    expect(res.getBody().error.code).to.equal("PCHAT_DISABLED");
+    expect(res.getBody().error).to.have.property("request_id");
+  });
+
+  test("API-200 · 201 on create, 200 on an external_ref replay", function () {
+    if (res.getStatus() === 503) {
+      return;
+    }
+    expect([200, 201]).to.include(res.getStatus());
+  });
+
+  test("API-200 · returns room + url; the code is a 64-hex capability", function () {
+    if (res.getStatus() !== 200 && res.getStatus() !== 201) {
+      return;
+    }
+    const body = res.getBody();
+    expect(body.room.id).to.be.a("string");
+    expect(body.room.code).to.match(/^[a-f0-9]{64}$/);
+    expect(body.room.status).to.be.oneOf(["new", "in_progress", "done", "problem"]);
+    expect(body.room.external_ref).to.equal("bruno-demo-0001");
+    // Only on a genuine create. A 200 replay echoes the FIRST create's values,
+    // so asserting the current body here would go red the moment you edit the
+    // payload without also changing external_ref.
+    if (res.getStatus() === 201) {
+      expect(body.room.customer_name).to.equal("สมชาย ใจดี");
+      expect(body.room.locale).to.equal("th");
+    }
+    // Host-agnostic on purpose so this passes against local and production.
+    expect(body.url).to.match(/\/support\/[a-f0-9]{64}$/);
+    // NG6's bound: the partner tier never returns transcript content.
+    expect(body.room).to.not.have.property("messages");
+    expect(body.room).to.not.have.property("meta");
+  });
+}
