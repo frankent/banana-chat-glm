@@ -14,6 +14,13 @@ class ApiException extends RuntimeException
         string $message,
         public readonly int $status = 422,
         public readonly array $details = [],
+        /**
+         * Extra response headers. The §7 renderer in bootstrap/app.php applies
+         * them verbatim. Added for FR-PCHAT-034 / DEC-067, whose 503 must carry
+         * `Retry-After` so a partner's client retries on a schedule instead of
+         * hot-looping.
+         */
+        public readonly array $headers = [],
     ) {
         parent::__construct($message);
     }
@@ -173,5 +180,108 @@ class ApiException extends RuntimeException
         return new self('MEDIA_SIZE_MISMATCH', 'ขนาดไฟล์ที่อัปโหลดไม่ตรงกับที่แจ้กไว้', 422, [
             'declared_bytes' => $declaredBytes,
         ]);
+    }
+
+    // ---- Public Chat: partner HMAC surface (FR-PCHAT-031, §7.1) ----
+    //
+    // These are thrown by VerifyPublicChatSignature. They exist as ApiExceptions
+    // rather than AuthenticationException on purpose: bootstrap/app.php renders
+    // AuthenticationException as AUTH_TOKEN_INVALID, which is misleading for a
+    // machine client that holds no token and sends no Authorization header.
+
+    /**
+     * Header missing or malformed, key_id unknown, key revoked, workspace not
+     * active, OR the stored secret could not be decrypted (APP_KEY rotated —
+     * MANDATORY graft 8). One code for all of them: an unauthenticated prober
+     * must not be able to enumerate which key ids exist.
+     */
+    public static function apiKeyInvalid(): self
+    {
+        return new self('API_KEY_INVALID', 'API key ไม่ถูกต้องหรือถูกยกเลิกแล้ว', 401);
+    }
+
+    public static function apiSignatureInvalid(): self
+    {
+        return new self('API_SIGNATURE_INVALID', 'ลายเซ็นคำขอไม่ถูกต้อง', 401);
+    }
+
+    /**
+     * ±300s window. The response names the observed skew and the server clock so
+     * the partner can fix their NTP instead of guessing.
+     */
+    public static function apiTimestampSkew(int $skewSeconds): self
+    {
+        return new self('API_TIMESTAMP_SKEW', 'เวลาของคำขอคลาดเคลื่อนเกินกำหนด', 401, [
+            'skew_seconds' => $skewSeconds,
+            'max_skew_seconds' => 300,
+            'server_time' => now()->getTimestamp(),
+        ]);
+    }
+
+    public static function apiNonceReplayed(): self
+    {
+        return new self('API_NONCE_REPLAYED', 'nonce นี้ถูกใช้ไปแล้ว', 409);
+    }
+
+    // ---- Public Chat: feature + room lifecycle (FR-PCHAT-034/012, §7.1) ----
+
+    /**
+     * FR-PCHAT-034 / DEC-067 — the kill switch. Writes stop; reads and data
+     * survive. Thrown only AFTER credentials verify, so a partner can tell
+     * "your key is bad" from "the service is paused".
+     */
+    public static function pchatDisabled(): self
+    {
+        return new self('PCHAT_DISABLED', 'ระบบแชทสาธารณะถูกปิดใช้งานชั่วคราว', 503, [
+            'retry_after_seconds' => 60,
+        ], ['Retry-After' => '60']);
+    }
+
+    public static function pchatRoomNotFound(): self
+    {
+        return new self('PCHAT_ROOM_NOT_FOUND', 'ไม่พบห้องแชทสาธารณะนี้', 404);
+    }
+
+    public static function pchatRoomClosed(): self
+    {
+        return new self('PCHAT_ROOM_CLOSED', 'การสนทนานี้ปิดแล้ว', 409);
+    }
+
+    /**
+     * FR-PCHAT-012 / DEC-063 — past expires_at, or the link was rotated, or the
+     * room was soft-deleted. EVERY Tier-2 route including broadcasting/auth
+     * answers this, so an open socket cannot outlive the link.
+     */
+    public static function pchatLinkExpired(?string $expiresAt = null): self
+    {
+        return new self('PCHAT_LINK_EXPIRED', 'ลิงก์สนทนานี้หมดอายุแล้ว', 410, [
+            'expires_at' => $expiresAt,
+        ]);
+    }
+
+    /**
+     * API-224 — the sole state-consistency guard (MANDATORY graft 28): a room
+     * cannot leave 'new' with a null assignee, and cannot be unassigned while
+     * 'in_progress'.
+     */
+    public static function pchatInvalidTransition(?string $from = null, ?string $to = null): self
+    {
+        return new self('PCHAT_INVALID_TRANSITION', 'เปลี่ยนสถานะห้องแบบนี้ไม่ได้', 422, array_filter([
+            'from' => $from,
+            'to' => $to,
+        ], fn ($v) => $v !== null));
+    }
+
+    /**
+     * FR-PCHAT-013 / MANDATORY graft 18 / pinned decision 3 — a signed-in member
+     * opened the customer link. Reads are served as the visitor; WRITES ARE NOT.
+     * ApiClient attaches the agent's bearer to every request, so without this an
+     * agent checking on a conversation would post a message recorded as coming
+     * from the customer. An invalid or expired bearer is a 401 instead — never
+     * silently anonymous.
+     */
+    public static function pchatSignedIn(): self
+    {
+        return new self('PCHAT_SIGNED_IN', 'คุณกำลังเข้าสู่ระบบอยู่ — เปิดห้องนี้จากเมนู Public Chat แทน', 403);
     }
 }

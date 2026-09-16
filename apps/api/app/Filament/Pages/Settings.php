@@ -35,6 +35,12 @@ class Settings extends Page
     /** FR-CALL-006 / DEC-057: policy notes shown next to the generated fields. */
     public const HELPERS = [
         'call.max_participants' => 'Maximum participants for NEW group calls and public meeting links (direct rooms stay at 2). Active calls and existing links keep the capacity they were created with.',
+        // FR-PCHAT-034 / DEC-067 / DEC-071 — the public chat kill switch. Off is
+        // the shipped default because this is an externally reachable,
+        // unauthenticated customer surface.
+        'publicchat.enabled' => 'Public Chat kill switch. OFF stops writes only: partner create/close and every agent and visitor send return 503, while the visitor page still loads read-only, agent reads and the admin transcripts are unaffected, and no conversation is closed, expired, reassigned or deleted. Re-enabling resumes mid-conversation.',
+        'publicchat.link_ttl_days' => 'Lifetime of a /support/<code> visitor link, in days from creation. The link is bearer authority — anyone holding the URL is the visitor — so this value is the main bound on a forwarded or leaked link.',
+        'publicchat.max_message_length' => 'Maximum characters in one public chat message (visitor or agent).',
     ];
 
     public static function ranges(): array
@@ -53,6 +59,12 @@ class Settings extends Page
             'ai.daily_message_limit_per_user' => [0, 100000], 'ai.max_message_chars' => [1, 128000], 'ai.max_concurrent_per_user' => [1, 20],
             'ai.compaction.trigger_ratio' => [0.1, 0.95], 'ai.stream.flush_interval_ms' => [20, 5000], 'ai.deleted_purge_days' => [1, 365],
             'ai.push_suppress_if_focused_seconds' => [0, 600],
+            // FR-PCHAT-033 — these two MUST exist here for as long as they exist
+            // in SettingsService::DEFAULTS. See the guard in form() below: a
+            // numeric key with no entry here used to take down the whole
+            // settings page, i.e. the very page that turns Public Chat off.
+            'publicchat.link_ttl_days' => [1, 365],
+            'publicchat.max_message_length' => [1, 32000],
         ];
     }
 
@@ -68,8 +80,22 @@ class Settings extends Page
             } elseif (is_string($default)) {
                 $field = TextInput::make($key)->maxLength(40)->regex('/^(?:[0-9]+\.[0-9]+\.[0-9]+(?:[-+][A-Za-z0-9.-]+)?)?$/')->helperText('Leave empty to disable the minimum-version gate.');
             } else {
-                [$min,$max] = self::ranges()[$key];
-                $field = TextInput::make($key)->numeric()->minValue($min)->maxValue($max);
+                // FR-PCHAT-033 / R11 — this used to be a bare
+                // `[$min,$max] = self::ranges()[$key]`, so ANY numeric key added
+                // to SettingsService::DEFAULTS without a matching ranges() entry
+                // threw an "Undefined array key" for every admin and took the
+                // whole settings page down — including the Public Chat kill
+                // switch that lives on it. A missing range is now a field with
+                // no min/max instead of an outage. Add the ranges() entry too:
+                // the guard is a seatbelt, not a licence to skip it.
+                [$min, $max] = self::ranges()[$key] ?? [null, null];
+                $field = TextInput::make($key)->numeric();
+                if ($min !== null) {
+                    $field->minValue($min);
+                }
+                if ($max !== null) {
+                    $field->maxValue($max);
+                }
                 if (is_int($default)) {
                     $field->integer();
                 }if ($default !== null) {

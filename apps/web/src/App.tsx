@@ -1,5 +1,8 @@
 import { MeetingsPage } from "./pages/MeetingsPage";
 import { PublicMeetingPage } from "./pages/PublicMeetingPage";
+import { PublicChatVisitorPage } from "./pages/PublicChatVisitorPage";
+import { PublicChatListPage } from "./pages/PublicChatListPage";
+import { PublicChatRoomPage } from "./pages/PublicChatRoomPage";
 import { CallProvider } from "./components/calls/CallProvider";
 import { BoardPage } from "./pages/BoardPage";
 import { unlockNotificationAudio } from "./lib/notification-audio";
@@ -49,6 +52,14 @@ export default function App() {
         <SessionGate>
           <Routes>
             <Route path="/meet/:code" element={<PublicMeetingPage />} />
+            {/*
+              FR-PCHAT-007 — the public visitor page is a SIBLING of /meet/:code
+              and lives OUTSIDE both <EchoProvider> and <CallProvider>. That is
+              the structural guarantee that a support conversation can never
+              offer a call or a meeting on the client: <CallButtons/> cannot
+              mount in a subtree with no call context. Do not move it inside.
+            */}
+            <Route path="/support/:code" element={<PublicChatVisitorPage />} />
             <Route
               path="*"
               element={
@@ -68,6 +79,15 @@ export default function App() {
                         <Route index element={<WelcomeView />} />
                         <Route path="/meetings" element={<MeetingsPage />} />
                         <Route path="/board" element={<BoardPage />} />
+                        {/* FR-PCHAT-004/006 — the agent queue and one conversation. */}
+                        <Route
+                          path="/public-chat"
+                          element={<PublicChatListPage />}
+                        />
+                        <Route
+                          path="/public-chat/:roomId"
+                          element={<PublicChatRoomPage />}
+                        />
                         <Route
                           path="/board/:ticketId"
                           element={<BoardPage />}

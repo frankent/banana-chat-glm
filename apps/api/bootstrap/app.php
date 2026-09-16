@@ -7,6 +7,7 @@ use App\Http\Middleware\RequireMinimumAppVersion;
 use App\Http\Middleware\RequireSetupCompleted;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\SetRequestId;
+use App\Http\Middleware\VerifyPublicChatSignature;
 use App\Http\Middleware\WorkspaceContextMiddleware;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -47,6 +48,11 @@ $app = Application::configure(basePath: dirname(__DIR__))
             'account.active' => EnsureAccountActive::class,
             'password.fresh' => EnsurePasswordFresh::class,
             'workspace.context' => WorkspaceContextMiddleware::class,
+            // FR-PCHAT-031 — Tier-1 partner HMAC. NOT an auth guard: there is no
+            // User behind a partner server, and the middleware never throws
+            // AuthenticationException (the renderer below would mislabel it
+            // AUTH_TOKEN_INVALID for a client that holds no token).
+            'api.hmac' => VerifyPublicChatSignature::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
@@ -65,7 +71,10 @@ $app = Application::configure(basePath: dirname(__DIR__))
         };
 
         $exceptions->render(function (ApiException $e, Request $request) use ($renderApiError) {
-            return $renderApiError($e, $request, $e->status, $e->errorCode, $e->getMessage(), $e->details);
+            // ->headers is how PCHAT_DISABLED carries Retry-After (DEC-067);
+            // it is empty for every other factory.
+            return $renderApiError($e, $request, $e->status, $e->errorCode, $e->getMessage(), $e->details)
+                ->withHeaders($e->headers);
         });
 
         $exceptions->render(function (ValidationException $e, Request $request) use ($renderApiError) {

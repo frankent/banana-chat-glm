@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Media\AttachmentSerializer;
+use App\Domain\Media\InlineSafety;
 use App\Domain\Media\SecretAttachmentExpiry;
 use App\Domain\Media\UploadService;
 use App\Enums\AttachmentStatus;
@@ -119,7 +120,9 @@ class UploadController extends Controller
 
     /**
      * Local-disk file stream — the signed `urls.*` when FILESYSTEM_DISK=local.
-     * SVG is never served inline (XSS, FR-MEDIA-004).
+     * Only the InlineSafety allowlist (raster image / video / audio) is served
+     * inline; everything else is an attachment with a neutral Content-Type
+     * (DEC-072, FR-MEDIA-004).
      */
     public function file(Request $request, string $attachmentId, string $variant): StreamedResponse
     {
@@ -143,12 +146,25 @@ class UploadController extends Controller
             abort(404);
         }
 
+        // DEC-072 — THE SAME PREDICATE THE S3 PATH USES.
+        //
+        // This used to read `str_contains($mime, 'svg') ? 'attachment' :
+        // 'inline'` — a one-type deny list that served text/html, xhtml, xml
+        // and every future browser-renderable type INLINE on our own origin.
+        // Worse, it disagreed with production, which does not come through this
+        // controller at all (S3/MinIO presigned GETs bypass it), so the local
+        // disk was the only place anyone could observe the rule and the place
+        // it did not matter. Both paths now call InlineSafety so the two cannot
+        // drift again, and the Content-Type is forced to the neutral type for
+        // anything outside the inline allowlist rather than echoed back.
         $mime = $variant === 'original' ? $attachment->mime_type : 'image/webp';
-        $disposition = str_contains($mime, 'svg') ? 'attachment' : 'inline';
 
         return $disk->response($key, $attachment->original_name, [
-            'Content-Type' => $mime,
-            'Content-Disposition' => $disposition.'; filename="'.str_replace('"', '', $attachment->original_name).'"',
+            'Content-Type' => InlineSafety::responseType($mime),
+            // Symfony's makeDisposition (via $disk->response's 4th argument)
+            // builds the RFC 6266 form with a safe ASCII fallback — the
+            // original_name is attacker-controlled and routinely Thai.
+            'Content-Disposition' => InlineSafety::contentDisposition($mime, $attachment->original_name),
             'X-Content-Type-Options' => 'nosniff',
         ]);
     }

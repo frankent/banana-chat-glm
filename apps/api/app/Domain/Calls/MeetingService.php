@@ -96,6 +96,6 @@ class MeetingService
         $p = MeetingParticipant::where('meeting_id', $m->id)->where('token_hash', hash('sha256', $secret))->first();
         abort_unless($p, 403);
         $p->update(['left_at' => $p->left_at ?? now()]);
-        $this->media->request('RemoveParticipant','meeting-'.$m->id,['room' => 'meeting-'.$m->id, 'identity' => $p->id]);
+        $this->media->request('RemoveParticipant', 'meeting-'.$m->id, ['room' => 'meeting-'.$m->id, 'identity' => $p->id]);
     }
 }

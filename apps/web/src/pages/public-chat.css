@@ -1,0 +1,323 @@
+/* FR-PCHAT — Public Chat surfaces: the agent queue, the agent conversation and
+   the public visitor page. Tokens come from index.css (--bc-ink/--bc-line/…) so
+   the support surfaces read as part of the product rather than a bolt-on.
+
+   MOBILE (DEC-058): nothing here sets a font-size on an input, select or
+   textarea, and nothing uses !important — the global 16px floor at
+   index.css:227 must keep winning on touch-primary devices, or focusing the
+   composer auto-zooms the page. Never add user-scalable=no to index.html. */
+
+/* ---------------------------------------------------------------- the queue */
+.bc-pchat-queue {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow: auto;
+  padding: 30px 28px;
+  background: #f6f7f3;
+  color: #354330;
+}
+.bc-pchat-queue-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.bc-pchat-queue-head h1 { font-size: 31px; font-weight: 700; letter-spacing: -1.1px; }
+.bc-pchat-queue-head h1 span { color: #d4b13f; }
+.bc-pchat-queue-head p { font-size: 12px; color: #89917f; margin-top: 4px; }
+.bc-pchat-summary { display: flex; gap: 10px; flex-wrap: wrap; }
+.bc-pchat-summary > div {
+  background: #fff;
+  border: 1px solid #e0e6d8;
+  border-radius: 10px;
+  padding: 9px 13px;
+  min-width: 74px;
+}
+.bc-pchat-summary dt { font-size: 9px; letter-spacing: .6px; color: #9aa38f; }
+.bc-pchat-summary dd { font-size: 19px; font-weight: 700; margin-top: 2px; }
+
+.bc-pchat-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.bc-pchat-segment { display: flex; gap: 4px; background: #e9ede2; border-radius: 9px; padding: 3px; flex-wrap: wrap; }
+.bc-pchat-segment button {
+  border-radius: 7px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #5f6d55;
+  min-height: 34px;
+}
+.bc-pchat-segment button.selected { background: #fff; color: #354330; font-weight: 650; box-shadow: 0 1px 3px #40533012; }
+.bc-pchat-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid #dce1d3;
+  border-radius: 8px;
+  padding: 0 10px;
+  flex: 1;
+  min-width: 190px;
+}
+.bc-pchat-search input { border: 0; outline: none; background: none; width: 100%; padding: 9px 0; color: #43513a; }
+.bc-pchat-toolbar select { border: 1px solid #dce1d3; border-radius: 8px; padding: 9px 10px; background: #fff; color: #43513a; }
+.bc-pchat-toggle { border: 1px solid #dce1d3; border-radius: 8px; padding: 9px 12px; font-size: 12px; background: #fff; min-height: 38px; }
+.bc-pchat-toggle.selected { background: #fcf5d7; border-color: #f0e2a8; font-weight: 650; }
+
+.bc-pchat-list { display: flex; flex-direction: column; gap: 8px; }
+.bc-pchat-row {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) auto minmax(0, 1.2fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  background: #fff;
+  border: 1px solid #e0e6d8;
+  border-radius: 11px;
+  padding: 13px 15px;
+}
+.bc-pchat-row:hover { border-color: #b8c49c; box-shadow: 0 4px 14px #4053300a; }
+.bc-pchat-row-who { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.bc-pchat-row-who strong { font-size: 13px; font-weight: 650; overflow-wrap: anywhere; }
+.bc-pchat-row-who small { font-size: 11px; color: #8b987c; overflow-wrap: anywhere; }
+.bc-pchat-row-who em { font-size: 9px; color: #a0a891; font-style: normal; }
+.bc-pchat-row-agent { display: flex; align-items: center; gap: 8px; font-size: 11px; min-width: 0; }
+.bc-pchat-row-agent .bc-avatar { width: 26px; height: 26px; font-size: 9px; }
+.bc-pchat-row-agent > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bc-pchat-unassigned { color: #a0a891; }
+.bc-pchat-row-meta { display: flex; align-items: center; gap: 8px; font-size: 10px; color: #9aa38f; justify-self: end; }
+.bc-pchat-row-meta b { background: #f4d35a; color: #464629; border-radius: 9px; padding: 1px 7px; font-size: 10px; }
+.bc-pchat-dot { width: 9px; height: 9px; border-radius: 50%; background: #e0a83c; display: inline-block; }
+
+.bc-pchat-pill { font-size: 9px; font-weight: 650; border-radius: 5px; padding: 4px 8px; white-space: nowrap; }
+.bc-pchat-pill.tone-neutral { background: #edf0e9; color: #6d7a63; }
+.bc-pchat-pill.tone-info { background: #e8eef8; color: #5a72a2; }
+.bc-pchat-pill.tone-ok { background: #e3f0e4; color: #4c8055; }
+.bc-pchat-pill.tone-warn { background: #fce2df; color: #bc5446; }
+
+.bc-pchat-empty { color: #a2aa96; font-size: 12px; padding: 24px 8px; text-align: center; }
+.bc-pchat-more { align-self: center; font-size: 12px; border: 1px solid #dce1d3; border-radius: 8px; padding: 9px 14px; background: #fff; }
+.bc-pchat-alert { background: #fff1ef; color: #a64c40; font-size: 12px; border-radius: 8px; padding: 11px 13px; }
+.bc-pchat-alert button, .bc-pchat-alert a { text-decoration: underline; }
+.bc-pchat-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fcf5d7;
+  color: #7a6a2c;
+  font-size: 12px;
+  border-radius: 8px;
+  padding: 11px 13px;
+}
+
+/* -------------------------------------------------- the agent conversation */
+.bc-pchat-room { height: 100%; display: flex; flex-direction: column; min-height: 0; background: #fff; }
+.bc-pchat-room-head {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--bc-line);
+  flex-wrap: wrap;
+}
+.bc-pchat-back { display: inline-flex; transform: rotate(180deg); color: #7d8b68; padding: 6px; }
+.bc-pchat-room-who { min-width: 0; flex: 1; }
+.bc-pchat-room-who h2 { font-size: 16px; font-weight: 650; letter-spacing: -.4px; overflow-wrap: anywhere; }
+.bc-pchat-room-who p { font-size: 11px; color: #8b987c; margin-top: 3px; overflow-wrap: anywhere; }
+.bc-pchat-room-controls { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.bc-pchat-room-controls label { display: flex; flex-direction: column; gap: 4px; }
+.bc-pchat-room-controls select { border: 1px solid #dce1d3; border-radius: 7px; padding: 7px 9px; background: #fff; color: #43513a; }
+
+.bc-pchat-transcript { flex: 1; min-height: 0; overflow: auto; padding: 18px 24px; display: flex; flex-direction: column; gap: 9px; }
+.bc-pchat-system { align-self: center; font-size: 10px; color: #8d977e; background: #f3f5ee; border-radius: 9px; padding: 5px 11px; overflow-wrap: anywhere; }
+.bc-pchat-msg { display: flex; gap: 9px; align-items: flex-start; max-width: min(78%, 680px); }
+.bc-pchat-msg[data-mine='true'] { align-self: flex-end; flex-direction: row-reverse; }
+.bc-pchat-msg .bc-avatar { width: 30px; height: 30px; font-size: 10px; }
+.bc-pchat-bubble { border: 1px solid #edf0e6; border-radius: 0 13px 13px 13px; padding: 9px 13px; min-width: 0; }
+.bc-pchat-msg[data-mine='true'] .bc-pchat-bubble { background: #fcf5d7; border-color: #f3e9ba; border-radius: 13px 0 13px 13px; }
+.bc-pchat-msg.kind-visitor .bc-pchat-bubble { background: #f7f9f2; }
+.bc-pchat-author { display: flex; align-items: baseline; gap: 9px; font-size: 11px; font-weight: 600; margin-bottom: 4px; overflow-wrap: anywhere; }
+.bc-pchat-author time { font-size: 9px; color: #9aa38f; font-weight: 400; }
+/* message bodies are plain text nodes — `pre-wrap` is what preserves the
+   customer's own line breaks without any markup being interpreted */
+.bc-pchat-body { font-size: 13px; line-height: 1.75; white-space: pre-wrap; overflow-wrap: anywhere; }
+.bc-pchat-deleted { font-size: 12px; color: #9aa38f; font-style: italic; }
+.bc-pchat-quote { border-left: 2px solid #d9e0cd; padding-left: 8px; font-size: 11px; color: #8b987c; margin-bottom: 5px; overflow-wrap: anywhere; }
+.bc-pchat-msg-actions { display: flex; gap: 10px; margin-top: 6px; }
+.bc-pchat-msg-actions button { font-size: 10px; color: #8b987c; min-height: 28px; }
+.bc-pchat-msg-actions button:hover { text-decoration: underline; }
+
+.bc-pchat-attachments { display: flex; flex-direction: column; gap: 7px; margin-top: 7px; }
+.bc-pchat-attachments img, .bc-pchat-attachments video { max-width: 100%; max-height: 260px; border-radius: 9px; display: block; }
+.bc-pchat-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  background: #f3f5ee;
+  border-radius: 8px;
+  padding: 8px 10px;
+  overflow-wrap: anywhere;
+}
+.bc-pchat-file small { color: #9aa38f; margin-left: auto; }
+.bc-pchat-file[aria-disabled='true'] { opacity: .6; }
+
+.bc-pchat-typing { min-height: 18px; font-size: 11px; color: #718261; padding: 0 24px; }
+
+.bc-pchat-composer { padding: 10px 24px 16px; }
+.bc-pchat-banner {
+  background: #f3f5ee;
+  color: #6d7a63;
+  font-size: 12px;
+  border-radius: 9px;
+  padding: 12px 14px;
+  line-height: 1.6;
+}
+.bc-pchat-banner a { text-decoration: underline; }
+.bc-pchat-compose-box {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  background: #fdfefa;
+  border: 1px solid #dfe5d7;
+  border-radius: 13px;
+  padding: 7px;
+}
+.bc-pchat-compose-box:focus-within { border-color: #c7b564; box-shadow: 0 0 0 3px #f4d35a15; }
+.bc-pchat-compose-box textarea {
+  flex: 1;
+  border: 0;
+  outline: none;
+  background: transparent;
+  resize: none;
+  padding: 9px 5px;
+  min-height: 40px;
+  color: #354330;
+  font-family: inherit;
+}
+.bc-pchat-attach { display: inline-flex; align-items: center; color: #8b977d; padding: 10px 8px; cursor: pointer; }
+.bc-pchat-attach input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.bc-pchat-send {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f4d35a;
+  color: #464629;
+  border-radius: 8px;
+  padding: 11px 15px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.bc-pchat-send:disabled { opacity: .55; }
+.bc-pchat-staged { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 7px; }
+.bc-pchat-staged span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #f3f5ee;
+  border-radius: 7px;
+  padding: 5px 9px;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.bc-pchat-staged small { color: #9aa38f; font-size: 9px; }
+.bc-pchat-replying { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 7px; }
+.bc-pchat-replying > p { flex: 1; margin: 0; }
+
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+
+/* ------------------------------------------------------- the visitor page */
+ /* `.bc-public-meeting` is a plain min-height block; the chat card needs a
+    column that actually fills the viewport so the transcript scrolls inside the
+    card instead of the page. */
+.bc-pchat-visitor {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  height: 100dvh;
+}
+.bc-pchat-visitor-card {
+  width: min(680px, 100%);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  background: #fff;
+  border: 1px solid var(--bc-line);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 10px 40px #35432010;
+}
+.bc-pchat-visitor-card > p[role='alert'],
+.bc-pchat-visitor-card > p[role='status'] { padding: 24px; }
+.bc-pchat-visitor-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--bc-line);
+}
+.bc-pchat-visitor-head h1 { font-size: 17px; font-weight: 650; letter-spacing: -.4px; overflow-wrap: anywhere; }
+.bc-pchat-visitor-head p { margin-top: 3px; overflow-wrap: anywhere; }
+.bc-pchat-visitor-log { flex: 1; min-height: 0; overflow: auto; padding: 18px 20px; display: flex; flex-direction: column; gap: 9px; }
+.bc-pchat-visitor .bc-pchat-msg { max-width: 88%; }
+.bc-pchat-visitor .bc-pchat-composer { padding: 10px 16px 16px; }
+.bc-pchat-visitor .bc-pchat-typing { padding: 0 20px; }
+.bc-pchat-visitor .bc-pchat-alert { margin: 0 16px; }
+.bc-pchat-visitor .bc-pchat-banner { margin: 0 16px 16px; }
+
+/* -------------------------------------------------------------- rail badge */
+.bc-pchat-badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 17px;
+  height: 17px;
+  border-radius: 9px;
+  background: #d9534f;
+  color: #fff;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+}
+/* NB: `.bc-rail-links button` is already `position: relative` (index.css:42),
+   which is what this badge anchors to — do not restate it here, or the rail's
+   `.active:before` marker would start resolving against a different ancestor. */
+
+/* ------------------------------------------------------------ small screens */
+@media (max-width: 760px) {
+  .bc-pchat-queue { padding: 20px 14px; gap: 14px; }
+  .bc-pchat-queue-head h1 { font-size: 26px; }
+  .bc-pchat-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'who status' 'agent meta';
+    row-gap: 9px;
+  }
+  .bc-pchat-row-who { grid-area: who; }
+  .bc-pchat-row > .bc-pchat-pill { grid-area: status; justify-self: end; }
+  .bc-pchat-row-agent { grid-area: agent; }
+  .bc-pchat-row-meta { grid-area: meta; }
+  .bc-pchat-room-head { padding: 11px 14px; gap: 10px; }
+  .bc-pchat-room-controls { width: 100%; }
+  .bc-pchat-room-controls label { flex: 1; min-width: 0; }
+  .bc-pchat-room-controls select { width: 100%; }
+  .bc-pchat-transcript { padding: 12px 14px; }
+  .bc-pchat-msg { max-width: 92%; }
+  .bc-pchat-composer, .bc-pchat-visitor .bc-pchat-composer { padding: 8px 12px 12px; }
+  .bc-pchat-typing, .bc-pchat-visitor .bc-pchat-typing { padding: 0 14px; }
+  /* the send label collapses to the icon rather than pushing the textarea to
+     an unusable width at 375px */
+  .bc-pchat-send span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .bc-pchat-send { padding: 11px; }
+  .bc-pchat-visitor-card { border-radius: 12px; }
+  .bc-pchat-visitor-head { padding: 14px; }
+  .bc-pchat-visitor-log { padding: 14px; }
+}

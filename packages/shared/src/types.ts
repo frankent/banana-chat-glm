@@ -231,6 +231,14 @@ export const DEFAULT_SETTINGS = {
   'auth.max_sessions_per_user': 10,
   'presence.offline_after_seconds': 60,
   'typing.ttl_seconds': 5,
+  /**
+   * FR-PCHAT-033/034, DEC-071 — public chat ships DISABLED. Enabling is a
+   * deliberate admin act; `link_ttl_days` and `max_message_length` are numeric,
+   * so each also has a `Settings::ranges()` row server-side (1..365 / 1..32000).
+   */
+  'publicchat.enabled': false,
+  'publicchat.link_ttl_days': 30,
+  'publicchat.max_message_length': 4000,
 } as const;
 
 /** §7 error codes that the client reasons about */
@@ -252,6 +260,20 @@ export const ERROR_CODES = {
   MSG_EMPTY: 422,
   VALIDATION_FAILED: 422,
   RATE_LIMITED: 429,
+  // §7.1 FR-PCHAT. Visitor/agent tiers:
+  PCHAT_DISABLED: 503,
+  PCHAT_ROOM_NOT_FOUND: 404,
+  PCHAT_ROOM_CLOSED: 409,
+  PCHAT_LINK_EXPIRED: 410,
+  PCHAT_INVALID_TRANSITION: 422,
+  /** FR-PCHAT-013 — a signed-in member may READ the link but never write as the visitor. */
+  PCHAT_SIGNED_IN: 403,
+  // Partner HMAC tier (FR-PCHAT-031). Never surfaced to a browser: no client
+  // signs a partner request, so these exist for completeness and error mapping.
+  API_KEY_INVALID: 401,
+  API_SIGNATURE_INVALID: 401,
+  API_TIMESTAMP_SKEW: 401,
+  API_NONCE_REPLAYED: 409,
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_CODES;
@@ -398,3 +420,423 @@ export interface MeetingJoin {
   meeting: PublicMeeting; participant_id: string; participant_token: string;
   url: string; token: string; can_end: boolean; workspace_slug: string | null;
 }
+
+// ---- §5.18 FR-PCHAT — public support chat (§8.10 API-200..228, §9 EVT-080..085) ----
+//
+// DEC-064: public chat is an isolated bounded context. A support conversation is
+// NEVER a `rooms` row and a support message is NEVER a `messages` row, so none of
+// the types below extend `Room`/`Message` and `RoomType` above is untouched —
+// this feature adds no room type.
+//
+// DEC-065: there are TWO serializers and two channels. Everything named
+// `PublicChat*Public*`/`PublicChatVisitor*` is what a customer holding the
+// capability link may see; everything named `PublicChat*Staff*` is internal.
+// They are deliberately separate declarations with no shared base: a shared base
+// is precisely how a field added for staff leaks to the customer.
+
+/** Internal queue status. NEVER sent to a visitor surface (FR-PCHAT-007). */
+export type PublicChatStatus = 'new' | 'in_progress' | 'done' | 'problem';
+
+/**
+ * The only status projection a visitor ever receives (MANDATORY graft 1 /
+ * FR-PCHAT-007): new|in_progress|problem → 'open', done → 'closed'. A customer
+ * must not learn that support flagged their conversation `problem`.
+ */
+export type PublicChatStatusPublic = 'open' | 'closed';
+
+/** Set server-side from the authenticated tier — never read from a payload. */
+export type PublicChatSenderKind = 'visitor' | 'agent' | 'system';
+
+/** No call/meet/AI type exists in this context (FR-PCHAT-002/006). */
+export type PublicChatMessageType = 'text' | 'image' | 'video' | 'file' | 'system';
+
+/** System rows carry `body: null` + this, so each reader gets their own locale. */
+export type PublicChatSystemEvent =
+  | 'claimed'
+  | 'reassigned'
+  | 'status_changed'
+  | 'closed_by_customer'
+  | 'link_rotated';
+
+/** Why API-210 reports the composer shut: the ticket is done, or the kill switch is on. */
+export type PublicChatClosedReason = 'done' | 'disabled';
+
+/** `public_chat_rooms.locale`, default 'th' (FR-I18N-001). Mirrors shared `Locale`. */
+export type PublicChatLocale = 'th' | 'en';
+
+/** {id,username,display_name} — staff surfaces only; never on a visitor payload. */
+export type PublicChatAgentStub = Pick<UserStub, 'id' | 'username' | 'display_name'>;
+
+// -- Tier 2 wire shapes: the customer surface (API-210..216, private-public-chat.{rid}) --
+
+/**
+ * API-210 `room` — EXACTLY what `PublicChatPublicSerializer::room()` emits.
+ *
+ * `id` is present and load-bearing: the visitor page cannot derive the room
+ * ULID from its 64-hex code, and it needs the ULID to subscribe to
+ * `private-public-chat.{id}` — which API-215 validates by literal string
+ * equality (design "Realtime", MANDATORY fix 12). The `code` is NOT echoed
+ * back; the visitor already holds it in their own URL.
+ *
+ * Note what is ABSENT and must stay absent (FR-PCHAT-014): no workspace_id, no
+ * RAW `status` (only the `open|closed` projection), no assignee, no `meta`, no
+ * `external_ref`.
+ */
+export interface PublicChatVisitorRoom {
+  id: string;
+  customer_name: string;
+  provider_name: string;
+  status_public: PublicChatStatusPublic;
+  locale: PublicChatLocale;
+  created_at: string | null;
+  expires_at: string | null;
+  last_seq: number;
+}
+
+/** FR-PCHAT-013 — a signed-in member who opened the customer link. */
+export interface PublicChatViewer {
+  kind: 'member';
+  display_name: string;
+}
+
+/** API-210 response. `can_send` is authoritative; the client derives the reason. */
+export interface PublicChatVisitorView {
+  room: PublicChatVisitorRoom;
+  can_send: boolean;
+  feature_enabled: boolean;
+  closed_reason: PublicChatClosedReason | null;
+  /** null for a genuine visitor; FR-PCHAT-013 populates it for a member bearer. */
+  viewer: PublicChatViewer | null;
+}
+
+/**
+ * Inline reply/quote on the CUSTOMER surface (MANDATORY graft 4). Snippet only:
+ * no sender id, no sender kind, no display name. `snippet` is null when the
+ * quoted row has been deleted — that null IS the tombstone, so there is no
+ * separate `deleted` flag.
+ */
+export interface PublicChatPublicReplySnippet {
+  id: string;
+  seq: number;
+  snippet: string | null;
+}
+
+/**
+ * Inline reply/quote on the AGENT surface. Carries `sender_kind` — enough to
+ * render "replying to the customer" vs "replying to a colleague" — which the
+ * public variant deliberately omits.
+ */
+export interface PublicChatStaffReplySnippet {
+  id: string;
+  seq: number;
+  sender_kind: PublicChatSenderKind;
+  snippet: string | null;
+}
+
+/**
+ * The visitor-facing message (API-211/212, EVT-080 public variant). Structurally
+ * different from `PublicChatStaffMessage`, not a subset of it: no
+ * `sender_user_id`, no `sender`, no snapshots, no `client_message_id`, no
+ * `mentions`, no `workspace_id`, no `deleted_by`, no `system_meta.actor_username`.
+ */
+export interface PublicChatPublicMessage {
+  id: string;
+  seq: number;
+  sender_kind: PublicChatSenderKind;
+  /**
+   * The external display name, ASSEMBLED SERVER-SIDE from the write-time
+   * snapshots and rendered as a plain text node (MANDATORY fix 20): the agent's
+   * `provider name (admin username)` (chat-core `agentExternalName`), the
+   * customer's own name for a visitor row, and null for a system row. The
+   * public serializer never joins `users`, so a later rename does not rewrite
+   * an existing transcript (FR-PCHAT-014).
+   */
+  display_name: string | null;
+  type: PublicChatMessageType;
+  body: string | null;
+  reply_to: PublicChatPublicReplySnippet | null;
+  system_event: PublicChatSystemEvent | null;
+  /** Projected: statuses are `status_public`, and there is NO `actor_username`. */
+  system_meta: { from?: PublicChatStatusPublic; to?: PublicChatStatusPublic } | null;
+  attachments: Attachment[];
+  /**
+   * `PublicChatMessage` has NO SoftDeletes trait, so a deleted row STAYS in the
+   * transcript (removing it would renumber the customer's visible `seq`) and
+   * the server renders the tombstone: `deleted: true` with `body`, `reply_to`,
+   * `display_name` and `system_meta` all nulled and `attachments` emptied.
+   * The public payload carries the FLAG only — never `deleted_at`/`deleted_by`.
+   */
+  deleted: boolean;
+  created_at: string | null;
+}
+
+/** API-211 — reconnect catch-up / 5 s polling fallback (`?after_seq=`). */
+export interface PublicChatVisitorMessagePage {
+  messages: PublicChatPublicMessage[];
+  last_seq: number;
+}
+
+/**
+ * API-213 / API-225 upload ticket. DELIBERATELY NOT the shared `UploadTicket`
+ * (API-060): this context answers `{attachment:{id,status}, upload_url,
+ * multipart?}` and omits API-060's `headers` / `expires_at`. Keys absent from
+ * the response are absent here too — `upload_url` and `multipart` are each
+ * dropped entirely when null (the controllers `array_filter` them out), which
+ * is why both are optional rather than nullable-and-required.
+ *
+ * See the reconciliation note in the FR-PCHAT report: this divergence from the
+ * product-wide API-060 convention is REPORTED, not silently blessed.
+ */
+export interface PublicChatUploadTicket {
+  attachment: { id: string; status: AttachmentStatus };
+  upload_url?: string;
+  multipart?: { upload_id: string; part_size: number; part_urls: string[] };
+}
+
+/** API-214 — completion answers the id/status pair only, never a full `Attachment`. */
+export interface PublicChatUploadCompletion {
+  attachment: { id: string; status: AttachmentStatus };
+}
+
+// -- Tier 3 wire shapes: the agent surface (API-220..228, private-public-chat-staff.{rid}) --
+
+/**
+ * RAW, staff-only system metadata — internal identity, staff channel only.
+ * Two shapes by event: `status_changed` / `closed_by_customer` carry the two
+ * RAW statuses (`problem` included) in `{from,to}`; `claimed` / `reassigned`
+ * carry member ULIDs in `{from_user_id,to_user_id}`. Either may carry
+ * `actor_username`. The public serializer projects this down to
+ * `{from?,to?}` in `status_public` terms and drops `actor_username` entirely.
+ */
+export interface PublicChatStaffSystemMeta {
+  from?: string;
+  to?: string;
+  from_user_id?: string;
+  to_user_id?: string;
+  actor_username?: string;
+}
+
+/** API-222/223, EVT-080 staff variant — what `PublicChatStaffSerializer::message()` emits. */
+export interface PublicChatStaffMessage {
+  id: string;
+  room_id: string;
+  seq: number;
+  sender_kind: PublicChatSenderKind;
+  /** The real member behind an agent row; null on visitor and system rows. */
+  sender: PublicChatAgentStub | null;
+  /**
+   * The exact string the CUSTOMER sees for this row — `provider (username)`
+   * from the write-time snapshots. Present on the staff surface on purpose, so
+   * an agent can tell at a glance how their message was signed externally.
+   */
+  external_display_name: string | null;
+  /** The room's `customer_name`, so a visitor row renders without a join. */
+  visitor_display_name: string | null;
+  type: PublicChatMessageType;
+  body: string | null;
+  reply_to: PublicChatStaffReplySnippet | null;
+  system_event: PublicChatSystemEvent | null;
+  system_meta: PublicChatStaffSystemMeta | null;
+  /** NOT NULL (DEC-066); unique with (room_id, sender_kind). System rows get a ULID. */
+  client_message_id: string;
+  attachments: Attachment[];
+  /** The tombstone flag; staff additionally get the audit pair below. */
+  deleted: boolean;
+  deleted_at: string | null;
+  deleted_by: string | null;
+  created_at: string | null;
+}
+
+/**
+ * API-222 page. NOT the internal `MessagePage`'s `has_more_*` shape: this
+ * endpoint answers ascending rows plus the room's `last_seq`, which is what the
+ * agent view needs to decide whether it is caught up.
+ */
+export interface PublicChatStaffMessagePage {
+  messages: PublicChatStaffMessage[];
+  last_seq: number;
+}
+
+/**
+ * API-220/221 row. There are no `room_members` rows in this context: every
+ * active workspace member sees every row (FR-PCHAT-004), so there is no
+ * `my_role`. `code` is deliberately ABSENT — the visitor's credential is the
+ * partner's to deliver, not something an agent list needs to carry.
+ */
+export interface PublicChatStaffRoom {
+  id: string;
+  customer_name: string;
+  provider_name: string;
+  external_ref: string | null;
+  status: PublicChatStatus;
+  /** The same projection the customer sees, so both surfaces can be compared. */
+  status_public: PublicChatStatusPublic;
+  locale: PublicChatLocale;
+  assigned_to: PublicChatAgentStub | null;
+  claimed_at: string | null;
+  /** MANDATORY graft 21 — stamped once by the auto-claim UPDATE, never rewritten. */
+  first_response_at: string | null;
+  /** `last_visitor_seq > last_agent_seq && status !== 'done'` — the amber dot. */
+  needs_reply: boolean;
+  last_seq: number;
+  last_visitor_seq: number;
+  last_agent_seq: number;
+  /** FR-PCHAT-010 — per-agent read pointer; one agent's never affects another's. */
+  my_last_read_seq: number;
+  unread_count: number;
+  last_message_at: string | null;
+  created_at: string | null;
+  expires_at: string | null;
+  closed_at: string | null;
+  /** The partner's arbitrary payload. NEVER serialised to a visitor. */
+  meta: Record<string, unknown> | null;
+}
+
+/**
+ * API-220 page. `next_cursor` is OPAQUE by contract — v1 encodes a base64
+ * offset over the triage sort so it can become a keyset later without an API
+ * change. Never parse it; pass it back verbatim.
+ */
+export interface PublicChatRoomPage {
+  rooms: PublicChatStaffRoom[];
+  next_cursor: string | null;
+}
+
+/**
+ * API-227 `summary` — six counters, not four. `done` and `needs_reply` are
+ * emitted alongside the three status counts and `mine`; the rail badge itself
+ * is `new + problem` (FR-PCHAT-003). `mine` and `needs_reply` both EXCLUDE
+ * `done` rooms, so a closed conversation never keeps a badge lit.
+ */
+export interface PublicChatSummary {
+  new: number;
+  in_progress: number;
+  problem: number;
+  done: number;
+  mine: number;
+  needs_reply: number;
+}
+
+/**
+ * The full API-227 body. The counters are nested under `summary` and carry
+ * `feature_enabled` beside them: this endpoint is a READ and keeps answering
+ * with the kill switch off (FR-PCHAT-034), so the rail can show a "paused" chip
+ * instead of vanishing.
+ */
+export interface PublicChatSummaryResponse {
+  summary: PublicChatSummary;
+  feature_enabled: boolean;
+}
+
+/** API-228 response — monotonic; a lower seq is a no-op, and the server reports the pointer ACTUALLY in force. */
+export interface PublicChatReadState {
+  room_id: string;
+  last_read_seq: number;
+  unread_count: number;
+}
+
+/** API-220 `assigned`: a member ULID, or the two symbolic values. */
+export type PublicChatAssigneeFilter = 'me' | 'none' | (string & {});
+
+/**
+ * API-220 query, in WIRE spelling (snake_case). FR-PCHAT-004: every one of
+ * these is applied SERVER-SIDE and belongs in the react-query key; the client
+ * never filters a page it already fetched.
+ */
+export interface PublicChatListQuery {
+  status?: PublicChatStatus[];
+  assigned?: PublicChatAssigneeFilter;
+  /** ILIKE over customer_name / provider_name / external_ref AND message bodies. */
+  q?: string;
+  needs_reply?: boolean;
+  cursor?: string;
+  limit?: number;
+}
+
+/**
+ * The list page's own UI state (camelCase — this is not a wire shape).
+ * `assignee: 'all'` is the wire's "omit `assigned` entirely".
+ */
+export interface PublicChatFilters {
+  status: PublicChatStatus[];
+  assignee: 'all' | PublicChatAssigneeFilter;
+  q: string;
+  needsReply: boolean;
+}
+
+// -- §9 EVT-080..085 --
+
+/** Deliberately a separate union: `RealtimeEventName` above is not widened. */
+export type PublicChatEventName =
+  | 'public_chat.message.created'
+  | 'public_chat.room.changed'
+  | 'public_chat.room.created'
+  | 'public_chat.message.deleted'
+  | 'public_chat.attachment.ready'
+  | 'public_chat.attachment.failed'
+  | 'public_chat.typing';
+
+/**
+ * EVT-084 payload. NOT a full `Attachment`: `AttachmentProcessed::payload()`
+ * emits a six-field whitelist keyed `attachment_id` (not `id`), with no signed
+ * URLs. The client re-fetches via API-062 / a message reload to get those.
+ */
+export interface PublicChatAttachmentEvent {
+  attachment_id: string;
+  kind: AttachmentKind;
+  status: AttachmentStatus;
+  filename: string;
+  width: number | null;
+  height: number | null;
+}
+
+/**
+ * Payloads on `private-public-chat.{room_id}` — visitor + agents mirroring.
+ * Every room-scoped event carries `room_id` in its own payload rather than
+ * relying on the channel name it arrived on.
+ */
+export interface PublicChatVisitorEventMap {
+  'public_chat.message.created': { room_id: string; message: PublicChatPublicMessage };
+  /**
+   * EVT-081 visitor variant — nested under `room`, and `status_public` +
+   * `can_send` ONLY. The visitor never learns who is assigned, or that anyone
+   * is.
+   */
+  'public_chat.room.changed': {
+    room: { id: string; status_public: PublicChatStatusPublic; can_send: boolean };
+  };
+  'public_chat.message.deleted': { room_id: string; message_id: string; seq: number };
+  'public_chat.attachment.ready': { attachment: PublicChatAttachmentEvent };
+  'public_chat.attachment.failed': { attachment: PublicChatAttachmentEvent };
+  /** EVT-085 visitor variant — sender_kind only, never a username. */
+  'public_chat.typing': { room_id: string; sender_kind: PublicChatSenderKind };
+}
+
+/** Payloads on `private-public-chat-staff.{room_id}` + `private-workspace.{wid}`. */
+export interface PublicChatStaffEventMap {
+  'public_chat.message.created': { room_id: string; message: PublicChatStaffMessage };
+  /**
+   * EVT-081 staff variant — the WHOLE staff room, nested under `room`. It also
+   * fans out to `private-workspace.{wid}` for queue/badge liveness, where the
+   * consumer has no channel-scoped room id to fall back on; `room.id` is what
+   * tells it which row to re-sort.
+   */
+  'public_chat.room.changed': { room: PublicChatStaffRoom };
+  'public_chat.room.created': { room: PublicChatStaffRoom };
+  'public_chat.message.deleted': { room_id: string; message_id: string; seq: number };
+  'public_chat.attachment.ready': { attachment: PublicChatAttachmentEvent };
+  'public_chat.attachment.failed': { attachment: PublicChatAttachmentEvent };
+  /** EVT-085 staff variant — the typing member, or null for the customer. */
+  'public_chat.typing': {
+    room_id: string;
+    sender_kind: PublicChatSenderKind;
+    user: PublicChatAgentStub | null;
+  };
+}
+
+type PublicChatEnvelopes<M> = { [K in keyof M]: EventEnvelope<M[K]> & { event: K } }[keyof M];
+
+/** Discriminated on `event` — what the visitor page's own Echo instance receives. */
+export type PublicChatVisitorEvent = PublicChatEnvelopes<PublicChatVisitorEventMap>;
+/** Discriminated on `event` — what the agent page receives via the shared Echo. */
+export type PublicChatStaffEvent = PublicChatEnvelopes<PublicChatStaffEventMap>;

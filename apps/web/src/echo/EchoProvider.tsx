@@ -245,9 +245,32 @@ export function EchoProvider({ children }: { children: ReactNode }) {
 
     channel.listen('.user.updated', refreshPeople);
     channel.listen('.user.status_changed', refreshPeople);
+
+    // EVT-081/082 (FR-PCHAT-003/004) — public chat room created / changed. The
+    // staff variants fan out to private-workspace.{wid} so every agent's queue
+    // and rail badge move without anyone having the conversation open.
+    //
+    // THESE LIVE HERE AND ONLY HERE. laravel-echo's stopListening(event) with no
+    // callback unbinds EVERY listener for that event on the channel, so a second
+    // component subscribing to the same workspace channel would silently kill
+    // this one's handler the moment it unmounted.
+    const refreshPublicChat = () => {
+      // deliberately NOT the whole ['public-chat'] prefix: that includes
+      // ['public-chat','messages',slug,roomId], so any room's status change
+      // would refetch the transcript an agent has open and reset its
+      // "load earlier" state. The open room gets its own staff-channel events.
+      void queryClient.invalidateQueries({ queryKey: ['public-chat', 'rooms'] });
+      void queryClient.invalidateQueries({ queryKey: ['public-chat', 'summary'] });
+      void queryClient.invalidateQueries({ queryKey: ['public-chat', 'room'] });
+    };
+    channel.listen('.public_chat.room.created', refreshPublicChat);
+    channel.listen('.public_chat.room.changed', refreshPublicChat);
+
     return () => {
       channel.stopListening('.user.updated');
       channel.stopListening('.user.status_changed');
+      channel.stopListening('.public_chat.room.created');
+      channel.stopListening('.public_chat.room.changed');
     };
   }, [instance, currentWorkspace, queryClient]);
 

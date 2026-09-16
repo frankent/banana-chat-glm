@@ -21,6 +21,18 @@ components:
       type: http
       scheme: bearer
       description: access_token from /auth/login (60 min TTL)
+    pchatHmac:
+      type: apiKey
+      in: header
+      name: X-PChat-Key
+      description: >
+        FR-PCHAT-031 partner credential. The public key id (`pck_` + 28 hex) travels in this header and
+        MUST be accompanied by X-PChat-Timestamp, X-PChat-Nonce and X-PChat-Signature, declared as
+        required parameters on every partner operation. The signature is `v1=` + lowercase hex
+        HMAC-SHA256 over exactly six "\n"-joined lines — `v1`, uppercase method, request path including
+        /api/v1 and without query string, timestamp, nonce, and sha256 of the RAW request body bytes
+        (sha256 of the empty string when there is no body). Sign the exact bytes put on the wire; never
+        re-serialised JSON. Sign server-side only — never from browser JavaScript. Never a user session.
   parameters:
     workspaceSlug:
       name: X-Workspace-Id
@@ -28,6 +40,33 @@ components:
       required: true
       schema: { type: string }
       description: slug of the active workspace
+    pchatCode:
+      name: code
+      in: path
+      required: true
+      schema: {type: string, pattern: '^[a-f0-9]{64}$'}
+      description: >
+        The visitor capability code (FR-PCHAT / DEC-063). Possession of it IS the identity. It must never
+        appear in a query string, a channel name, a referrer header or an access log; the edge sets
+        no-referrer, no-store and access_log off on both /support/ and /api/v1/public-chat/.
+    pchatTimestamp:
+      name: X-PChat-Timestamp
+      in: header
+      required: true
+      schema: {type: integer}
+      description: Unix seconds. Accepted within +/-300s of server time, else 401 API_TIMESTAMP_SKEW.
+    pchatNonce:
+      name: X-PChat-Nonce
+      in: header
+      required: true
+      schema: {type: string, minLength: 16, maxLength: 64, pattern: '^[A-Za-z0-9_-]+$'}
+      description: Single use per key. Cached for 600s (more than twice the skew window), else 409 API_NONCE_REPLAYED.
+    pchatSignature:
+      name: X-PChat-Signature
+      in: header
+      required: true
+      schema: {type: string, pattern: '^v1=[a-f0-9]{64}$'}
+      description: See the pchatHmac security scheme for the canonical string. Compared in constant time.
   schemas:
     PublicMeeting:
       type: object
@@ -50,6 +89,104 @@ components:
         token: {type: string}
         can_end: {type: boolean}
         workspace_slug: {type: [string, 'null'], description: Only returned to the meeting creator.}
+    PublicChatRoomPartner:
+      type: object
+      description: API-201 partner view. Status counts and the external display name only; never message bodies.
+      required: [id, status, customer_name, provider_name, message_count, expires_at]
+      properties:
+        id: {type: string, description: 'Room ULID. Partner routes address rooms by this, never by code.'}
+        status: {type: string, enum: [new, in_progress, done, problem]}
+        customer_name: {type: string, maxLength: 120}
+        provider_name: {type: string, maxLength: 120}
+        assigned_display_name: {type: [string, 'null'], description: 'External display name of the assigned agent, or null.'}
+        message_count: {type: integer}
+        last_message_at: {type: [string, 'null'], format: date-time}
+        closed_at: {type: [string, 'null'], format: date-time}
+        expires_at: {type: string, format: date-time}
+    PublicChatRoomVisitor:
+      type: object
+      description: >
+        API-210 visitor view. Deliberately carries status_public, never the raw status - a customer must
+        not learn that support flagged the conversation `problem` (FR-PCHAT-007).
+      required: [code, customer_name, provider_name, status_public, locale, created_at]
+      properties:
+        code: {type: string, pattern: '^[a-f0-9]{64}$'}
+        customer_name: {type: string, maxLength: 120}
+        provider_name: {type: string, maxLength: 120}
+        status_public: {type: string, enum: [open, closed], description: 'open = new|in_progress|problem, closed = done'}
+        locale: {type: string, enum: [th, en]}
+        created_at: {type: string, format: date-time}
+    PublicChatMessageVisitor:
+      type: object
+      description: >
+        Public payload. Contains no user ULID, no mentions, no read receipts, no assignee and no room meta;
+        an agent is identified only by external_display_name (`provider name (admin username)`) built from
+        write-time snapshots (FR-PCHAT-014).
+      required: [id, seq, sender_kind, type, created_at]
+      properties:
+        id: {type: string}
+        seq: {type: integer}
+        sender_kind: {type: string, enum: [visitor, agent, system]}
+        external_display_name: {type: [string, 'null'], description: 'Plain text `provider name (admin username)`; never HTML, never Markdown.'}
+        type: {type: string, enum: [text, image, video, file, system]}
+        body: {type: [string, 'null']}
+        system_event: {type: [string, 'null'], enum: [claimed, reassigned, status_changed, closed_by_customer, link_rotated, null]}
+        reply_to:
+          type: [object, 'null']
+          description: Snippet-only quote. Deliberately carries no sender id.
+          properties:
+            seq: {type: integer}
+            snippet: {type: string}
+            deleted: {type: boolean}
+        attachments: {type: array, items: {type: object}, description: Whitelisted attachment fields only; never delegated to the internal serializer.}
+        deleted_at: {type: [string, 'null'], format: date-time}
+        created_at: {type: string, format: date-time}
+    PublicChatRoomStaff:
+      type: object
+      description: API-220/221 agent view. Carries the raw status, the assignee, meta and external_ref.
+      required: [id, workspace_id, status, customer_name, provider_name, created_at, expires_at]
+      properties:
+        id: {type: string}
+        workspace_id: {type: string}
+        status: {type: string, enum: [new, in_progress, done, problem]}
+        customer_name: {type: string}
+        provider_name: {type: string}
+        external_ref: {type: [string, 'null']}
+        meta: {type: [object, 'null'], description: Customer-supplied payload. Never serialised to the visitor.}
+        locale: {type: string, enum: [th, en]}
+        assigned_to: {type: [object, 'null'], properties: {id: {type: string}, username: {type: string}, display_name: {type: string}}}
+        claimed_at: {type: [string, 'null'], format: date-time}
+        first_response_at: {type: [string, 'null'], format: date-time}
+        last_seq: {type: integer}
+        last_visitor_seq: {type: integer}
+        last_agent_seq: {type: integer}
+        needs_reply: {type: boolean, description: last_visitor_seq > last_agent_seq and status != done}
+        my_last_read_seq: {type: integer}
+        unread_count: {type: integer}
+        last_message_at: {type: [string, 'null'], format: date-time}
+        closed_at: {type: [string, 'null'], format: date-time}
+        expires_at: {type: string, format: date-time}
+        created_at: {type: string, format: date-time}
+    PublicChatMessageStaff:
+      type: object
+      description: Internal payload, broadcast only on private-public-chat-staff.{room_id}.
+      required: [id, room_id, seq, sender_kind, type, created_at]
+      properties:
+        id: {type: string}
+        room_id: {type: string}
+        seq: {type: integer}
+        sender_kind: {type: string, enum: [visitor, agent, system]}
+        sender: {type: [object, 'null'], properties: {id: {type: string}, username: {type: string}, display_name: {type: string}}}
+        external_display_name: {type: [string, 'null']}
+        type: {type: string, enum: [text, image, video, file, system]}
+        body: {type: [string, 'null']}
+        system_event: {type: [string, 'null']}
+        system_meta: {type: [object, 'null']}
+        reply_to_message_id: {type: [string, 'null']}
+        client_message_id: {type: string}
+        attachments: {type: array, items: {type: object}}
+        deleted_at: {type: [string, 'null'], format: date-time}
+        created_at: {type: string, format: date-time}
     RoomCall:
       type: object
       required: [id,room_id,workspace_id,kind,started_by,caller_name,room_type,participants,created_at]
@@ -575,9 +712,9 @@ paths:
                     type: array
                     items: { $ref: '#/components/schemas/WorkspaceSummary' }
                   must_change_password: { type: boolean }
-        '401': { description: invalid credentials, schema: { $ref: '#/components/schemas/Error' } }
-        '423': { description: locked (AUTH_LOCKED), schema: { $ref: '#/components/schemas/Error' } }
-        '429': { description: rate limited, schema: { $ref: '#/components/schemas/Error' } }
+        '401': { description: 'invalid credentials, schema: { $ref: ''#/components/schemas/Error'' } '}
+        '423': { description: 'locked (AUTH_LOCKED), schema: { $ref: ''#/components/schemas/Error'' } '}
+        '429': { description: 'rate limited, schema: { $ref: ''#/components/schemas/Error'' } '}
   /auth/refresh:
     post:
       summary: API-002 rotate refresh token
@@ -612,7 +749,7 @@ paths:
                 new_password: { type: string }
       responses:
         '204': {description: 'changed'}
-        '422': { description: policy violation, schema: { $ref: '#/components/schemas/Error' } }
+        '422': { description: 'policy violation, schema: { $ref: ''#/components/schemas/Error'' } '}
   /me:
     get: { summary: API-008 profile + settings, responses: { '200': {description: 'ok'} } }
     patch: { summary: API-009 update profile, responses: { '200': {description: 'updated'} } }
@@ -676,7 +813,7 @@ paths:
                 type: array
                 items: { $ref: '#/components/schemas/RoomListItem' }
     post:
-      summary: API-021 create dm or group (secret variant: FR-ROOM-012)
+      summary: 'API-021 create dm or group (secret variant: FR-ROOM-012)'
       parameters: [{ $ref: '#/components/parameters/workspaceSlug' }]
       requestBody:
         content:
@@ -689,7 +826,7 @@ paths:
                     type: { type: string, enum: [dm] }
                     user_id: { type: string }
                     secret: { type: boolean, description: opt-in; requires expiry_days }
-                    expiry_days: { type: integer, minimum: 1, maximum: 30, description: days from creation; required iff secret=true, prohibited otherwise }
+                    expiry_days: { type: integer, minimum: 1, maximum: 30, description: 'days from creation; required iff secret=true, prohibited otherwise '}
                 - type: object
                   required: [type, name, member_ids]
                   properties:
@@ -1061,3 +1198,445 @@ paths:
                 body: {type: string, minLength: 1, maxLength: 10000}
       responses:
         '201': {description: 'Created comment in data'}
+
+  # ---------------------------------------------------------------------------
+  # FR-PCHAT — public support chat (PRODUCT_SPEC §5.18, §8.10)
+  # Tier 1 partner (HMAC) · Tier 2 visitor (unauthenticated, the code is the credential)
+  # Tier 3 support agent (existing bearer + X-Workspace-Id).
+  # Concrete Tier-3 prefixes are declared BEFORE /public-chat/{code} so a first-fit
+  # matcher never routes /public-chat/rooms into the templated visitor path.
+  # Every write returns 503 PCHAT_DISABLED while publicchat.enabled is false (DEC-071).
+  # ---------------------------------------------------------------------------
+  /partner/public-chat/rooms:
+    post:
+      summary: API-200 — Create a support conversation and return its visitor link
+      description: >
+        Idempotent on external_ref: a repeat with the same external_ref returns 200 with the same room
+        and the same code, not an error and not a duplicate. Never issues a user session.
+      security: [{pchatHmac: []}]
+      parameters:
+        - {$ref: '#/components/parameters/pchatTimestamp'}
+        - {$ref: '#/components/parameters/pchatNonce'}
+        - {$ref: '#/components/parameters/pchatSignature'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [customer_name, provider_name]
+              properties:
+                customer_name: {type: string, minLength: 1, maxLength: 120}
+                provider_name: {type: string, minLength: 1, maxLength: 120}
+                external_ref: {type: string, maxLength: 120, description: Customer's own ticket id; makes create idempotent.}
+                locale: {type: string, enum: [th, en], default: th}
+                meta: {type: object, description: 'Free-form customer payload, max 8KB serialised. Never served to the visitor.'}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      room: {$ref: '#/components/schemas/PublicChatRoomPartner'}
+                      code: {type: string, pattern: '^[a-f0-9]{64}$'}
+                      url: {type: string, format: uri, description: '<APP_URL>/support/<code>. The URL is bearer authority — deliver it over a private channel.'}
+        '200': {description: 'Idempotent replay: same external_ref, same room and code'}
+        '401': {description: API_KEY_INVALID / API_SIGNATURE_INVALID / API_TIMESTAMP_SKEW}
+        '409': {description: API_NONCE_REPLAYED}
+        '422': {description: VALIDATION_FAILED}
+        '429': {description: 'Named limiter pchat-create, keyed by X-PChat-Key not by IP'}
+        '503': {description: 'PCHAT_DISABLED with Retry-After: 60, returned only after signature verification'}
+  /partner/public-chat/rooms/{id}:
+    get:
+      summary: API-201 — Partner status read (no message bodies; answers even while the feature is off)
+      security: [{pchatHmac: []}]
+      parameters:
+        - {$ref: '#/components/parameters/pchatTimestamp'}
+        - {$ref: '#/components/parameters/pchatNonce'}
+        - {$ref: '#/components/parameters/pchatSignature'}
+        - {name: id, in: path, required: true, schema: {type: string, pattern: '^[0-9A-HJKMNP-TV-Z]{26}$'}, description: Room ULID. A 64-hex code here is a plain 404 — the visitor credential never travels in a partner path.}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {type: object, properties: {data: {$ref: '#/components/schemas/PublicChatRoomPartner'}}}
+        '401': {description: 'Signature, key or skew rejected'}
+        '404': {description: PCHAT_ROOM_NOT_FOUND (also for another workspace's room)}
+  /partner/public-chat/rooms/{id}/close:
+    post:
+      summary: API-202 — Close the conversation (status done)
+      security: [{pchatHmac: []}]
+      parameters:
+        - {$ref: '#/components/parameters/pchatTimestamp'}
+        - {$ref: '#/components/parameters/pchatNonce'}
+        - {$ref: '#/components/parameters/pchatSignature'}
+        - {name: id, in: path, required: true, schema: {type: string, pattern: '^[0-9A-HJKMNP-TV-Z]{26}$'}}
+      responses:
+        '200': {description: 'data: {status: done, closed_at}. The visitor keeps read-only access to the transcript.'}
+        '409': {description: PCHAT_ROOM_CLOSED}
+        '404': {description: PCHAT_ROOM_NOT_FOUND}
+        '503': {description: PCHAT_DISABLED}
+  /partner/public-chat/rooms/{id}/rotate-link:
+    post:
+      summary: API-203 — Mint a new visitor code; the old one 404s immediately
+      description: >
+        The remedy for a leaked capability URL short of ending the conversation. Messages, status and
+        assignment are unchanged and the partner must re-deliver the new URL. Does not forcibly
+        disconnect an already-connected socket — the channel is keyed by room id, not by code — but the
+        old code cannot send, reload or re-authorise.
+      security: [{pchatHmac: []}]
+      parameters:
+        - {$ref: '#/components/parameters/pchatTimestamp'}
+        - {$ref: '#/components/parameters/pchatNonce'}
+        - {$ref: '#/components/parameters/pchatSignature'}
+        - {name: id, in: path, required: true, schema: {type: string, pattern: '^[0-9A-HJKMNP-TV-Z]{26}$'}}
+      responses:
+        '200': {description: 'data: {code, url}'}
+        '404': {description: PCHAT_ROOM_NOT_FOUND}
+        '503': {description: PCHAT_DISABLED}
+  /public-chat/rooms:
+    get:
+      summary: API-220 — Support queue for every active member of the workspace
+      description: >
+        All filtering is server-side. q matches customer_name, provider_name, external_ref AND message
+        bodies. Default order is triage order: problem first, then needs_reply, then last_message_at
+        DESC NULLS LAST, id DESC.
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/workspaceSlug'}
+        - {name: status, in: query, schema: {type: string}, description: 'CSV of new|in_progress|done|problem'}
+        - {name: assigned, in: query, schema: {type: string}, description: "ULID, 'me' or 'none'"}
+        - {name: q, in: query, schema: {type: string}}
+        - {name: needs_reply, in: query, schema: {type: boolean}}
+        - {name: cursor, in: query, schema: {type: string}}
+        - {name: limit, in: query, schema: {type: integer, maximum: 100}}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {type: array, items: {$ref: '#/components/schemas/PublicChatRoomStaff'}}
+                  meta: {type: object, properties: {next_cursor: {type: [string, 'null']}}}
+  /public-chat/summary:
+    get:
+      summary: API-227 — Rail badge counters
+      security: [{bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/workspaceSlug'}]
+      responses:
+        '200': {description: 'data: {new, in_progress, problem, mine}'}
+  /public-chat/messages/{id}:
+    delete:
+      summary: API-226 — Soft-delete any message in a support conversation
+      description: >
+        Any active workspace member, audited as public_chat.message_deleted. Deliberately its own
+        endpoint: the internal moderation path resolves a NULL-sender row to a room-role check that no
+        support agent holds, which would make a visitor message undeletable by anyone.
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/workspaceSlug'}
+        - {name: id, in: path, required: true, schema: {type: string}}
+      responses:
+        '204': {description: Deleted; emits EVT-083 on both room channels}
+        '404': {description: Unknown message or another workspace's message}
+        '503': {description: PCHAT_DISABLED}
+  /public-chat/rooms/{id}:
+    parameters:
+      - {$ref: '#/components/parameters/workspaceSlug'}
+      - {name: id, in: path, required: true, schema: {type: string, pattern: '^[0-9A-HJKMNP-TV-Z]{26}$'}}
+    get:
+      summary: API-221 — Conversation detail for an agent
+      security: [{bearerAuth: []}]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {type: object, properties: {data: {$ref: '#/components/schemas/PublicChatRoomStaff'}}}
+        '404': {description: Unknown room or another workspace's room}
+    patch:
+      summary: API-224 — Change status and/or assignee
+      description: >
+        Writes a system row in the same locked transaction and emits EVT-081 (projected payload to the
+        visitor). The only transition guard is PCHAT_INVALID_TRANSITION.
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status: {type: string, enum: [new, in_progress, done, problem]}
+                assigned_to: {type: [string, 'null'], description: Must be an active member of the same workspace.}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: {type: object, properties: {data: {$ref: '#/components/schemas/PublicChatRoomStaff'}}}
+        '422': {description: 'PCHAT_INVALID_TRANSITION (cannot leave new unassigned, cannot unassign while in_progress) or an assignee who is not an active member'}
+        '503': {description: PCHAT_DISABLED}
+  /public-chat/rooms/{id}/messages:
+    parameters:
+      - {$ref: '#/components/parameters/workspaceSlug'}
+      - {name: id, in: path, required: true, schema: {type: string, pattern: '^[0-9A-HJKMNP-TV-Z]{26}$'}}
+    get:
+      summary: API-222 — Agent transcript
+      security: [{bearerAuth: []}]
+      parameters:
+        - {name: before_seq, in: query, schema: {type: integer}}
+        - {name: after_seq, in: query, schema: {type: integer}}
+        - {name: limit, in: query, schema: {type: integer, maximum: 100}}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {type: array, items: {$ref: '#/components/schemas/PublicChatMessageStaff'}}
+                  meta: {type: object, properties: {has_more_before: {type: boolean}, has_more_after: {type: boolean}}}
+    post:
+      summary: API-223 — Agent reply; the first one auto-claims the conversation
+      description: >
+        Inside the same lockForUpdate transaction that assigns seq, an unassigned room gets assigned_to,
+        status in_progress, claimed_at and first_response_at plus one `claimed` system row, so exactly
+        one claim under concurrent replies is a database guarantee.
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [client_message_id]
+              properties:
+                client_message_id: {type: string, minLength: 1, maxLength: 64}
+                body: {type: string}
+                attachment_ids: {type: array, maxItems: 10, items: {type: string}}
+                reply_to_message_id: {type: string, description: Must be a message in the same support conversation.}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: {type: object, properties: {data: {$ref: '#/components/schemas/PublicChatMessageStaff'}}}
+        '200': {description: Idempotent replay of the same client_message_id for this sender_kind}
+        '409': {description: PCHAT_ROOM_CLOSED}
+        '503': {description: PCHAT_DISABLED}
+  /public-chat/rooms/{id}/uploads:
+    post:
+      summary: API-225 — Agent upload ticket (uploader_id = the agent AND public_chat_room_id = the room)
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/workspaceSlug'}
+        - {name: id, in: path, required: true, schema: {type: string, pattern: '^[0-9A-HJKMNP-TV-Z]{26}$'}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, filename, mime_type, size_bytes]
+              properties:
+                kind: {type: string, enum: [image, video, file]}
+                filename: {type: string}
+                mime_type: {type: string}
+                size_bytes: {type: integer}
+      responses:
+        '201': {description: 'Upload ticket, same shape as API-060'}
+        '503': {description: PCHAT_DISABLED}
+  /public-chat/rooms/{id}/read:
+    post:
+      summary: API-228 — Advance this agent's personal read pointer
+      security: [{bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/workspaceSlug'}
+        - {name: id, in: path, required: true, schema: {type: string, pattern: '^[0-9A-HJKMNP-TV-Z]{26}$'}}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, required: [seq], properties: {seq: {type: integer}}}
+      responses:
+        '200': {description: 'data: {last_read_seq, unread_count}. Monotonic — a lower seq is a no-op and never affects another agent.'}
+        '503': {description: PCHAT_DISABLED}
+  /public-chat/{code}:
+    get:
+      summary: API-210 — Visitor page bootstrap (unauthenticated; the code is the credential)
+      description: >
+        Returns status_public, never the raw status. A valid active-member bearer makes the caller a
+        read-only viewer (FR-PCHAT-013): reads are served, writes are refused. An invalid or expired
+        bearer is a 401 and never silently becomes an anonymous visitor. Response is Cache-Control:
+        no-store.
+      security: [{}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/pchatCode'}]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      room: {$ref: '#/components/schemas/PublicChatRoomVisitor'}
+                      can_send: {type: boolean, description: feature_enabled AND not expired AND status_public=open AND viewer is not a signed-in member}
+                      feature_enabled: {type: boolean}
+                      closed_reason: {type: [string, 'null'], enum: [done, disabled, null]}
+                      viewer:
+                        type: [object, 'null']
+                        description: Non-null only when a valid active-member bearer was presented.
+                        properties:
+                          kind: {type: string, const: member}
+                          display_name: {type: string}
+        '401': {description: A supplied bearer was invalid or expired}
+        '404': {description: PCHAT_ROOM_NOT_FOUND (also after API-203 rotate-link)}
+        '410': {description: PCHAT_LINK_EXPIRED (expired or soft-deleted)}
+        '429': {description: 'Named limiter pchat-visitor-read, keyed by code so one visitor cannot exhaust another''s budget'}
+  /public-chat/{code}/messages:
+    parameters: [{$ref: '#/components/parameters/pchatCode'}]
+    get:
+      summary: API-211 — Visitor transcript and reconnect catch-up
+      security: [{}, {bearerAuth: []}]
+      parameters:
+        - {name: after_seq, in: query, schema: {type: integer}}
+        - {name: limit, in: query, schema: {type: integer, maximum: 100}}
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      messages: {type: array, items: {$ref: '#/components/schemas/PublicChatMessageVisitor'}}
+                      last_seq: {type: integer}
+        '410': {description: PCHAT_LINK_EXPIRED}
+    post:
+      summary: API-212 — Visitor sends a message
+      security: [{}, {bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [client_message_id]
+              properties:
+                client_message_id: {type: string, format: uuid, description: 'Required here, unlike the member endpoint. Must be a UUID (422 otherwise); uniqueness is per (room, sender_kind, client_message_id).'}
+                body: {type: string}
+                attachment_ids: {type: array, maxItems: 10, items: {type: string}}
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: {type: object, properties: {data: {$ref: '#/components/schemas/PublicChatMessageVisitor'}}}
+        '200': {description: 'Idempotent replay — same client_message_id, same message'}
+        '403': {description: 'PCHAT_SIGNED_IN — an active member may read this conversation but must not write as the customer'}
+        '409': {description: PCHAT_ROOM_CLOSED (a visitor message never auto-reopens a closed room)}
+        '410': {description: PCHAT_LINK_EXPIRED}
+        '422': {description: VALIDATION_FAILED}
+        '429': {description: 'Named limiter pchat-visitor-write, keyed by code'}
+        '503': {description: PCHAT_DISABLED}
+  /public-chat/{code}/uploads:
+    post:
+      summary: API-213 — Visitor upload ticket (uploader_id NULL, public_chat_room_id set)
+      description: >
+        kind 'avatar' is rejected 422 before UploadService is reached. Mime sniffing, the blocked
+        extension list and the per-kind size caps are the existing ones, unchanged.
+      security: [{}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/pchatCode'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, filename, mime_type, size_bytes]
+              properties:
+                kind: {type: string, enum: [image, video, file]}
+                filename: {type: string}
+                mime_type: {type: string}
+                size_bytes: {type: integer}
+      responses:
+        '201': {description: 'Upload ticket, same shape as API-060'}
+        '403': {description: PCHAT_SIGNED_IN}
+        '410': {description: PCHAT_LINK_EXPIRED}
+        '422': {description: 'VALIDATION_FAILED, including kind=avatar'}
+        '429': {description: 'Named limiter pchat-visitor-upload, keyed by code'}
+        '503': {description: PCHAT_DISABLED}
+  /public-chat/{code}/uploads/{attachment_id}/complete:
+    post:
+      summary: API-214 — Complete a visitor upload (ownership is asserted against the room, not a user)
+      security: [{}, {bearerAuth: []}]
+      parameters:
+        - {$ref: '#/components/parameters/pchatCode'}
+        - {name: attachment_id, in: path, required: true, schema: {type: string}}
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: {type: object, properties: {parts: {type: array, items: {type: object}}}}
+      responses:
+        '200': {description: 'data: attachment. EVT-084 is emitted on the two room channels, never on a user channel.'}
+        '403': {description: PCHAT_SIGNED_IN}
+        '410': {description: PCHAT_LINK_EXPIRED}
+        '503': {description: PCHAT_DISABLED}
+  /public-chat/{code}/broadcasting/auth:
+    post:
+      summary: API-215 — Visitor realtime authorisation for exactly one channel
+      description: >
+        Asserts channel_name === 'private-public-chat.' + room.id by LITERAL STRING EQUALITY — never a
+        prefix, regex or str_contains match. There is exactly one legal value per code, and this
+        assertion is the entire tenancy boundary on the realtime path: Reverb allows all origins and
+        there is no CORS config, so neither is a backstop. The staff channel is not derivable from any
+        visitor input and is rejected. Presence channels are never used; that would hand the visitor the
+        agent roster.
+      security: [{}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/pchatCode'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [socket_id, channel_name]
+              properties:
+                socket_id: {type: string}
+                channel_name: {type: string, description: 'Must equal private-public-chat.{room_id}. The room ULID, never the code, keys the channel.'}
+      responses:
+        '200': {description: Signed authentication response (no user identity is involved)}
+        '403': {description: 'Any other channel, including another room''s channel and private-public-chat-staff.{own room id}'}
+        '410': {description: PCHAT_LINK_EXPIRED}
+  /public-chat/{code}/typing:
+    post:
+      summary: API-216 — Visitor typing indicator (EVT-085 carries sender_kind only, never a username)
+      security: [{}, {bearerAuth: []}]
+      parameters: [{$ref: '#/components/parameters/pchatCode'}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, required: [typing], properties: {typing: {type: boolean}}}
+      responses:
+        '204': {description: Accepted}
+        '403': {description: PCHAT_SIGNED_IN}
+        '410': {description: PCHAT_LINK_EXPIRED}
+        '503': {description: PCHAT_DISABLED}

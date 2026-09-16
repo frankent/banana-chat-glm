@@ -9,6 +9,9 @@ use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\MeetingController;
 use App\Http\Controllers\Api\V1\MessageController;
 use App\Http\Controllers\Api\V1\NotificationController;
+use App\Http\Controllers\Api\V1\PublicChatAgentController;
+use App\Http\Controllers\Api\V1\PublicChatPartnerController;
+use App\Http\Controllers\Api\V1\PublicChatVisitorController;
 use App\Http\Controllers\Api\V1\RoomController;
 use App\Http\Controllers\Api\V1\RoomToolsController;
 use App\Http\Controllers\Api\V1\SearchController;
@@ -90,6 +93,80 @@ Route::prefix('v1')->group(function (): void {
     Route::post('/public-meetings/{code}/leave', [MeetingController::class, 'leave'])->where('code', '[a-f0-9]{64}')->middleware('throttle:60,1');
     Route::get('/calls/authorize-media', [CallController::class, 'authorizeMedia']);
 
+    /*
+    |----------------------------------------------------------------------
+    | PUBLIC CHAT — FR-PCHAT. THREE TIERS, THREE TRUST MODELS.
+    |----------------------------------------------------------------------
+    |
+    | TIER 1 `partner/public-chat/*`  machine client, HMAC-signed (api.hmac)
+    | TIER 2 `public-chat/{code}/*`   UNAUTHENTICATED, the code IS the credential
+    | TIER 3 `public-chat/rooms/*`    authenticated active workspace member
+    |
+    | THE `partner/` PREFIX IS LOAD-BEARING. Without it, partner
+    | GET /public-chat/rooms/{id} and agent GET /public-chat/rooms/{id} are the
+    | same path in two middleware groups disambiguated only by a route regex —
+    | and a dropped ->where() would silently reroute a customer request into the
+    | AUTHENTICATED handler. It also gives the nginx `access_log off` exemption
+    | a path to match on.
+    |
+    | EVERY LIMITER IS NAMED, NEVER numeric `throttle:N,1`. As already documented
+    | further down this file, stacked numeric throttles share ONE cache key per
+    | resolved user-or-IP across every numerically-throttled route on the domain.
+    | Tier 1 keys on the API key id because the partner calls from ONE server IP;
+    | Tier 2 keys on the room code so one noisy visitor cannot exhaust another's
+    | budget. See AppServiceProvider::boot().
+    */
+
+    // ---- TIER 1 — partner, HMAC. Rooms addressed BY ULID, never by {code} ---
+    // A {code} path would put the VISITOR'S bearer credential in the partner's
+    // outbound HTTP logs, in any intermediate proxy and in our own nginx access
+    // log on every status poll (MANDATORY graft 12). ->whereUlid makes a 64-hex
+    // value in {id} a plain 404.
+    Route::prefix('partner/public-chat')->middleware('api.hmac')->group(function (): void {
+        Route::post('/rooms', [PublicChatPartnerController::class, 'store'])
+            ->middleware('throttle:pchat-create'); // API-200
+        Route::get('/rooms/{id}', [PublicChatPartnerController::class, 'show'])
+            ->whereUlid('id')->middleware('throttle:pchat-partner'); // API-201
+        Route::post('/rooms/{id}/close', [PublicChatPartnerController::class, 'close'])
+            ->whereUlid('id')->middleware('throttle:pchat-partner'); // API-202
+        Route::post('/rooms/{id}/rotate-link', [PublicChatPartnerController::class, 'rotateLink'])
+            ->whereUlid('id')->middleware('throttle:pchat-partner'); // API-203
+    });
+
+    // ---- TIER 2 — visitor, UNAUTHENTICATED ---------------------------------
+    // Outside every auth group by construction. ->where('code', '[a-f0-9]{64}')
+    // makes a malformed code 404 at ROUTING, before it can touch the database,
+    // and keeps these paths from colliding with the Tier-3 literals below
+    // ('rooms', 'summary', 'messages' can never match 64 hex chars).
+    // THE CONSTRAINT IS DECLARED PER ROUTE, NEVER ON THE GROUP. `Route::prefix()
+    // ->group(...)->where(...)` does NOT propagate the pattern to the routes
+    // inside the group, and without it `/public-chat/{code}` swallows the Tier-3
+    // literals `/public-chat/rooms` and `/public-chat/summary` — which is a
+    // silent reroute of an AUTHENTICATED endpoint into the UNAUTHENTICATED
+    // handler, exactly the failure the `partner/` prefix exists to prevent on
+    // the other side. Verified by the Tier-3 tests, which 404 without it.
+    $pchatCode = '[a-f0-9]{64}';
+
+    Route::prefix('public-chat')->group(function () use ($pchatCode): void {
+        Route::get('/{code}', [PublicChatVisitorController::class, 'show'])
+            ->where('code', $pchatCode)->middleware('throttle:pchat-visitor-read'); // API-210
+        Route::get('/{code}/messages', [PublicChatVisitorController::class, 'messages'])
+            ->where('code', $pchatCode)->middleware('throttle:pchat-visitor-read'); // API-211
+        Route::post('/{code}/messages', [PublicChatVisitorController::class, 'send'])
+            ->where('code', $pchatCode)->middleware('throttle:pchat-visitor-write'); // API-212
+        Route::post('/{code}/uploads', [PublicChatVisitorController::class, 'createUpload'])
+            ->where('code', $pchatCode)->middleware('throttle:pchat-visitor-upload'); // API-213
+        Route::post('/{code}/uploads/{attachment}/complete', [PublicChatVisitorController::class, 'completeUpload'])
+            ->where('code', $pchatCode)->whereUlid('attachment')->middleware('throttle:pchat-visitor-upload'); // API-214
+        // API-215 — the visitor channel-auth endpoint. An UNAUTHENTICATED SIGNING
+        // ORACLE over the Reverb app secret; see the controller's comment block
+        // before touching it.
+        Route::post('/{code}/broadcasting/auth', [PublicChatVisitorController::class, 'broadcastAuth'])
+            ->where('code', $pchatCode)->middleware('throttle:pchat-visitor-read');
+        Route::post('/{code}/typing', [PublicChatVisitorController::class, 'typing'])
+            ->where('code', $pchatCode)->middleware('throttle:pchat-visitor-write'); // API-216
+    });
+
     Route::middleware(['auth:api', 'account.active', 'password.fresh', 'workspace.context'])->group(function (): void {
         Route::get('/meetings', [MeetingController::class, 'index']);
         Route::post('/meetings', [MeetingController::class, 'create'])->middleware('throttle:10,1');
@@ -136,6 +213,26 @@ Route::prefix('v1')->group(function (): void {
         Route::put('/rooms/{roomId}/pins/{messageId}', [RoomToolsController::class, 'pin'])->whereUlid('roomId');
         Route::delete('/rooms/{roomId}/pins/{messageId}', [RoomToolsController::class, 'unpin'])->whereUlid('roomId');
         Route::post('/rooms/{roomId}/typing', [RoomToolsController::class, 'typing'])->whereUlid('roomId');
+
+        // ---- TIER 3 — support agents (FR-PCHAT-004/005/006/009/010) --------
+        // Authorisation is Decision A: active WorkspaceMember of X-Workspace-Id,
+        // which this group's workspace.context middleware has already proved.
+        // No room-level role, no room_members row, no new role — "all support
+        // can see all room + message". Declared BEFORE the /rooms block below
+        // so these literal paths are never shadowed.
+        Route::get('/public-chat/rooms', [PublicChatAgentController::class, 'index']); // API-220
+        Route::get('/public-chat/summary', [PublicChatAgentController::class, 'summary']); // API-227
+        Route::get('/public-chat/rooms/{id}', [PublicChatAgentController::class, 'show'])->whereUlid('id'); // API-221
+        Route::patch('/public-chat/rooms/{id}', [PublicChatAgentController::class, 'update'])->whereUlid('id'); // API-224
+        Route::get('/public-chat/rooms/{id}/messages', [PublicChatAgentController::class, 'messages'])->whereUlid('id'); // API-222
+        Route::post('/public-chat/rooms/{id}/messages', [PublicChatAgentController::class, 'send'])
+            ->whereUlid('id')->middleware('throttle:pchat-agent-write'); // API-223
+        Route::post('/public-chat/rooms/{id}/uploads', [PublicChatAgentController::class, 'createUpload'])
+            ->whereUlid('id')->middleware('throttle:pchat-agent-write'); // API-225
+        Route::post('/public-chat/rooms/{id}/read', [PublicChatAgentController::class, 'markRead'])->whereUlid('id'); // API-228
+        Route::post('/public-chat/rooms/{id}/typing', [PublicChatAgentController::class, 'typing'])
+            ->whereUlid('id')->middleware('throttle:pchat-agent-typing'); // EVT-085 staff side
+        Route::delete('/public-chat/messages/{id}', [PublicChatAgentController::class, 'destroyMessage'])->whereUlid('id'); // API-226
 
         Route::get('/rooms', [RoomController::class, 'index']);
         Route::post('/rooms', [RoomController::class, 'store']);

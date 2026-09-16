@@ -21,7 +21,13 @@ Schedule::job(new PurgeDeletedAiConversations)->dailyAt('03:15')->onOneServer();
 // §4.3 — daily usage → monthly rollup + ws token budget check (FR-AI-010)
 Schedule::job(new RollupAiUsage)->dailyAt('00:10')->onOneServer();
 
-// FR-MEDIA-001 — pending uploads expire after 1h (TC-MEDIA-011)
+// FR-MEDIA-001 — pending uploads expire after 1h (TC-MEDIA-011), AND
+// DEC-073 / FR-PCHAT-020 — completed-but-unreferenced PUBLIC CHAT attachments
+// older than PurgeExpiredUploads::PUBLIC_CHAT_ORPHAN_GRACE_HOURS. The second
+// sweep rides the same hourly job on purpose: it is the same table, the same
+// disk handle and the same "reclaim what nothing points at" responsibility, and
+// a separate schedule entry would be one more thing to forget to register. The
+// grace period, not the tick rate, is what bounds how long an orphan lives.
 Schedule::job(new PurgeExpiredUploads)->hourly()->onOneServer();
 
 // NFR-OPS-011 — provider error-rate / first-token p95 alert rules (TASK-INF-014)

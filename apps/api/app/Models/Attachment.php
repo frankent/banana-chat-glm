@@ -22,6 +22,12 @@ class Attachment extends Model
     protected $fillable = [
         'workspace_id',
         'uploader_id',
+        // FR-PCHAT-020 / DEC-068 — the partition column. NULL for every internal
+        // upload; the owning public chat room for a visitor or agent support
+        // ticket. It is fillable so UploadService::createForPublicChat can mass
+        // assign it in the same create() as every other column; the
+        // `attachments_owner_chk` CHECK keeps "owned by nobody" unrepresentable.
+        'public_chat_room_id',
         'kind',
         'status',
         'original_name',
@@ -58,6 +64,12 @@ class Attachment extends Model
     public function uploader(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /** FR-PCHAT-020 — null for every internal attachment. */
+    public function publicChatRoom(): BelongsTo
+    {
+        return $this->belongsTo(PublicChatRoom::class);
     }
 
     public function messages(): BelongsToMany

@@ -3,8 +3,9 @@
 namespace App\Domain\Media;
 
 use App\Models\Attachment;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /**
  * FR-ROOM-012 — secret-room expiry for the media pipeline.
@@ -46,7 +47,7 @@ class SecretAttachmentExpiry
      * Secret rooms (any liveness — the cap must apply even mid-sweep) that
      * reference this attachment through a message or a note.
      */
-    private static function secretRoomQuery(Attachment $attachment): \Illuminate\Database\Query\Builder
+    private static function secretRoomQuery(Attachment $attachment): Builder
     {
         return DB::table('rooms')
             ->where('is_secret', true)

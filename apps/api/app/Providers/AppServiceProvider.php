@@ -69,6 +69,57 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(20)->by('ai:'.$request->user()?->id);
         });
 
+        /*
+        |------------------------------------------------------------------
+        | FR-PCHAT-031 — PUBLIC CHAT LIMITERS. NAMED, NEVER numeric.
+        |------------------------------------------------------------------
+        | routes/api.php already documents why: stacked numeric `throttle:N,1`
+        | share ONE cache key per resolved user-or-IP across every numerically
+        | throttled route on the domain, so a numeric limit here would be both
+        | wrong and shared with unrelated endpoints.
+        |
+        | THE KEYS ARE THE POINT.
+        |  - Tier 1 keys on X-PChat-Key, not the IP: the partner calls from ONE
+        |    server IP, so an IP key would give an entire integration the budget
+        |    of a single browser tab. (The IP fallback exists only so an
+        |    unsigned prober is still bounded.)
+        |  - Tier 2 keys on the ROOM CODE, not the IP: one noisy visitor must not
+        |    exhaust another customer's budget, and keying by code also means
+        |    link-guessing cannot be amortised across codes.
+        |
+        | HONEST CEILING (R3): nginx limit_req zone=edge_api is 300r/m burst=150
+        | keyed on $binary_remote_addr. A busy partner hits that from its single
+        | IP no matter what these numbers say; app-level limiters cannot raise an
+        | edge limit. Size capacity against it or ship the X-PChat-Key-keyed
+        | nginx exemption with the feature.
+        */
+        RateLimiter::for('pchat-create', fn (Request $request) => Limit::perMinute(60)
+            ->by('pchat-create:'.($request->header('X-PChat-Key') ?: $request->ip())));
+
+        // Partner status polls / close / rotate-link. Separate from the create
+        // budget so a tight polling loop cannot starve room creation.
+        RateLimiter::for('pchat-partner', fn (Request $request) => Limit::perMinute(120)
+            ->by('pchat-partner:'.($request->header('X-PChat-Key') ?: $request->ip())));
+
+        RateLimiter::for('pchat-visitor-read', fn (Request $request) => Limit::perMinute(120)
+            ->by('pchat-read:'.$request->route('code')));
+
+        RateLimiter::for('pchat-visitor-write', fn (Request $request) => Limit::perMinute(20)
+            ->by('pchat-write:'.$request->route('code')));
+
+        RateLimiter::for('pchat-visitor-upload', fn (Request $request) => Limit::perMinute(10)
+            ->by('pchat-upload:'.$request->route('code')));
+
+        // Route middleware runs AFTER the group's auth:api, so ->user() is set.
+        RateLimiter::for('pchat-agent-write', fn (Request $request) => Limit::perMinute(60)
+            ->by('pchat-agent:'.($request->user()?->id ?: $request->ip())));
+
+        // Typing gets its OWN budget. Sharing pchat-agent-write would let a
+        // client emitting a keystroke indicator every 3 seconds burn a third of
+        // the send allowance, so a busy agent would 429 on a real reply.
+        RateLimiter::for('pchat-agent-typing', fn (Request $request) => Limit::perMinute(60)
+            ->by('pchat-typing:'.($request->user()?->id ?: $request->ip())));
+
         // FR-SETUP — wizard endpoints: 10/min, install itself 3/min
         RateLimiter::for('setup', fn (Request $request) => Limit::perMinute(10)->by('setup-ip:'.$request->ip()));
         RateLimiter::for('setup-install', fn (Request $request) => Limit::perMinute(3)->by('setup-install-ip:'.$request->ip()));

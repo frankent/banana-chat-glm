@@ -30,11 +30,22 @@ class AttachmentSerializer
         $expiresAt = SecretAttachmentExpiry::expiresAt($attachment);
 
         $derived = $attachment->derived ?? [];
+
+        // DEC-072 — every presigned GET carries a forced disposition and a
+        // forced Content-Type. `original` uses the SERVER-SNIFFED mime on the
+        // row (UploadService::finish writes the finfo result back over whatever
+        // the client declared), so an object stored in MinIO as text/html is
+        // replayed as an inert application/octet-stream download and can no
+        // longer execute same-origin. The derived variants are produced by our
+        // own ffmpeg/Imagick pipeline and are always webp — they are named
+        // explicitly rather than inherited from the row, because a video's row
+        // mime is video/mp4 while its poster is an image.
+        $name = $attachment->original_name;
         $urls = [
-            'original' => $this->mediaUrls->temporaryGetUrl($disk, $attachment->storage_key, $expiresAt),
-            'thumb_sm' => isset($derived['thumb_sm']) ? $this->mediaUrls->temporaryGetUrl($disk, $derived['thumb_sm'], $expiresAt) : null,
-            'thumb_md' => isset($derived['thumb_md']) ? $this->mediaUrls->temporaryGetUrl($disk, $derived['thumb_md'], $expiresAt) : null,
-            'poster' => isset($derived['poster']) ? $this->mediaUrls->temporaryGetUrl($disk, $derived['poster'], $expiresAt) : null,
+            'original' => $this->mediaUrls->temporaryGetUrl($disk, $attachment->storage_key, $expiresAt, $attachment->mime_type, $name),
+            'thumb_sm' => isset($derived['thumb_sm']) ? $this->mediaUrls->temporaryGetUrl($disk, $derived['thumb_sm'], $expiresAt, 'image/webp', $name) : null,
+            'thumb_md' => isset($derived['thumb_md']) ? $this->mediaUrls->temporaryGetUrl($disk, $derived['thumb_md'], $expiresAt, 'image/webp', $name) : null,
+            'poster' => isset($derived['poster']) ? $this->mediaUrls->temporaryGetUrl($disk, $derived['poster'], $expiresAt, 'image/webp', $name) : null,
         ];
 
         return [

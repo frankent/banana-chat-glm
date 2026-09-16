@@ -59,3 +59,38 @@ export {
   nextSecretDeadline,
 } from './secret-room.js';
 export type { SecretRoomLike, SecretExpiryState } from './secret-room.js';
+
+/**
+ * FR-PCHAT-008 — public support chat. `packages/chat-core` is the ONLY place
+ * this logic may live (CLAUDE.md); apps import from here, never reimplement.
+ */
+export {
+  PUBLIC_CHAT_STATUSES,
+  VISITOR_DISPLAY_NAME_MAX,
+  agentExternalName,
+  comparePublicChatRooms,
+  filterPublicChatRooms,
+  isPublicChatCode,
+  matchesPublicChatFilters,
+  needsReply,
+  publicChatCanSend,
+  publicChatClaimState,
+  publicChatClosedReasonKey,
+  publicChatComposerBannerKey,
+  publicChatComposerState,
+  publicChatLinkPath,
+  publicChatStatusLabel,
+  publicChatStatusLabelKey,
+  publicChatStatusPublic,
+  publicChatStatusPublicLabel,
+  publicChatStatusTone,
+  sortPublicChatQueue,
+  visitorDisplayName,
+} from './public-chat.js';
+export type {
+  PublicChatClaimState,
+  PublicChatComposerContext,
+  PublicChatComposerState,
+  PublicChatRoomLike,
+  PublicChatStatusTone,
+} from './public-chat.js';

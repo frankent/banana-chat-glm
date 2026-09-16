@@ -20,6 +20,19 @@ import type {
   MessagePage,
   MessageSearchResult,
   ReadStatusEntry,
+  PublicChatListQuery,
+  PublicChatPublicMessage,
+  PublicChatReadState,
+  PublicChatRoomPage,
+  PublicChatStaffMessage,
+  PublicChatStaffMessagePage,
+  PublicChatStaffRoom,
+  PublicChatStatus,
+  PublicChatSummaryResponse,
+  PublicChatUploadCompletion,
+  PublicChatUploadTicket,
+  PublicChatVisitorMessagePage,
+  PublicChatVisitorView,
   RoomListItem,
   SearchPage,
   UploadTicket,
@@ -58,6 +71,71 @@ function secretBody(opts?: SecretRoomOptions): Record<string, unknown> {
     return {};
   }
   return { secret: true, expiry_days: opts.expiryDays };
+}
+
+/**
+ * §5.18 FR-PCHAT — public support chat (§8.10). Two of the three tiers live
+ * here; the partner tier (API-200..203) deliberately does NOT, because it is
+ * HMAC-signed server-to-server and signing from browser JavaScript would ship
+ * the partner secret to every visitor (MANDATORY graft 10).
+ *
+ * Attachment kinds a public chat upload may request. `avatar` is absent by
+ * construction: the server rejects it 422 before UploadService is reached
+ * (FR-PCHAT-020), and there is no reason for a client to be able to ask.
+ */
+export type PublicChatUploadKind = 'image' | 'video' | 'file';
+
+export interface PublicChatUploadInput {
+  kind: PublicChatUploadKind;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+}
+
+export interface PublicChatVisitorSendInput {
+  /**
+   * FR-PCHAT-011 — REQUIRED on the visitor tier (unlike the member endpoint,
+   * where it is optional) and must be a UUID, else 422. Generate it ONCE per
+   * composed message with `crypto.randomUUID()` and reuse the same value on
+   * every retry: that is what makes a retry a 200 replay instead of a duplicate.
+   */
+  client_message_id: string;
+  body?: string;
+  /** At most 10 (`message.max_attachments`). */
+  attachment_ids?: string[];
+}
+
+export interface PublicChatAgentSendInput extends PublicChatVisitorSendInput {
+  /** MANDATORY graft 4 — inline reply/quote within the same room (NG4, no threads). */
+  reply_to_message_id?: string;
+}
+
+export interface PublicChatRoomPatch {
+  status?: PublicChatStatus;
+  /** A ULID of an active member of the same workspace, or null to unassign. */
+  assigned_to?: string | null;
+}
+
+/** Pusher/Reverb channel-auth response — the visitor page feeds this to Echo. */
+export interface PublicChatBroadcastAuth {
+  auth: string;
+}
+
+/**
+ * `new URLSearchParams({q: undefined})` serialises the literal string
+ * "undefined", which the server would then match against. Drop empty values
+ * instead of trusting the caller to omit the key.
+ */
+function pchatQuery(params: Record<string, string | number | boolean | undefined | null>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === '') {
+      continue;
+    }
+    search.set(key, String(value));
+  }
+  const qs = search.toString();
+  return qs === '' ? '' : `?${qs}`;
 }
 
 /** Typed endpoint wrappers — one method per API row in spec §8. */
@@ -514,5 +592,194 @@ export class Endpoints {
 
   aiClearMemories(slug: string) {
     return this.api.request<void>('/api/v1/ai/memories/clear', { method: 'POST', workspaceSlug: slug });
+  }
+  // ---- §5.18 FR-PCHAT tier 2: the visitor (API-210..216) ----
+  //
+  // UNAUTHENTICATED: the 64-hex `code` in the path IS the credential (DEC-063),
+  // so it never goes in a query string and no `workspaceSlug` is passed — the
+  // server resolves the workspace from the room. `ApiClient` still attaches an
+  // Authorization header when the browser happens to hold a token, and that is
+  // intended: FR-PCHAT-013 needs the server to SEE a member bearer so it can
+  // answer `viewer:{kind:'member'}` and refuse the write with 403
+  // PCHAT_SIGNED_IN, rather than silently recording an agent as the customer.
+
+  /** API-210 — room, `can_send`, `feature_enabled`, `closed_reason`, `viewer`. */
+  publicChatVisitorView(code: string) {
+    return this.api.request<PublicChatVisitorView>(`/api/v1/public-chat/${code}`);
+  }
+
+  /** API-211 — reconnect catch-up and the 5 s polling fallback. */
+  publicChatVisitorMessages(code: string, params: { after_seq?: number; limit?: number } = {}) {
+    return this.api.request<PublicChatVisitorMessagePage>(
+      `/api/v1/public-chat/${code}/messages${pchatQuery(params)}`,
+    );
+  }
+
+  /** API-212 — 201 on a first send, 200 with the identical message on replay. */
+  publicChatVisitorSend(code: string, input: PublicChatVisitorSendInput) {
+    return this.api.request<{ message: PublicChatPublicMessage }>(`/api/v1/public-chat/${code}/messages`, {
+      method: 'POST',
+      body: input,
+    });
+  }
+
+  /**
+   * API-213 — ticket gets `uploader_id` NULL and `public_chat_room_id` = the room.
+   *
+   * Answers `PublicChatUploadTicket`, NOT the shared API-060 `UploadTicket`:
+   * this tier emits `{attachment:{id,status}, upload_url, multipart?}` with no
+   * `headers` / `expires_at`. Callers that want an API-060-shaped ticket must
+   * adapt it explicitly — the divergence is real and is reported upstream
+   * rather than papered over with a wrong type here.
+   */
+  publicChatVisitorUpload(code: string, input: PublicChatUploadInput) {
+    return this.api.request<PublicChatUploadTicket>(`/api/v1/public-chat/${code}/uploads`, { method: 'POST', body: input });
+  }
+
+  /** API-214 — ownership is asserted against the ROOM, not an uploader identity. */
+  publicChatVisitorCompleteUpload(code: string, attachmentId: string, parts?: { part_number: number; etag: string }[]) {
+    return this.api.request<PublicChatUploadCompletion>(
+      `/api/v1/public-chat/${code}/uploads/${attachmentId}/complete`,
+      { method: 'POST', body: parts !== undefined ? { parts } : {} },
+    );
+  }
+
+  /**
+   * API-215 — the visitor page's own Echo authorizer. `channelName` must be
+   * exactly `private-public-chat.{room.id}`: the server compares it by literal
+   * string equality and 403s anything else, including the -staff channel
+   * (MANDATORY fix 7/14). Do not build this string by pattern.
+   */
+  publicChatVisitorBroadcastAuth(code: string, socketId: string, channelName: string) {
+    return this.api.request<PublicChatBroadcastAuth>(`/api/v1/public-chat/${code}/broadcasting/auth`, {
+      method: 'POST',
+      body: { socket_id: socketId, channel_name: channelName },
+    });
+  }
+
+  /** API-216 — EVT-085; the visitor variant carries sender_kind only. Answers 202 `{ok:true}`. */
+  publicChatVisitorTyping(code: string, typing: boolean) {
+    return this.api.request<{ ok: boolean }>(`/api/v1/public-chat/${code}/typing`, { method: 'POST', body: { typing } });
+  }
+
+  // ---- §5.18 FR-PCHAT tier 3: the support agent (API-220..228) ----
+  //
+  // Ordinary auth + `X-Workspace-Id`; authorisation is "active member of this
+  // workspace", with no room-level role and no `room_members` row.
+
+  /**
+   * API-220. FR-PCHAT-004: every filter is serialised here and applied
+   * SERVER-SIDE — put the same values in the react-query key and never filter
+   * the returned page in memory, or "Problem only" silently means "problem
+   * rooms that happened to be on page 1".
+   */
+  publicChatRooms(slug: string, filters: PublicChatListQuery = {}) {
+    const query = pchatQuery({
+      status: filters.status !== undefined && filters.status.length > 0 ? filters.status.join(',') : undefined,
+      assigned: filters.assigned,
+      q: filters.q,
+      needs_reply: filters.needs_reply === true ? 1 : undefined,
+      cursor: filters.cursor,
+      limit: filters.limit,
+    });
+    return this.api.request<PublicChatRoomPage>(`/api/v1/public-chat/rooms${query}`, { workspaceSlug: slug });
+  }
+
+  /** API-221 — the detail row, including `meta`, `my_last_read_seq`, `unread_count`. */
+  publicChatRoom(slug: string, roomId: string) {
+    return this.api.request<{ room: PublicChatStaffRoom }>(`/api/v1/public-chat/rooms/${roomId}`, { workspaceSlug: slug });
+  }
+
+  publicChatMessages(slug: string, roomId: string, params: { after_seq?: number; before_seq?: number; limit?: number } = {}) {
+    return this.api.request<PublicChatStaffMessagePage>(
+      `/api/v1/public-chat/rooms/${roomId}/messages${pchatQuery(params)}`,
+      { workspaceSlug: slug },
+    );
+  }
+
+  /**
+   * API-223 — TRIGGERS AUTO-CLAIM (FR-PCHAT-009): the first agent message
+   * assigns the room, moves `new` → `in_progress` and stamps `claimed_at` /
+   * `first_response_at` in the same transaction that assigns `seq`. Reuse one
+   * `client_message_id` across retries so a retry replays instead of claiming
+   * twice.
+   */
+  publicChatSend(slug: string, roomId: string, input: PublicChatAgentSendInput) {
+    // `room` rides along because the auto-claim may have just changed status,
+    // assignee, claimed_at and first_response_at in the same transaction —
+    // the caller should apply it rather than re-fetching the row.
+    return this.api.request<{ message: PublicChatStaffMessage; room: PublicChatStaffRoom }>(
+      `/api/v1/public-chat/rooms/${roomId}/messages`,
+      { method: 'POST', workspaceSlug: slug, body: input },
+    );
+  }
+
+  /** API-224 — status and/or assignment; 422 PCHAT_INVALID_TRANSITION. */
+  publicChatUpdateRoom(slug: string, roomId: string, patch: PublicChatRoomPatch) {
+    return this.api.request<{ room: PublicChatStaffRoom }>(`/api/v1/public-chat/rooms/${roomId}`, {
+      method: 'PATCH',
+      workspaceSlug: slug,
+      body: patch,
+    });
+  }
+
+  /** API-225 — `uploader_id` = the agent AND `public_chat_room_id` = the room. */
+  publicChatCreateUpload(slug: string, roomId: string, input: PublicChatUploadInput) {
+    return this.api.request<UploadTicket>(`/api/v1/public-chat/rooms/${roomId}/uploads`, {
+      method: 'POST',
+      workspaceSlug: slug,
+      body: input,
+    });
+  }
+
+  /**
+   * API-226 — soft delete, audited. Any active workspace member may delete any
+   * message in the room, visitor rows included: this context has its own
+   * endpoint precisely because `MessageEditor`'s moderator branch cannot
+   * authorise deleting a NULL-sender row (MANDATORY fix 27).
+   */
+  publicChatDeleteMessage(slug: string, messageId: string) {
+    // Answers 200 with the TOMBSTONE row, not 204: `PublicChatMessage` has no
+    // SoftDeletes trait, so the row stays in the transcript (deleting it would
+    // renumber the customer's `seq`) and the response is what to render in its
+    // place. NOTE: §8.10 still documents 204 — see the reconciliation report.
+    return this.api.request<{ message: PublicChatStaffMessage }>(`/api/v1/public-chat/messages/${messageId}`, {
+      method: 'DELETE',
+      workspaceSlug: slug,
+    });
+  }
+
+  /**
+   * API-227 — the counters are nested under `summary`, with `feature_enabled`
+   * beside them. The rail badge is `summary.new + summary.problem`
+   * (FR-PCHAT-003); `feature_enabled` is what lets the rail show a "paused"
+   * chip instead of vanishing when the kill switch is off (FR-PCHAT-034).
+   */
+  publicChatSummary(slug: string) {
+    return this.api.request<PublicChatSummaryResponse>('/api/v1/public-chat/summary', { workspaceSlug: slug });
+  }
+
+  /**
+   * EVT-085 staff side — POST /public-chat/rooms/{id}/typing. The agent-tier
+   * twin of `publicChatVisitorTyping`: it fans out to BOTH room channels, so
+   * the customer sees "support is typing" (sender_kind only, no username) while
+   * other agents additionally see WHICH colleague is typing. Answers 202
+   * `{ok:true}`.
+   */
+  publicChatTyping(slug: string, roomId: string, typing: boolean) {
+    return this.api.request<{ ok: boolean }>(`/api/v1/public-chat/rooms/${roomId}/typing`, {
+      method: 'POST',
+      workspaceSlug: slug,
+      body: { typing },
+    });
+  }
+
+  /** API-228 — per-agent read pointer (FR-PCHAT-010). Monotonic: a lower seq is a no-op. */
+  publicChatMarkRead(slug: string, roomId: string, seq: number) {
+    return this.api.request<PublicChatReadState>(`/api/v1/public-chat/rooms/${roomId}/read`, {
+      method: 'POST',
+      workspaceSlug: slug,
+      body: { seq },
+    });
   }
 }

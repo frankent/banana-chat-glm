@@ -59,8 +59,8 @@
 | NG2 | End-to-end encryption | ขัดกับ requirement ให้แอดมินกำกับ/ค้นหา/retention; ใช้ encryption at rest + TLS แทน |
 | NG3 | Public sign-up / SSO / OAuth | requirement ระบุ username+password ที่แอดมินสร้างเท่านั้น (ออกแบบ `auth_provider` เผื่อ SSO ใน P2) |
 | NG4 | Threads (reply แบบซ้อนเป็นกระทู้) | ใช้ reply/quote แบบ inline แทน ลดความซับซ้อน UI |
-| NG5 | Guest / external user ข้าม workspace | ทุกคนต้องเป็น member ของ workspace เท่านั้น |
-| NG6 | Bot / Webhook / Integration API | P2 — ออกแบบ token type `bot` เผื่อไว้ |
+| NG5 | Guest / external user ข้าม workspace — **ยกเว้น public chat visitor ของ FR-PCHAT (DEC-060)** | ทุกคนต้องเป็น member ของ workspace เท่านั้น; ข้อยกเว้นเดียวคือ visitor ของ public support chat ที่ถือ capability link 1 ใบ เข้าถึงได้ **หนึ่ง support conversation เท่านั้น** — ไม่มี workspace identity, ไม่เป็น member, ไม่ได้ access/refresh token ของแอป, และมองห้อง/ข้อความ/สมาชิก/directory อื่นไม่ได้เลย (§5.18) |
+| NG6 | Bot / Webhook / Integration API ทั่วไป — **ยกเว้น partner API ของ FR-PCHAT (DEC-061)** | P2 — ออกแบบ token type `bot` เผื่อไว้; ข้อยกเว้นเดียวคือ partner API แบบ HMAC ของ public support chat ที่ทำได้เพียง สร้าง / อ่านสถานะ (ไม่มีเนื้อหาข้อความ) / ปิด / หมุนลิงก์ ห้อง support ที่ตัวเองสร้างใน workspace ของตัวเอง — **ส่งข้อความไม่ได้ อ่าน transcript ไม่ได้ และทำแทน user คนใดไม่ได้** (§5.18) |
 | NG7 | Video transcoding หลาย bitrate | v1 เก็บไฟล์ต้นฉบับ + poster frame; ถ้าไฟล์ใหญ่ให้ client บีบอัดก่อนอัปโหลด |
 | NG8 | AI แปล/สรุปข้อความในห้องแชท (room) | AI Assistant v1 คุยแยกใน conversation ของตัวเอง ไม่อ่านข้อมูลห้องแชท (ไม่มี RAG/ @ai ในห้อง) — P2 |
 | NG9 | Self-host LLM / fine-tuning | v1 ใช้ provider ภายนอกผ่าน OpenAI-compatible API; รองรับ self-host ที่มี API เดียวกันได้โดยไม่ต้องแก้โค้ด (DEC-021) |
@@ -279,7 +279,17 @@ erDiagram
   users ||--o{ ai_conversations : owns
   ai_conversations ||--o{ ai_messages : has
   users ||--o{ ai_user_memories : has
+  workspaces ||--o{ public_chat_api_keys : issues
+  workspaces ||--o{ public_chat_rooms : has
+  public_chat_api_keys ||--o{ public_chat_rooms : created
+  public_chat_rooms ||--o{ public_chat_messages : has
+  public_chat_rooms ||--o{ public_chat_reads : has
+  users ||--o{ public_chat_reads : has
+  public_chat_messages ||--o{ public_chat_message_attachments : has
+  attachments ||--o{ public_chat_message_attachments : in
+  public_chat_rooms ||--o{ attachments : owns
 ```
+> `public_chat_*` เป็น bounded context แยก (DEC-064): **ไม่มี** ความสัมพันธ์ใด ๆ กับ `rooms` / `room_members` / `messages` — ตารางเดียวที่ใช้ร่วมกับฝั่งภายในคือ `attachments` (DEC-068)
 
 ### 4.2 Tables
 
@@ -415,8 +425,9 @@ Unique: `(room_id, seq)`, `(room_id, sender_id, client_message_id)`; Index: `(ro
 |---|---|---|
 | id | ulid PK | |
 | workspace_id | FK | |
-| uploader_id | FK users | |
-| kind | enum `image`,`video`,`file`,`avatar` | |
+| uploader_id | FK users **NULL** | NULL เฉพาะไฟล์ที่ visitor ของ public chat อัปโหลด (FR-PCHAT-020, DEC-068) — เดิม NOT NULL |
+| public_chat_room_id | FK public_chat_rooms NULL | ตั้งค่าเฉพาะไฟล์ของ public chat; internal claim ต้อง `whereNull('public_chat_room_id')` เสมอ |
+| kind | enum `image`,`video`,`file`,`avatar` | visitor ใช้ได้เฉพาะ `image`/`video`/`file` |
 | status | enum `pending`,`uploaded`,`processing`,`ready`,`failed`,`deleted` | |
 | original_name | varchar(255) | sanitized |
 | mime_type | varchar(127) | จาก sniff ไม่ใช่ที่ client บอก |
@@ -429,7 +440,8 @@ Unique: `(room_id, seq)`, `(room_id, sender_id, client_message_id)`; Index: `(ro
 | expires_at | timestamptz NULL | pending upload หมดอายุใน 1 ชม. |
 | deleted_at | timestamptz NULL | |
 
-Index: `(status, expires_at)`, `(workspace_id, kind)`
+Index: `(status, expires_at)`, `(workspace_id, kind)`, `(public_chat_room_id)`
+Constraint: `attachments_owner_chk CHECK (uploader_id IS NOT NULL OR public_chat_room_id IS NOT NULL)` — ไฟล์ที่ไม่มีเจ้าของทั้งสองฝั่งต้องเป็นไปไม่ได้ในระดับ DB (FR-PCHAT-020, TC-PCHAT-043)
 
 #### `message_attachments` (pivot)
 `message_id`, `attachment_id`, `position smallint` — PK `(message_id, attachment_id)`
@@ -596,14 +608,83 @@ Index: `(user_id, importance desc, last_used_at desc)`, GIN trgm `content`
 
 เพิ่มใน `users`: `ai_memory_enabled bool default true`, `ai_consented_at timestamptz NULL`
 
+#### `public_chat_api_keys` (FR-PCHAT-030/032)
+| column | type | notes |
+|---|---|---|
+| id | ulid PK | |
+| workspace_id | FK workspaces cascade | ห้องทุกห้องที่ key นี้สร้างอยู่ใน workspace นี้ |
+| name | varchar(80) | ชื่อที่แอดมินตั้งให้ integration |
+| key_id | char(32) UNIQUE | `pck_` + hex 28 ตัว — ตัวระบุสาธารณะ ใส่ log ได้ |
+| secret_ciphertext | text | `Crypt::encryptString(secret)` ด้วย APP_KEY (DEC-062); model `$hidden` — ไม่มี endpoint/ฟิลด์ Filament ใดอ่านคืน |
+| secret_last4 | char(4) | แสดงผลอย่างเดียว `****abcd` (คู่ขนานกับ `ai_providers.api_key_last4`) |
+| created_by_admin_id | FK users nullOnDelete | System Admin ที่กดออก key |
+| last_used_at | timestamptz NULL | เขียนอย่างมาก 1 ครั้ง/นาที/key (TC-PCHAT-037) |
+| revoked_at | timestamptz NULL | เพิกถอนแล้ว — ห้องเดิมยังใช้งานต่อได้ (FR-PCHAT-032) |
+
+Index: `(workspace_id, revoked_at)` · secret ปรากฏเป็น plaintext เพียงครั้งเดียวใน Filament notification ตอนออก key
+
+#### `public_chat_rooms` (FR-PCHAT-001)
+| column | type | notes |
+|---|---|---|
+| id | ulid PK | partner อ้างถึงห้องด้วย id นี้เท่านั้น ไม่ใช่ `code` (FR-PCHAT-030) |
+| workspace_id | FK workspaces cascade | |
+| api_key_id | FK public_chat_api_keys nullOnDelete | provenance อย่างเดียว ไม่ใช่เจ้าของห้อง |
+| code | char(64) UNIQUE | `bin2hex(random_bytes(32))` — credential เดียวของ visitor (DEC-063); หมุนได้ด้วย API-203 |
+| customer_name | varchar(120) | ingest ผ่าน `visitorDisplayName` (trim, ตัด control chars) |
+| provider_name | varchar(120) | ชื่อฝั่งลูกค้าที่ใช้ประกอบป้ายภายนอก |
+| status | varchar(12) default `new` | `new`,`in_progress`,`done`,`problem` |
+| assigned_to | FK users nullOnDelete | active workspace member เท่านั้น |
+| claimed_at | timestamptz NULL | เวลา auto-claim (FR-PCHAT-009) |
+| first_response_at | timestamptz NULL | เขียนโดย UPDATE เดียวกับ auto-claim ห้ามเขียนทับ — ใช้วัด first-response time |
+| external_ref | varchar(120) NULL | เลข ticket ฝั่งลูกค้า |
+| meta | jsonb NULL | payload อิสระของลูกค้า **ไม่เคย** ถูก serialize ให้ visitor |
+| locale | char(2) default `th` | FR-I18N-001 |
+| last_seq / last_visitor_seq / last_agent_seq | int default 0 | `needsReply` = last_visitor_seq > last_agent_seq |
+| last_message_at | timestamptz NULL | |
+| expires_at | timestamptz | created_at + `publicchat.link_ttl_days` |
+| closed_at | timestamptz NULL | ตั้งพร้อม status `done` |
+| deleted_at | timestamptz NULL | soft delete |
+
+Index: `(workspace_id, status, last_message_at desc)`, `(workspace_id, assigned_to)` · Unique บางส่วน `(workspace_id, external_ref) WHERE external_ref IS NOT NULL` (idempotency ของ API-200 — **ไม่รวม** `api_key_id` เพื่อให้ retry หลัง rotate key ไม่สร้างห้องซ้ำ)
+
+#### `public_chat_messages` (FR-PCHAT-002)
+| column | type | notes |
+|---|---|---|
+| id | ulid PK | |
+| room_id | FK public_chat_rooms cascade | |
+| workspace_id | FK workspaces cascade | denormalise ไว้กัน cross-tenant: ทุก query กรอง `workspace_id` ซ้ำอีกชั้น (DEC-070) |
+| seq | int | ต่อห้อง เริ่ม 1 เพิ่มทีละ 1 ภายใต้ `lockForUpdate` เดียวกับ auto-claim |
+| sender_kind | varchar(8) | `visitor`,`agent`,`system` — server กำหนดจาก tier เสมอ ไม่เคยรับจาก payload |
+| sender_user_id | FK users nullOnDelete | NULL สำหรับ visitor/system |
+| agent_username_snapshot | varchar(64) NULL | snapshot ตอนเขียน — serializer ฝั่ง public **ไม่ join `users`** |
+| provider_name_snapshot | varchar(120) NULL | เช่นเดียวกัน |
+| type | varchar(8) | `text`,`image`,`video`,`file`,`system` — ไม่มีชนิด call/meet ในบริบทนี้ |
+| body | text NULL | ยาวไม่เกิน `publicchat.max_message_length` |
+| reply_to_message_id | ulid NULL FK public_chat_messages | inline reply/quote ภายในห้องเดียวกันเท่านั้น (NG4); payload ฝั่ง public ส่งเฉพาะ snippet |
+| system_event | varchar(24) NULL | `claimed`,`reassigned`,`status_changed`,`closed_by_customer`,`link_rotated` |
+| system_meta | jsonb NULL | `{from,to,actor_username}`; แถว system มี `body` NULL เพื่อให้แต่ละ serializer render ตาม locale ของผู้อ่าน |
+| client_message_id | varchar(64) NOT NULL | visitor ต้องส่งเป็น UUID; agent ใช้ `crypto.randomUUID()`; แถว system server สร้าง ULID ให้เอง (DEC-066) |
+| deleted_at | timestamptz NULL | soft delete |
+| deleted_by | FK users nullOnDelete | |
+
+Unique: `(room_id, seq)`, `(room_id, sender_kind, client_message_id)` — ทุกคอลัมน์ NOT NULL จึงไม่ตกหลุม NULL-distinct ของ Postgres และ visitor จอง client id ทับ agent ไม่ได้ · Index: `(room_id, seq desc)`
+
+#### `public_chat_message_attachments` (pivot)
+`message_id` FK public_chat_messages cascade, `attachment_id` FK attachments cascade, `position smallint default 0` — PK `(message_id, attachment_id)`
+แยกจาก `message_attachments` เพราะ pivot นั้น FK ไปที่ `messages` การใช้ซ้ำต้องทำ FK เป็น nullable/polymorphic ซึ่งคือการปนเปื้อนที่ DEC-064 ตั้งใจกัน
+
+#### `public_chat_reads` (FR-PCHAT-010)
+`room_id` FK public_chat_rooms cascade, `user_id` FK users cascade, `workspace_id` FK workspaces cascade, `last_read_seq int default 0`, `updated_at` — PK `(room_id, user_id)`
+read pointer ต่อ agent (ไม่ใช่ต่อห้อง) ใช้คำนวณ `unread_count` ใน API-220/221; `needs_reply` ระดับคิวยังคำนวณจาก `last_visitor_seq`/`last_agent_seq` ของห้องเพื่อให้ลำดับคิวเหมือนกันทุกคน
+
 ### 4.3 Retention / Purge Jobs
 | Job | ความถี่ | ทำอะไร |
 |---|---|---|
-| `PurgeExpiredUploads` | ทุก 15 นาที | ลบ attachments `pending` ที่ `expires_at < now()` ทั้งใน DB และ MinIO |
+| `PurgeExpiredUploads` | ทุก 15 นาที (โค้ดปัจจุบันลงตาราง `hourly` — `routes/console.php`; ความถี่ไม่ใช่ตัวกำหนดอายุ orphan, grace period เป็นตัวกำหนด) | ลบ attachments `pending` ที่ `expires_at < now()` ทั้งใน DB และ MinIO; **และกวาดรอบที่สอง (DEC-073)** — attachment ของ public chat (`public_chat_room_id` ไม่เป็น NULL) ที่อัปโหลดเสร็จแล้ว (`uploaded`/`processing`/`ready`/`failed` — `finish()` ตั้ง `expires_at = NULL` จึงไม่เคยเข้าเงื่อนไขแรก) แต่ไม่มี pivot ใดใน 4 ตารางอ้างถึง และ `created_at` เก่ากว่า 24 ชม. → hard delete แถว + original + derived (แถวที่ถูก claim ระหว่างกวาด รอด เพราะ DELETE ยืนยัน NOT EXISTS ซ้ำ); attachment ภายใน (`public_chat_room_id` NULL) ไม่ถูกแตะเลย |
 | `ExpireSecretRooms` | ทุกนาที | FR-ROOM-012 — ห้องลับที่ `secret_expires_at <= now()` (รวมห้องที่ถูก soft delete ไปก่อนหน้า) → จบ call ที่ค้าง, broadcast EVT-003, mark attachments ลบ + queue ลบไฟล์ทันที, hard delete room/messages/members/notes (access ถูกปฏิเสธตั้งแต่จุดหมดอายุแล้ว — job นี้ยกเลิกพื้นที่จัดเก็บเท่านั้น) |
 | `PurgeDeletedRooms` | ทุกวัน 03:00 | ห้องที่ `purge_after < now()` → hard delete messages, attachments, members |
-| `ApplyRetentionPolicy` | ทุกวัน 03:30 | ตาม `workspaces.message_retention_days` → soft delete `delete_reason=retention` |
-| `PurgeOrphanAttachments` | ทุกวัน 04:00 | attachments ที่ไม่มี message/avatar อ้างถึง > 24 ชม. |
+| `ApplyRetentionPolicy` | ทุกวัน 03:30 | ตาม `workspaces.message_retention_days` → soft delete `delete_reason=retention`; **ครอบคลุม `public_chat_messages` ด้วยค่า retention เดียวกัน** (soft delete ผ่าน `deleted_at` โดย `deleted_by` เป็น NULL — ตารางนี้ไม่มีคอลัมน์ `delete_reason` และไม่ต้องเพิ่ม) ส่วนแถว `public_chat_rooms` ไม่ถูกแตะ เพื่อให้ Admin ยังเห็นว่ามี conversation นั้นอยู่ |
+| `PurgeOrphanAttachments` | ทุกวัน 04:00 | attachments ที่ไม่มี message/avatar อ้างถึง > 24 ชม. — **การอ้างถึงนับรวม `public_chat_message_attachments` ด้วย** (FR-PCHAT-020): ไฟล์ที่ visitor ส่งสำเร็จแล้วมี `uploader_id` NULL แต่ไม่ใช่ orphan และต้องไม่ถูกลบ; ticket ของ public chat ที่ค้างไม่ถูก claim ยังถูกเก็บกวาดตามปกติ |
 | `FlushPresence` | ทุก 60 วิ | Redis `last_seen` → `users.last_seen_at` |
 | `CleanupSessions` | ทุกวัน | ลบ sessions หมดอายุ/revoked > 90 วัน |
 | `PruneAuditLogs` | ทุกเดือน | > 2 ปี → archive เป็นไฟล์ใน MinIO แล้วลบ |
@@ -651,6 +732,9 @@ Index: `(user_id, importance desc, last_used_at desc)`, GIN trgm `content`
 | `ai.deleted_purge_days` | 30 | FR-AI-002 |
 | `ai.admin_review_enabled` | false | FR-AI-013 |
 | `ai.push_suppress_if_focused_seconds` | 30 | FR-AI-003 |
+| `publicchat.enabled` | **false** | FR-PCHAT-034 — ฟีเจอร์ออกสู่ production ในสถานะปิด (DEC-071) |
+| `publicchat.link_ttl_days` | 30 (แก้ได้ 1–365) | FR-PCHAT-012 — ต้องมีแถวใน `Settings::ranges()` คู่กันเสมอ |
+| `publicchat.max_message_length` | 4000 (แก้ได้ 1–32000) | FR-PCHAT-002 — ต้องมีแถวใน `Settings::ranges()` คู่กันเสมอ |
 
 ---
 
@@ -943,6 +1027,7 @@ Index: `(user_id, importance desc, last_used_at desc)`, GIN trgm `content`
 
 #### FR-MEDIA-004 ดาวน์โหลด/แสดงผล — P0 · PH2
 - ทุก URL ที่ส่งให้ client เป็น presigned GET หมดอายุ 1 ชม. (ผ่าน nginx path `/storage/...` ที่ proxy ไป MinIO); `Content-Disposition: attachment; filename*=UTF-8''...` สำหรับ kind=file; inline สำหรับ image/video; header `Content-Type` จาก DB (sniffed) ไม่ใช่จาก object
+- **disposition/Content-Type ตัดสินด้วย allowlist ที่ `InlineSafety` (DEC-072)**: inline เฉพาะ raster image / video / audio ที่ระบุไว้ นอกนั้น `attachment` + `application/octet-stream` เสมอ — บังคับทั้งบน presigned GET (เซ็นอยู่ใน query string จึงถอดไม่ได้) และบน local disk route; SVG/XML ยัง **อัปโหลดได้ตามสเปกในฝั่ง internal** และปลอดภัยด้วยชั้นนี้ ส่วนฝั่ง public chat ถูกปฏิเสธตั้งแต่ตอนอัปโหลด (FR-PCHAT-020)
 - **AC**
   - [ ] URL หมดอายุ → client refetch message เพื่อรับ URL ใหม่ (api-client มี interceptor)
   - [ ] video เล่นแบบ range request ได้ (206)
@@ -1446,6 +1531,44 @@ Web shell only; no API, event or native app change. Accessibility zoom stays a h
 
 ---
 
+## 5.18 PCHAT — public support chat (TASK-BE/WEB/CORE/ADM/INF/QA-046)
+
+DEC-060/061 amend NG5/NG6 and the Appendix C parking lot exactly far enough to allow this feature and no further. A **visitor** is an external party scoped to ONE support conversation through ONE capability link: never a workspace member, never issued an app token, never able to see another room, message, member or directory. The **partner API** is a narrow HMAC-signed integration that may create, read the status of, close and rotate the link of rooms it created in its own workspace; it can never send a message, read a transcript, or act as any user.
+
+Public chat is an isolated bounded context (DEC-064): it owns `public_chat_*` tables and **never creates a `rooms`, `room_members` or `messages` row**, adds no `RoomType` case, and touches no room or message read path. Calls, meetings, room search, workspace unread, the room AI bot, `MessageEditor` moderation and `Jobs/NotifyMessage` are therefore structurally out of reach rather than gated — the only surface shared with internal chat is the media pipeline (`attachments` + `UploadService`), partitioned by `attachments.public_chat_room_id` (DEC-068). The feature ships **disabled** (`publicchat.enabled=false`, DEC-071). Filament is **3.3**, not v4.
+
+| ID | Acceptance criteria | Tests |
+|---|---|---|
+| FR-PCHAT-001 | A support conversation is a `public_chat_rooms` row owned by one workspace and is strictly 1-1: one external visitor (whoever holds the link) and the workspace's support agents, no member list, no invitations, no third party. Statuses are `new`/`in_progress`/`done`/`problem`. `code` is 64 lowercase hex from 32 random bytes and is the visitor's only credential (DEC-063); `expires_at` = creation + `publicchat.link_ttl_days`. The room carries `customer_name`, `provider_name`, optional `external_ref`, `meta` jsonb, `locale` (default `th`, FR-I18N-001), assignment, `claimed_at`, `first_response_at` and denormalised seq counters. Creation emits EVT-082. The room is never a `rooms` row and never appears in `GET /rooms`, search or workspace unread. | TC-PCHAT-001,006,025 |
+| FR-PCHAT-002 | Messages are `public_chat_messages` rows with a per-room gapless `seq` assigned under `lockForUpdate`. `sender_kind` (`visitor`/`agent`/`system`) is set server-side from the authenticated tier and is never read from the payload. Supported types are text, image, video and file only — no call, meeting or AI message type exists in this context. Bodies are capped by `publicchat.max_message_length` and rendered with the existing escaped GFM-subset parser; inline reply/quote is supported via `reply_to_message_id` within the same room (no threads, NG4) and the public payload carries snippet + deleted-state only, never a sender id. Agent rows store `agent_username_snapshot` and `provider_name_snapshot` at write time. System rows have `body` NULL and carry `system_event` + `system_meta` so each serializer renders the sentence in the reader's locale. Any active workspace member may soft-delete any message in the room (API-226, audited `public_chat.message_deleted`); deletion emits EVT-083. | TC-PCHAT-013,015,035,039 |
+| FR-PCHAT-003 | The web rail gains a Public Chat entry after Board, active only on `/public-chat*` (the Conversations entry's active test must exclude that prefix so two rail items never light at once). The badge counts `new` + `problem` from API-227, polled every 30 s and invalidated by EVT-081/082 on `private-workspace.{wid}`. When the feature is off the entry stays visible with a "paused" chip. | TC-PCHAT-026, TC-WEB-072 |
+| FR-PCHAT-004 | The Public Chat list shows every support conversation in the workspace to every active member — no per-room membership. Every filter is **server-side**: `status` (multi-select of the four), `assigned` (Anyone / Me / Unassigned / any active member), free-text `q` and a `needs_reply` toggle, all serialised into API-220's query string and into the client query key; the client never filters a fetched page. `q` matches `customer_name`, `provider_name`, `external_ref` **and message bodies** (EXISTS over `public_chat_messages`), so an agent can find a conversation by what the customer actually said. Each row shows customer name, provider name, a status pill, assignee avatar + display name or "Unassigned", relative `last_message_at`, an unread count and a needs-reply dot. | TC-PCHAT-033,042, TC-WEB-073 |
+| FR-PCHAT-005 | Default queue order is triage order, one formula for every viewer: `status='problem'` first, then `needs_reply` (`last_visitor_seq > last_agent_seq`), then `last_message_at DESC NULLS LAST, id DESC`. Cursor pagination follows §7. API-227 returns `{new, in_progress, problem, mine}` for the rail badge. | TC-PCHAT-046 |
+| FR-PCHAT-006 | Agents answer in a dedicated conversation page: header with customer name, status select, assignee select and a "Claimed by X at HH:mm" line; composer with text and attach (image/video/file) only. There is **no call button, no meeting button and no call/meeting endpoint that resolves a public chat room id** — a call attempt against such an id is a 404, not a permission error, because the id is not in `rooms`. Sends carry a `client_message_id` UUID and retry on failure. The page subscribes to `private-public-chat-staff.{rid}`. | TC-PCHAT-024, TC-WEB-074 |
+| FR-PCHAT-007 | `/support/:code` is a standalone visitor page mounted at the top level, outside both the Echo and Call providers, so no call or meeting UI can mount even by mistake. It requires no login: the code in the path is the credential. The visitor sees the transcript, may send text and attach image/video/file, and sees agents as `provider name (admin username)` only. Visitor surfaces expose `status_public` (`open` for new/in_progress/problem, `closed` for done) and **never** the raw status — a customer must not learn that support flagged the conversation `problem`. Because the mere existence of a system row, timed to the agent's click, leaks the flag as surely as the word would, a transition invisible to that projection emits no visitor-visible `status_changed` row and no visitor EVT-081 frame at all (DEC-074). Copy is rendered through the shared i18n translator driven by `room.locale` (default `th`), not hardcoded English. Realtime is a page-owned Echo instance authorised by API-215, with `?after_seq=` polling every 5 s as fallback. Responses are `Cache-Control: no-store`; the code never appears in a query string. | TC-PCHAT-027,032, TC-WEB-075,076 |
+| FR-PCHAT-008 | Platform-agnostic logic lives in `packages/chat-core` (never in apps): `PUBLIC_CHAT_STATUSES`, `publicChatStatusLabel/Tone`, `publicChatStatusPublic`, `needsReply`, `filterPublicChatRooms`, the queue sort comparator, `agentExternalName(provider, username) => "provider (username)"` — one definition shared by server test fixtures and both clients so the external label cannot drift, `isPublicChatCode`, `visitorDisplayName` and `publicChatLinkPath`. Shared types and zod schemas live in `packages/shared`. The existing `RoomType` union is not touched — this feature adds no room type. | TC-CORE-061..068 |
+| FR-PCHAT-009 | The first agent message auto-claims: inside the same `lockForUpdate` transaction that assigns `seq`, an unassigned room gets `assigned_to` = that agent, `status` `new` → `in_progress`, `claimed_at` and `first_response_at` (stamped once, never overwritten), plus one `claimed` system row. Concurrent replies therefore produce exactly one claim by database guarantee. API-224 changes status and/or assignee, writes a system row in the same transaction, and validates that `assigned_to` is an active member of the same workspace (else 422). The only transition guard is `PCHAT_INVALID_TRANSITION` 422: a room cannot leave `new` with a null assignee and cannot be unassigned while `in_progress`. All changes emit EVT-081 to staff; the visitor receives it — and a visitor-visible `status_changed` row — only when the projected payload actually moves, so a transition whose two sides project to the same `status_public` (`in_progress` → `problem`) produces no visitor frame and no visitor row at all (DEC-074). | TC-PCHAT-010,011,012,047 |
+| FR-PCHAT-010 | `public_chat_reads(room_id, user_id, last_read_seq)` gives each agent a personal read pointer advanced by API-228 (monotonic; a lower seq is a no-op) and surfaced as `unread_count` / `my_last_read_seq` in API-220/221. One agent's pointer never affects another's, and it never changes queue order — `needs_reply` remains the shared queue-level signal. | TC-PCHAT-042 |
+| FR-PCHAT-011 | `client_message_id` is **required** on the visitor send endpoint (unlike the member endpoint where it is optional) and must be a UUID, else 422. Uniqueness is `(room_id, sender_kind, client_message_id)` — every column NOT NULL, so Postgres NULL-distinct cannot make the index inert, and a visitor cannot squat a value that would replay an agent's message back to the agent. A repeat send returns 200 with the identical message; a first send returns 201. System rows are given a server-generated ULID as their client id so the first status change cannot violate the constraint. | TC-PCHAT-009,039,041 |
+| FR-PCHAT-012 | Link lifecycle. **Opened** — GET returns the room, transcript and `can_send` = feature enabled AND not expired AND `status_public` = open AND the viewer is not a signed-in member. **Shared / opened twice** — both copies work, both may send, both see full history; there is no device binding and no "link already in use" error (the meeting feature sets the precedent). **Expired** (`expires_at`) or soft-deleted — every Tier-2 route including broadcasting/auth returns 410 `PCHAT_LINK_EXPIRED`, so an open socket cannot outlive the link. **Closed** (`done`) — GET still returns 200 read-only with the full transcript (the customer keeps their receipt) while sends return 409 `PCHAT_ROOM_CLOSED`; any agent may move the room back to `in_progress`, which re-enables sending immediately via EVT-081. A visitor message never auto-reopens a closed room (DEC-069). **Rotated** (API-203) — a new `code` is minted, the old code returns 404 `PCHAT_ROOM_NOT_FOUND` on every Tier-2 route immediately and the conversation, assignment and messages are untouched; the partner must re-deliver the new URL. Rotation does not forcibly disconnect an already-connected socket (the channel is keyed by room id, not by code) — it stops every future request, reload and re-auth. | TC-PCHAT-028,029,036 |
+| FR-PCHAT-013 | An agent who opens the customer link is served reads as the visitor but **must not write as one**. API-210 returns `viewer: null` or `{kind:'member', display_name}` when a valid active-member bearer is presented; in that case the visitor page replaces the composer with "You are signed in as X — open this in Public Chat" and every Tier-2 write (message, upload, complete, typing) returns 403 `PCHAT_SIGNED_IN`. Broadcasting auth still succeeds so the agent sees live updates. An invalid or expired bearer is a 401 and never silently becomes an anonymous visitor (FR-MEET-002 precedent). | TC-PCHAT-044,045, TC-WEB-077 |
+| FR-PCHAT-014 | The customer-facing identity of an agent is `provider name (admin username)`, assembled server-side from the write-time snapshots and rendered as a plain text node on every surface. A later username or provider rename does not rewrite an existing transcript. The public payload contains no user ULID, no assignee, no mentions, no read receipts, no `meta`, and no attachment field beyond an explicit whitelist — internal identity is kept off the customer surface at the wire level, not only in the serializer: `private-public-chat.{rid}` carries the public payload and `private-public-chat-staff.{rid}` the internal one (DEC-065). Customer-supplied `customer_name`, `provider_name`, `external_ref` and `meta` are attacker-controlled: capped and stripped of C0/C1 and U+200B–U+200F / U+202A–U+202E at ingest, never passed to the Markdown renderer, never emitted through `{!! !!}` or an `->html()` column, and prefixed with the existing `=+@-\t\r` guard in every CSV export column. | TC-PCHAT-013,014,015,030 |
+| FR-PCHAT-015 | A visitor message pushes to the room's `assigned_to` agent and, when the room is unassigned, deliberately to **nobody** — the queue badge is the signal, not waking every workspace member. Delivery uses a new job that reuses the existing push decision/preferences path; it must never reuse `Jobs/NotifyMessage`, whose first act is a silent early-return on a null sender. The push display name is `customer_name`; type `public_chat_message`, collapse key the room id, no message body when `preview_in_push=false`. Agent-to-visitor messages produce no push at all — the visitor has no device record. | TC-PCHAT-034 |
+| FR-PCHAT-016 | Two channels per room: `private-public-chat.{room_id}` (visitor + agents, public payload) and `private-public-chat-staff.{room_id}` (agents only, internal payload), both keyed by the room ULID so the capability code never appears in a channel name, a subscribe frame, devtools or a failed job. Agent authorisation reuses the existing active-workspace-member check. Visitor authorisation is API-215, which asserts `channel_name === 'private-public-chat.' . $room->id` by **literal string equality** — never a prefix, regex or `str_contains` match — and delegates the signature to the framework broadcaster so `socket_id` is validated by the vendor's anchored pattern; a presence channel is never used, since that would hand the visitor the agent roster. Events are dispatched after commit and carry the standard §9 envelope. Reconnect catch-up is `?after_seq=`, the same discipline as the existing message gap-fill. The visitor page owning its own Echo instance is an explicit, documented exemption from the §9 "components never subscribe directly" rule (PublicMeetingPage precedent), because the shared provider is hardwired to an account token. | TC-PCHAT-016,017,018,019,023,027 |
+| FR-PCHAT-020 | Visitor and agent uploads reuse `UploadService`, the mime sniffing, blocked-extension list and per-kind size caps unchanged — forking the media pipeline would guarantee drift in exactly the security checks that matter (DEC-068). This surface adds exactly one refusal on top: a browser-executable type (the markup family plus scripts, PHP, Flash and page-archive containers) is rejected on the declared mime at ticket time and on the sniffed mime at complete time, on both the visitor and the agent ticket, because it is unauthenticated and nobody was ever promised SVG sharing here — internal uploads keep the specced FR-MEDIA-004/005 behaviour and rely on the read-time disposition control instead (DEC-072). A completed public chat attachment that no message ever claims is reclaimed with its objects after 24 h by `PurgeExpiredUploads`, which is what stops an anonymous visitor orphaning storage permanently (DEC-073). Sibling methods `createForPublicChat` / `completeForPublicChat` assert room ownership instead of uploader identity; the existing `create(User …)` / `complete(… User …)` signatures are not widened. Visitor tickets accept `image`/`video`/`file` only — `avatar` is rejected 422 before the service is reached — and the attachment row gets `uploader_id` NULL with `public_chat_room_id` set. The partition is enforced on both sides: internal claims add `whereNull('public_chat_room_id')` and public claims require the attachment's `public_chat_room_id` to equal the room, backed by the `attachments_owner_chk` CHECK. `attachment.ready`/`failed` for these rows broadcasts on the two room channels (EVT-084) instead of the uploader's user channel, which for a NULL uploader would be dead — otherwise the visitor watches their own image never finish. A public chat attachment that a message has claimed is **not** an orphan: `PurgeOrphanAttachments` counts `public_chat_message_attachments` as a reference, or every visitor upload would be hard-deleted 24 h after it was sent. | TC-PCHAT-020,021,022,023,043,051 |
+| FR-PCHAT-021 | Admin (Filament **3.3**) gets a browse-only Public Chat Rooms resource under Content: workspace, customer, provider, status badge, assignee (placeholder "Unassigned"), last message and created columns, with status / workspace / assigned / date-range filters and a cross-workspace query. A row action opens a read-only transcript modal showing `sender_kind`, the external display name, body and attachment names — audited as `public_chat.transcript_viewed` **before** the modal renders, all customer strings escaped. A second row action streams a CSV/JSON export whose columns include `sender_kind`, the external display name, `agent_username_snapshot` and `customer_name`, so a NULL-sender transcript never exports with the participant missing. No create, edit, delete or bulk action. The panel is unaffected by the kill switch — an admin must be able to read what happened precisely when the feature is switched off. | TC-PCHAT-026,030 |
+| FR-PCHAT-030 | The partner integrates over four HMAC-signed server-to-server routes (API-200..203) that address rooms **by ULID**, never by `code`, so the visitor's credential never travels in a partner request path, proxy log or nginx access log. Create takes `{customer_name, provider_name, external_ref?, locale?, meta?}` and returns the room plus `https://<APP_URL>/support/<code>`; a repeat with the same `external_ref` returns 200 with the same room and code rather than an error or a duplicate. Status read returns counts and the external display name only — never message bodies — and answers even while the feature is off. Close sets `done`; rotate-link mints a new code. Routes live outside every auth group and never issue, accept or imply a user session. Customer-facing integration docs must state prominently that the link is bearer authority and that signing must happen server-side only, never from browser JavaScript. | TC-PCHAT-001,005,006,036,040 |
+| FR-PCHAT-031 | Requests carry `X-PChat-Key` (public `pck_…` id, safe to log), `X-PChat-Timestamp`, `X-PChat-Nonce` (16–64 chars) and `X-PChat-Signature` (`v1=` + lowercase hex HMAC-SHA256). The signed canonical string is exactly six `\n`-joined lines: `v1`, uppercase method, request path including `/api/v1` and without query string, timestamp, nonce, and the lowercase sha256 of the **raw request body bytes** — never re-serialised JSON, since re-serialising changes key order and whitespace and produces intermittent unreproducible failures. Verification is fail-closed, cheapest first, and deliberately in this order: headers present → clock skew ≤ 300 s → key lookup (not revoked, workspace active) → constant-time signature compare → nonce not already cached (TTL 600 s, more than twice the skew window) → workspace context and a `last_used_at` write at most once per minute → **only then** the feature gate. Order matters twice: an unauthenticated prober must not learn whether the feature is on, and a legitimate partner must get a clean retriable 503 rather than a misleading 401. A secret that cannot be decrypted (for example after an APP_KEY rotation) is a 401 `API_KEY_INVALID` plus a critical log entry, never a 500. Rate limits are **named** limiters, never stacked numeric throttles: partner create keyed by `X-PChat-Key` (60/min — the partner calls from one server IP, so IP keying is wrong), visitor read 120/min, visitor write 20/min and visitor upload 10/min all keyed by `code`, agent write 60/min keyed by user. | TC-PCHAT-002,003,004,007,008,037,038,049,050 |
+| FR-PCHAT-032 | The API-key admin resource is a plain Filament **Resource** (not the browse-only base, whose documented contract is "browse and explicit actions only" — this resource exists to issue and revoke), and issuance is a **table header `CreateAction` using `->using()`**, following the proven in-repo user-creation shape. (The header action does render: only the list page's own create button authorises against `canCreate()`.) Issuance shows `key_id` and the plaintext secret (`pcs_` + 64 hex — a shape secret scanners can pattern-match) exactly once in a persistent notification that also carries the "sign server-side only, never from browser JavaScript" warning; the response is `Cache-Control: no-store`, the audit row records neither the secret nor any digest of it, and no endpoint, export, log or Filament field ever reads `secret_ciphertext` back out. Row actions revoke (confirmation required, `revoked_at` set, audited) and rotate (revoke + issue, one new secret). After revocation every subsequent signed call gets 401 `API_KEY_INVALID`, but **rooms the key already created stay open and their links keep working** — a key is an integration credential, not the owner of customer conversations, and killing live customer chats because an ops key rotated would be the worse failure. | TC-PCHAT-005,048 |
+| FR-PCHAT-033 | Admin → Settings gains `publicchat.enabled` (bool), `publicchat.link_ttl_days` (int, 1–365) and `publicchat.max_message_length` (int, 1–32000). Every numeric key **must** ship with a matching `Settings::ranges()` entry in the same change: the settings form destructures `ranges()[$key]` with no guard, so a missing entry throws for every admin on the very page that turns the feature off. Saving flushes the shared settings cache, so a change propagates cluster-wide immediately. | TC-PCHAT-026 |
+| FR-PCHAT-034 | The kill switch stops writes and preserves everything else. Partner create/close/rotate → 503 `PCHAT_DISABLED` with `Retry-After: 60`, **after** signature verification so the partner can tell "your key is bad" from "the service is paused"; partner status read still answers. Visitor GET → 200 with `feature_enabled:false`, `can_send:false` and `closed_reason:'disabled'` so the page shows a calm "support is temporarily unavailable" banner over a still-readable transcript, deliberately not an error page; visitor sends → 503. Agent writes (send, status, assignment, upload, delete, read pointer) → 503; agent reads and the rail entry are unaffected. Filament is fully unaffected. Open conversations are **not** closed, expired, reassigned or deleted: status, assignee, read pointers and every message are preserved exactly, and re-enabling resumes mid-conversation with no migration. A write already past the gate completes normally — the gate is checked once, before a short transaction, so there is no mid-transaction abort or partial write. Public chat has no calls or meetings of its own, and this switch never affects FR-CALL / FR-MEET calls, which are a different feature with a different gate. Open sockets are not force-disconnected; they simply receive nothing, because nothing is written. | TC-PCHAT-008,026 |
+
+TASK-BE-046: `public_chat_*` migrations, the HMAC middleware, the three controller tiers, the second message writer, both serializers and the agent push job. TASK-CORE-046: `packages/chat-core/src/public-chat.ts` + shared types/zod. TASK-WEB-046: rail entry, list page, agent conversation page and the standalone visitor page with i18n. TASK-ADM-046: the two Filament 3.3 resources, the transcript blade, the export and the three settings keys with their `ranges()` entries. TASK-INF-046: `/support/` and `/api/v1/public-chat/` nginx location blocks with `Referrer-Policy: no-referrer`, `Cache-Control: no-store` and `access_log off` — the URL is the credential and must not leak through a referrer header, a proxy cache or an access log. TASK-QA-046: TC-PCHAT-001..051. No native app UI in this increment.
+
+API-200..203 (partner, HMAC); API-210..216 (visitor, unauthenticated, code-scoped); API-220..228 (agent, existing auth + workspace middleware). EVT-080..085 on the two room channels plus `private-workspace.{wid}` for list liveness. Details in §8.10 and §9.
+
+---
+
 ## 6. Permission Matrix
 
 สัญลักษณ์: ✅ ทำได้ · ❌ ไม่ได้ · 🔒 ทำได้ตาม `room.settings` · Ⓢ = System Admin (ผ่าน Admin Panel เท่านั้น ไม่ผ่าน client API)
@@ -1494,6 +1617,30 @@ Web shell only; no API, event or native app change. Accessibility zoom stays a h
 | ตั้งค่า provider / limits | ❌ | ❌ | ❌ | ✅ |
 | ดู usage รวม | ❌ | ❌ | ✅ ของ ws ตน (P1) | ✅ |
 
+### 6.5 ระดับ Public Chat (FR-PCHAT — NG5/NG6 ที่ถูกแก้โดย DEC-060/061)
+Ⓥ = visitor ที่ถือ capability link (ไม่ใช่ member, ไม่มี token ของแอป) · Ⓟ = partner API key (HMAC, ห้องที่ตัวเองสร้างใน ws ตัวเองเท่านั้น)
+
+| Action | Ⓥ | Ⓟ | Member | WS Admin/Owner | Ⓢ |
+|---|---|---|---|---|---|
+| สร้างห้อง support | ❌ | ✅ | ❌ | ❌ | ❌ |
+| อ่านสถานะห้อง (ไม่มีเนื้อหาข้อความ) | ✅ (ห้องตน) | ✅ | ✅ | ✅ | ✅ |
+| อ่าน transcript | ✅ (ห้องตน) | ❌ | ✅ (ทุกห้องใน ws) | ✅ | ✅ (audit `public_chat.transcript_viewed`) |
+| ค้นหาห้อง/เนื้อหาข้อความในคิว | ❌ | ❌ | ✅ | ✅ | ✅ |
+| ส่งข้อความในฐานะ visitor | ✅ | ❌ | ❌ (403 `PCHAT_SIGNED_IN` — FR-PCHAT-013) | ❌ | ❌ |
+| ส่งข้อความในฐานะ agent | ❌ | ❌ | ✅ (auto-claim) | ✅ | ❌ |
+| แนบไฟล์ image/video/file | ✅ | ❌ | ✅ | ✅ | ❌ |
+| เปลี่ยน status / assignee | ❌ | ❌ | ✅ | ✅ | ❌ |
+| ปิดห้อง (`done`) | ❌ | ✅ | ✅ | ✅ | ❌ |
+| หมุนลิงก์ (rotate code) | ❌ | ✅ | ❌ | ❌ | ❌ |
+| ลบข้อความ (soft, audited) | ❌ | ❌ | ✅ (ทุกข้อความในห้อง) | ✅ | ❌ |
+| เห็น `meta` / `external_ref` / ชื่อผู้รับผิดชอบ | ❌ | ✅ (ของตน) | ✅ | ✅ | ✅ |
+| เห็น raw `status` (`problem`) | ❌ (เห็นเฉพาะ `status_public`) | ✅ | ✅ | ✅ | ✅ |
+| ตั้ง read pointer ของตน | ❌ | ❌ | ✅ | ✅ | ❌ |
+| ออก / เพิกถอน / หมุน API key | ❌ | ❌ | ❌ | ❌ | ✅ |
+| เปิด-ปิดฟีเจอร์ (`publicchat.enabled`) | ❌ | ❌ | ❌ | ❌ | ✅ |
+| เริ่ม call / meeting ในห้อง support | ❌ | ❌ | ❌ | ❌ | ❌ (ไม่มี surface — 404 เชิงโครงสร้าง) |
+| เข้าถึงห้อง/ข้อความ/สมาชิกอื่นของ workspace | ❌ | ❌ | ✅ ตามตาราง 6.1–6.3 | ✅ | ✅ |
+
 > Implementation: Laravel Policies `WorkspacePolicy`, `RoomPolicy`, `MessagePolicy`, `AttachmentPolicy`, `AiConversationPolicy`, `AiMemoryPolicy` — ทุกเซลล์ในตารางนี้ต้องมี unit test (TC-PERM-001..070) แบบ table-driven
 
 ---
@@ -1534,6 +1681,9 @@ MEDIA_UPLOAD_EXPIRED, MEDIA_QUOTA_EXCEEDED,
 AI_DISABLED, AI_WORKSPACE_NOT_ALLOWED, AI_PROVIDER_NOT_CONFIGURED, AI_CONSENT_REQUIRED, AI_PROVIDER_ERROR,
 AI_PROVIDER_TIMEOUT, AI_CONTEXT_OVERFLOW, AI_MESSAGE_TOO_LONG, AI_QUOTA_EXCEEDED, AI_GENERATION_IN_PROGRESS,
 AI_NOT_GENERATING, AI_MEMORY_DISABLED,
+PCHAT_DISABLED (503), PCHAT_ROOM_NOT_FOUND (404), PCHAT_ROOM_CLOSED (409), PCHAT_LINK_EXPIRED (410),
+PCHAT_INVALID_TRANSITION (422), PCHAT_SIGNED_IN (403 — member bearer บน visitor route, FR-PCHAT-013),
+API_KEY_INVALID (401), API_SIGNATURE_INVALID (401), API_TIMESTAMP_SKEW (401), API_NONCE_REPLAYED (409),
 NOT_FOUND, VALIDATION_FAILED, RATE_LIMITED, APP_UPDATE_REQUIRED, INTERNAL_ERROR
 ```
 
@@ -1692,6 +1842,47 @@ NOT_FOUND, VALIDATION_FAILED, RATE_LIMITED, APP_UPDATE_REQUIRED, INTERNAL_ERROR
 
 ---
 
+### 8.10 Public Chat (FR-PCHAT — §5.18)
+
+`[hmac]` = ลงลายมือชื่อตาม FR-PCHAT-031 (`X-PChat-Key` / `-Timestamp` / `-Nonce` / `-Signature`) ไม่มี bearer ไม่มี session · `[code]` = ไม่ต้อง login, `{code}` ในพาธคือ credential (route constraint `[a-f0-9]{64}`, ตอบพร้อม `Cache-Control: no-store`) · ทุก error ใช้ envelope §7
+
+**Tier 1 — partner (server→server, อ้างห้องด้วย ULID ไม่ใช่ code)**
+
+| ID | Method | Path | Guard | Body / Query | Response | FR |
+|---|---|---|---|---|---|---|
+| API-200 | POST | `/partner/public-chat/rooms` | hmac | `{customer_name*, provider_name*, external_ref?, locale?:'th'\|'en', meta?}` | 201 `{room:{id,code,status,customer_name,provider_name,created_at,expires_at}, url}` · 200 เนื้อหาเดียวกันเมื่อ `external_ref` ซ้ำ (idempotent replay ไม่ใช่ error) · 503 `PCHAT_DISABLED` | PCHAT-030 |
+| API-201 | GET | `/partner/public-chat/rooms/{id}` | hmac | — | 200 `{id,status,customer_name,provider_name,assigned_display_name\|null,message_count,last_message_at,closed_at,expires_at}` — ไม่มีเนื้อหาข้อความ, ตอบแม้ปิดฟีเจอร์ | PCHAT-030 |
+| API-202 | POST | `/partner/public-chat/rooms/{id}/close` | hmac | — | 200 `{status:'done', closed_at}` · 409 `PCHAT_ROOM_CLOSED` | PCHAT-012/030 |
+| API-203 | POST | `/partner/public-chat/rooms/{id}/rotate-link` | hmac | — | 200 `{code, url}` — code เดิม 404 ทันทีทุก route; บทสนทนา/การมอบหมาย/ข้อความไม่เปลี่ยน | PCHAT-012/030 |
+
+**Tier 2 — visitor (ไม่ต้อง login; bearer ของ member ทำให้ "เขียน" ถูกปฏิเสธ ไม่ใช่กลายเป็น visitor)**
+
+| ID | Method | Path | Guard | Body / Query | Response | FR |
+|---|---|---|---|---|---|---|
+| API-210 | GET | `/public-chat/{code}` | code | — | 200 `{room:{code,customer_name,provider_name,status_public,locale,created_at}, can_send, feature_enabled, closed_reason:null\|'done'\|'disabled', viewer:null\|{kind:'member',display_name}}` · 410 · 404 | PCHAT-007/012/013/034 |
+| API-211 | GET | `/public-chat/{code}/messages` | code | `?after_seq&limit(≤100)` | 200 `{messages:[public_chat_message], last_seq}` | PCHAT-007/016 |
+| API-212 | POST | `/public-chat/{code}/messages` | code | `{client_message_id* (uuid), body?, attachment_ids?[≤10]}` | 201 `{message}` · 200 เมื่อ replay · 409 · 503 · 403 `PCHAT_SIGNED_IN` · 422 | PCHAT-011/013 |
+| API-213 | POST | `/public-chat/{code}/uploads` | code | `{kind:'image'\|'video'\|'file', filename, mime_type, size_bytes}` | 201 upload ticket (`uploader_id` NULL, `public_chat_room_id` = ห้อง) · 422 เมื่อ `kind='avatar'` · 422 `MEDIA_MIME_MISMATCH` เมื่อ `mime_type` เป็น browser-executable (รวม svg/xml — DEC-072) และซ้ำอีกครั้งบน mime ที่ sniff ได้ตอน API-214 | PCHAT-020 |
+| API-214 | POST | `/public-chat/{code}/uploads/{attachment_id}/complete` | code | `{parts?}` | 200 `{attachment}` | PCHAT-020 |
+| API-215 | POST | `/public-chat/{code}/broadcasting/auth` | code | `{socket_id, channel_name}` | 200 signed auth · 403 ถ้า `channel_name` ≠ `private-public-chat.{room.id}` (เทียบสตริงตรง ๆ ห้าม prefix/regex) · 410 | PCHAT-016 |
+| API-216 | POST | `/public-chat/{code}/typing` | code | `{typing:bool}` | 204 | PCHAT-016 |
+
+**Tier 3 — support agent (auth + `X-Workspace-Id` + active member เดิม; ไม่มี role ระดับห้อง)**
+
+| ID | Method | Path | Guard | Body / Query | Response | FR |
+|---|---|---|---|---|---|---|
+| API-220 | GET | `/public-chat/rooms` | auth ws | `?status(csv)&assigned=ULID\|me\|none&q&needs_reply&cursor&limit` | `{data:[staff_room], meta:{next_cursor}}` เรียง problem → needs_reply → `last_message_at` desc nulls last, id desc | PCHAT-004/005/010 |
+| API-221 | GET | `/public-chat/rooms/{id}` | auth ws | — | `{room: staff_room}` (รวม `meta`, `external_ref`, `my_last_read_seq`, `unread_count`) · 404 ถ้าเป็นของ ws อื่น | PCHAT-004/010 |
+| API-222 | GET | `/public-chat/rooms/{id}/messages` | auth ws | `?before_seq&after_seq&limit` | `{data:[staff_message], meta:{has_more_before, has_more_after}}` | PCHAT-002 |
+| API-223 | POST | `/public-chat/rooms/{id}/messages` | auth ws | `{client_message_id*, body?, attachment_ids?[], reply_to_message_id?}` | 201/200 `{message}` — ทริกเกอร์ auto-claim · 409 · 503 | PCHAT-009 |
+| API-224 | PATCH | `/public-chat/rooms/{id}` | auth ws | `{status?, assigned_to?:ULID\|null}` | `{room}` · 422 `PCHAT_INVALID_TRANSITION` / assignee ไม่ใช่ active member · 503 · EVT-081 ฝั่ง staff เสมอ ส่วนฝั่ง visitor ส่งเฉพาะเมื่อ projection ขยับจริง (DEC-074) | PCHAT-009 |
+| API-225 | POST | `/public-chat/rooms/{id}/uploads` | auth ws | `{kind, filename, mime_type, size_bytes}` | 201 upload ticket (`uploader_id` = agent **และ** `public_chat_room_id` = ห้อง) · deny list เดียวกับ API-213: ticket ของ public chat ปฏิเสธ browser-executable รวม svg/xml (DEC-072) | PCHAT-020 |
+| API-226 | DELETE | `/public-chat/messages/{id}` | auth ws | — | 204 (soft delete, audit `public_chat.message_deleted`) | PCHAT-002 |
+| API-227 | GET | `/public-chat/summary` | auth ws | — | `{new, in_progress, problem, mine}` | PCHAT-003/005 |
+| API-228 | POST | `/public-chat/rooms/{id}/read` | auth ws | `{seq}` | `{last_read_seq, unread_count}` — monotonic, seq ต่ำกว่าเดิมเป็น no-op | PCHAT-010 |
+
+---
+
 ## 9. Realtime Events
 
 ทุก event payload = `{ "event": "<name>", "workspace_id": "...", "data": {...}, "emitted_at": "<iso>" }`
@@ -1726,12 +1917,19 @@ NOT_FOUND, VALIDATION_FAILED, RATE_LIMITED, APP_UPDATE_REQUIRED, INTERNAL_ERROR
 | EVT-055 | private-user.{uid} | `ai.conversation.updated` | `{conversation_summary}` | title/archive เปลี่ยน |
 | EVT-056 | private-user.{uid} | `ai.conversation.deleted` | `{conversation_id}` | FR-AI-002 |
 | EVT-057 | private-user.{uid} | `ai.memories.changed` | `{added:int, updated:int, deleted:int}` | หลัง ExtractMemories (client refresh หน้าความจำถ้าเปิดอยู่) |
+| EVT-080 | private-public-chat.{rid} (public payload) **+** private-public-chat-staff.{rid} (internal payload) | `public_chat.message.created` | public: `{message}` ไม่มี user ULID/mentions/meta, `reply_to` เป็น snippet เท่านั้น · staff: `{message}` เต็ม | FR-PCHAT-002/016 |
+| EVT-081 | ทั้งสอง room channel **+** private-workspace.{wid} (staff) | `public_chat.room.changed` | visitor: `{status_public, can_send}` เท่านั้น — และ **งดส่งทั้ง frame** เมื่อ transition นั้นไม่ขยับค่าที่ visitor เห็น (DEC-074) · staff: `{status, assigned_to:{id,username,display_name}\|null, claimed_at, first_response_at}` ส่งทุกครั้งเสมอ | FR-PCHAT-009/034 |
+| EVT-082 | private-workspace.{wid} | `public_chat.room.created` | `{staff_room}` (list liveness + badge) | FR-PCHAT-001/005 |
+| EVT-083 | ทั้งสอง room channel | `public_chat.message.deleted` | `{message_id, room_id, seq}` | FR-PCHAT-002 |
+| EVT-084 | ทั้งสอง room channel | `public_chat.attachment.ready` / `.failed` | `{attachment}` — แทน `private-user.{uploader_id}` ซึ่งเป็น channel ตายเมื่อ `uploader_id` NULL | FR-PCHAT-020 |
+| EVT-085 | ทั้งสอง room channel | `public_chat.typing` | visitor: `{sender_kind}` เท่านั้น (ไม่มี username) · staff: `{sender_kind, user_id?, display_name?}` | FR-PCHAT-016 |
 
 กติกา client (`packages/chat-core`):
 - ทุก event ผ่าน `EventRouter` → reducer ของ store; **ห้าม** component subscribe echo โดยตรง
 - `message.created` ที่ seq ไม่ต่อเนื่อง → trigger gap-fill ก่อน apply
 - event ที่มาถึงก่อน REST response ของตัวเอง (เช่นส่งข้อความแล้ว WS มาก่อน 201) → dedupe ด้วย `client_message_id`
 - `ai.message.delta` ต้อง apply ตาม `index` ต่อเนื่อง; กระโดด → refetch `GET /ai/messages/{id}` (TC-CORE-041); `ai.message.completed` เป็น authoritative แทน content ทั้งก้อน
+- **ข้อยกเว้นที่บันทึกไว้ (FR-PCHAT-016)**: หน้า `/support/:code` สร้าง Echo instance ของตัวเองและ subscribe โดยตรง เพราะ provider ที่ใช้ร่วมผูกกับ access token ของบัญชีและ visitor ไม่มีบัญชี — แบบเดียวกับหน้า public meeting; ทุก surface ภายในยังห้าม subscribe ตรงตามเดิม
 
 ---
 
@@ -1750,6 +1948,7 @@ NOT_FOUND, VALIDATION_FAILED, RATE_LIMITED, APP_UPDATE_REQUIRED, INTERNAL_ERROR
                                   "thread-id": "<room_id>", "mutable-content": 1 } } }
 }
 // types อื่น: "room_added" {workspace_id, room_id}, "workspace_added" {workspace_id}, "session_revoked" {}, "mention" (เหมือน message + mention:true),
+// "public_chat_message" {workspace_id, public_chat_room_id, message_id, seq} title=customer_name, collapse_key=public_chat_room_id, channel `messages` — ส่งเฉพาะ assigned_to; ห้องที่ยังไม่มีผู้รับผิดชอบ "ไม่ส่งหาใครเลย" โดยตั้งใจ (FR-PCHAT-015),
 // "ai_completed" {conversation_id, message_id} title="AI Assistant" body=title ของ conversation หรือ "ตอบเสร็จแล้ว" (ไม่ใส่เนื้อหาคำตอบใน push), collapse_key=conversation_id, channel `ai`
 ```
 - Android channels: `messages` (default), `mentions` (high), `system`, `ai` (default, ไม่มีเสียงถ้า sound=false)
@@ -2398,6 +2597,63 @@ NOT_FOUND, VALIDATION_FAILED, RATE_LIMITED, APP_UPDATE_REQUIRED, INTERNAL_ERROR
 | TC-SETUP-007 | install ขาด field / slug ไม่ผ่าน regex → 422 `VALIDATION_FAILED` (envelope §7) | Feature |
 | TC-SETUP-008 | boot โดยไม่มี APP_KEY (container เปล่าจริง): `SetupState::applyPreInstallDefaults` ให้ key ชั่วคราว + cache/session ไฟล์ — `/setup` ต้อง 200 ไม่ใช่ 500 จาก `EncryptCookies`/limiter; key ที่มีอยู่แล้วไม่ถูกแทนที่ | Feature |
 
+#### PCHAT (public support chat — §5.18)
+ชนิด **Security** = เทสต์ความปลอดภัย ห้าม skip และห้ามรวบเป็น integration test เดียว
+
+| TC | ทดสอบ | ชนิด |
+|---|---|---|
+| TC-PCHAT-001 | HMAC happy path: POST `/partner/public-chat/rooms` ที่ลงลายมือชื่อถูก → 201, `room.id` เป็น ULID, `url` = `<APP_URL>/support/<64 hex>`, แถวใน `public_chat_rooms` status `new`, `expires_at` = now + `publicchat.link_ttl_days` | Feature |
+| TC-PCHAT-002 | แก้ body 1 ไบต์หลังลงลายมือชื่อ → 401 `API_SIGNATURE_INVALID` และไม่มีแถวถูกสร้าง | Security |
+| TC-PCHAT-003 | timestamp เก่า 301 วินาที → 401 `API_TIMESTAMP_SKEW` พร้อม `details.skew_seconds` + `server_time`; 299 วินาที → ผ่าน | Feature |
+| TC-PCHAT-004 | nonce เดิมซ้ำภายใน 300 วิ → 409 `API_NONCE_REPLAYED`; nonce ใหม่ key เดิม → ผ่าน | Security |
+| TC-PCHAT-005 | key ที่ถูก revoke → 401 `API_KEY_INVALID`; ห้องที่ key นั้นสร้างไว้ยังเปิดอยู่และ visitor GET ได้ 200 | Feature |
+| TC-PCHAT-006 | ส่ง `external_ref` เดิมซ้ำ → 200, `id`/`code` เดิม, มีแถวเดียวใน DB (ไม่ใช่ 409/422) | Feature |
+| TC-PCHAT-007 | ลงลายมือชื่อบน JSON ที่ serialize ใหม่ (สลับลำดับคีย์) แล้วส่ง bytes เดิม → 401 — ยืนยันกติกา "เซ็น raw bytes" | Security |
+| TC-PCHAT-008 | ลายมือชื่อถูกแต่ `publicchat.enabled=false` → 503 `PCHAT_DISABLED` + `Retry-After: 60` (ไม่ใช่ 401) และ API-201 ยังตอบ 200 | Feature |
+| TC-PCHAT-009 | visitor POST ข้อความสอง ครั้งด้วย `client_message_id` เดียว → 1 แถว, ครั้งแรก 201 ครั้งที่สอง 200 พร้อม message เดิม | Feature |
+| TC-PCHAT-010 | agent สองคนตอบพร้อมกัน → claim ครั้งเดียว, system row `claimed` แถวเดียว, `seq` ต่อเนื่องไม่มีช่องว่างและไม่ซ้ำ | Feature |
+| TC-PCHAT-011 | auto-claim ตั้ง `assigned_to`, status `in_progress`, `claimed_at`, `first_response_at` และปล่อย EVT-081 ทั้งสอง room channel + `private-workspace` | Feature |
+| TC-PCHAT-012 | API-224: เปลี่ยน assignee และครบทั้งสี่ status บันทึกจริง + เขียน system row + ปล่อย EVT-081; assignee ที่ไม่ใช่ active member ของ ws เดียวกัน → 422; ออกจาก `new` ทั้งที่ยังไม่มี assignee → 422 `PCHAT_INVALID_TRANSITION` | Feature |
+| TC-PCHAT-013 | ข้อความของ agent แสดงภายนอกเป็น `Provider (username)` และภายในเป็นผู้ใช้จริง | Feature |
+| TC-PCHAT-014 | payload ฝั่ง public ไม่มี user ULID, mentions, read receipt, `assigned_to` หรือ `room.meta` และ `reply_to` มีเฉพาะ `{seq, snippet, deleted}` ไม่มี sender id | Security |
+| TC-PCHAT-015 | เปลี่ยน username / provider ภายหลัง → ข้อความเก่ายังแสดงตาม snapshot ตอนเขียน | Feature |
+| TC-PCHAT-016 | API-215 ขอ auth ช่อง `private-public-chat.{room ของตน}` → 200 พร้อม auth ที่ถูกเซ็น | Feature |
+| TC-PCHAT-017 | API-215 ขอ auth ช่องของห้องอื่น → 403 และไม่มีการเซ็นใด ๆ ถูกคืน | Security |
+| TC-PCHAT-018 | API-215 ขอ auth `private-public-chat-staff.{room ของตน}` → 403 | Security |
+| TC-PCHAT-019 | channel callback: active member ผ่านทั้งสองช่อง; member ที่ suspended และ member ของ ws อื่น → false | Security |
+| TC-PCHAT-020 | visitor ขอ ticket `image`/`video`/`file` → 201 (`uploader_id` NULL, `public_chat_room_id` ตั้งค่า); `avatar` → 422 ก่อนเรียก `UploadService`; นามสกุลต้องห้าม/เกินขนาด → error เดิมไม่เปลี่ยน | Feature |
+| TC-PCHAT-021 | attachment ที่มี `public_chat_room_id` ถูก claim โดยข้อความภายในไม่ได้ | Security |
+| TC-PCHAT-022 | attachment ภายในถูก claim โดยข้อความ public chat ไม่ได้ | Security |
+| TC-PCHAT-023 | ไฟล์ของ visitor เสร็จ → EVT-084 ออกที่สอง room channel ไม่ใช่ `private-user.` | Feature |
+| TC-PCHAT-024 | POST `/rooms/{public_chat_room_id}/calls` → 404 และไม่มี endpoint call/meeting ใดคืนผลกับ id นี้ | Security |
+| TC-PCHAT-025 | ห้อง public chat ไม่โผล่ใน GET `/rooms`, `/search/messages`, `/search/files` และไม่นับใน workspace unread | Feature |
+| TC-PCHAT-026 | ปิดฟีเจอร์: agent/visitor write → 503; visitor GET → 200 `feature_enabled:false, can_send:false, closed_reason:'disabled'`; Filament transcript → 200; เปิดกลับมาแล้ว status/assignee/read pointer/ข้อความครบเท่าเดิม | Feature |
+| TC-PCHAT-027 | เปิดลิงก์เดียวกันสอง browser: ส่งได้ทั้งคู่และเห็นข้อความของกันและกัน | Feature |
+| TC-PCHAT-028 | หลัง `done`: visitor GET 200 อ่านได้เต็ม, POST 409 `PCHAT_ROOM_CLOSED`; agent PATCH กลับ `in_progress` → visitor POST 201 | Feature |
+| TC-PCHAT-029 | หลัง `expires_at`: ทุก route Tier 2 รวม `broadcasting/auth` → 410 `PCHAT_LINK_EXPIRED` | Feature |
+| TC-PCHAT-030 | `<img src=x onerror=alert(1)>` เป็น `customer_name` แสดงเป็น text ทั้งหน้า visitor, หน้า agent และ transcript ใน Filament; `=cmd` ถูก prefix guard ใน CSV export | Security |
+| TC-PCHAT-031 | cross-workspace: partner key ของ A อ่านห้องของ B ไม่ได้; ทุก endpoint Tier 3 คืน 404 กับ room id ของ ws อื่น; ไม่มี response Tier 2 ใดคืนแถวของ ws อื่น | Security |
+| TC-PCHAT-032 | ห้องที่ถูกตั้งเป็น `problem` อ่านได้เป็น `status_public:'open'` ทั้งใน API-210 และ EVT-081 ฝั่ง visitor และไม่มีคีย์ `status` ดิบใน payload ใด; **zero-delta (`in_progress`→`problem`) ต้องไม่ให้ visitor เห็นอะไรเลย** — API-211 ไม่มีแถว `status_changed` (ไม่ใช่แถว `open`→`open`) และไม่มี frame ใดออกช่อง `private-public-chat.{rid}` ทั้ง EVT-080 ของแถวนั้นและ EVT-081; ส่วน transition ที่ขยับจริง (`in_progress`→`done`) ยังได้แถวเดียวที่บรรจุเฉพาะค่า projected (`open`→`closed`) + EVT-081 ฉบับ visitor หนึ่งใบ; ฝั่ง staff (API-221 และ `private-public-chat-staff.{rid}`) เห็น `from`/`to` จริงทุกครั้งทั้งสองกรณี (DEC-074) | Security |
+| TC-PCHAT-033 | API-220 `q` เจอห้องจากคำที่ปรากฏเฉพาะใน body ของข้อความ (ไม่ใช่ชื่อลูกค้า/provider/external_ref) | Feature |
+| TC-PCHAT-034 | ข้อความ visitor ในห้องที่มี assignee → push 1 ใบถึงคนนั้น title = `customer_name`; ห้องที่ยังไม่มี assignee → 0 push; `Jobs/NotifyMessage` ไม่เคยถูก dispatch | Feature |
+| TC-PCHAT-035 | agent ตอบแบบ reply ข้อความ visitor → payload public มี `{seq, snippet, deleted}`; เมื่อข้อความต้นทางถูกลบ ยังแสดงสถานะลบแทน snippet | Feature |
+| TC-PCHAT-036 | API-203 rotate-link: คืน `code` ใหม่, code เดิม 404 ทุก route Tier 2 ทันที, ข้อความ/สถานะ/assignee ไม่เปลี่ยน | Feature |
+| TC-PCHAT-037 | เรียก partner API สองครั้งห่างกัน 5 วินาที → `last_used_at` ถูกเขียนครั้งเดียว (อย่างมาก 1 ครั้ง/นาที/key) | Feature |
+| TC-PCHAT-038 | `secret_ciphertext` ที่ decrypt ไม่ได้ (เช่นหลังหมุน APP_KEY) → 401 `API_KEY_INVALID` + log ระดับ critical ไม่ใช่ 500 | Security |
+| TC-PCHAT-039 | เปลี่ยน status เป็นอย่างแรกในห้องที่ยังไม่มีข้อความ → system row ถูกสร้างสำเร็จด้วย `client_message_id` เป็น ULID ที่ server สร้าง | Feature |
+| TC-PCHAT-040 | route partner รับเฉพาะ ULID: ใส่ code 64 hex ในตำแหน่ง `{id}` → 404 และไม่มี request path ของ partner ที่มี code อยู่เลย | Security |
+| TC-PCHAT-041 | visitor และ agent ส่ง `client_message_id` ค่าเดียวกัน → เกิดสองแถว (unique แยกตาม `sender_kind`) และ replay ของแต่ละฝั่งคืนแถวของตัวเอง; visitor ส่งค่าที่ไม่ใช่ UUID → 422 | Security |
+| TC-PCHAT-042 | API-228: `last_read_seq` เดินหน้าอย่างเดียว (seq ต่ำกว่าเดิม = no-op), `unread_count` ใน API-220/221 ถูกต้องต่อ agent, pointer ของ agent อีกคนไม่เปลี่ยน | Feature |
+| TC-PCHAT-043 | INSERT `attachments` ที่ `uploader_id` และ `public_chat_room_id` เป็น NULL ทั้งคู่ ถูกปฏิเสธโดย constraint ที่ระดับ DB | Security |
+| TC-PCHAT-044 | bearer ของ active member บน Tier 2: GET 200 พร้อม `viewer.kind='member'`; POST message / uploads / complete / typing → 403 `PCHAT_SIGNED_IN`; API-215 ยัง 200 | Security |
+| TC-PCHAT-045 | bearer ที่หมดอายุ/ไม่ถูกต้องบน Tier 2 → 401 ไม่ตกไปเป็น visitor เงียบ ๆ | Security |
+| TC-PCHAT-046 | API-220 ลำดับ default: `problem` ก่อน → ห้องที่ needs_reply → `last_message_at` desc nulls last, id desc (ตรวจด้วยชุดข้อมูลที่จงใจให้ห้องคุยเยอะแต่ปิดแล้วอยู่ล่าง) | Feature |
+| TC-PCHAT-047 | `first_response_at` ถูกประทับโดย UPDATE เดียวกับ auto-claim และไม่ถูกเขียนทับเมื่อ agent ตอบซ้ำ | Feature |
+| TC-PCHAT-048 | ออก API key: response มี `Cache-Control: no-store`, แถว audit ไม่มี secret และไม่มี digest ของ secret, และไม่มี endpoint/ฟิลด์/export ใดคืน `secret_ciphertext` | Security |
+| TC-PCHAT-049 | limiter แบบ named: visitor เขียน 21 ครั้ง/นาทีบน code หนึ่ง → 429 ขณะที่อีก code ไม่ถูกกระทบ; limiter ของ partner คีย์ด้วย `X-PChat-Key` ไม่ใช่ IP | Feature |
+| TC-PCHAT-051 | `PurgeOrphanAttachments`: ไฟล์ของ visitor ที่ถูก claim โดยข้อความแล้วและมีอายุเกิน 24 ชม. **ไม่ถูกลบ**; ticket ของ public chat ที่ไม่มีข้อความอ้างถึงเกิน 24 ชม. ยังถูกลบตามปกติ | Feature |
+| TC-PCHAT-050 | ลำดับตรวจสอบ: ไม่มี header → 401 ก่อนแตะ DB; key ไม่รู้จัก → 401 ก่อนถึง feature gate; feature gate ถูกเรียกหลังตรวจลายมือชื่อผ่านเท่านั้น (prober แยก "ฟีเจอร์เปิดอยู่ไหม" ไม่ได้) | Security |
+
 #### PERM (table-driven policy tests)
 | TC | ทดสอบ |
 |---|---|
@@ -2461,6 +2717,14 @@ NOT_FOUND, VALIDATION_FAILED, RATE_LIMITED, APP_UPDATE_REQUIRED, INTERNAL_ERROR
 | TC-CORE-048 | delta throttle render ≤ 30 fps (batch state updates) | 
 | TC-CORE-049 | conversation list update จาก `ai.conversation.updated` (title) | 
 | TC-CORE-050 | AI cache adapter: list + 100 msgs/conversation, ล้างเมื่อ logout | 
+| TC-CORE-061 | `needsReply` = true เมื่อ `last_visitor_seq > last_agent_seq` และ status ≠ `done` | 
+| TC-CORE-062 | `filterPublicChatRooms` กรอง status + assignee (`me`/`none`/ULID) + q + needsReply พร้อมกัน | 
+| TC-CORE-063 | `agentExternalName(provider, username)` = `provider (username)` — นิยามเดียวใช้ร่วม server fixture และทั้งสอง client | 
+| TC-CORE-064 | `isPublicChatCode` รับเฉพาะ `^[a-f0-9]{64}$` (ปฏิเสธตัวพิมพ์ใหญ่ ความยาวผิด ช่องว่างท้าย) | 
+| TC-CORE-065 | `visitorDisplayName` trim, cap 120, ตัด C0/C1 และ U+200B–U+200F / U+202A–U+202E, ว่างหลัง trim → invalid | 
+| TC-CORE-066 | `publicChatStatusLabel`/`Tone` ครบทั้งสี่สถานะ × locale `th`/`en` | 
+| TC-CORE-067 | `publicChatStatusPublic`: new/in_progress/problem → `open`, done → `closed` | 
+| TC-CORE-068 | queue comparator เรียง problem → needsReply → `last_message_at` desc nulls last, id desc; `publicChatLinkPath(code)` = `/support/${code}` | 
 
 ### 12.6 Test Case Catalog — Web
 | TC | ทดสอบ | ชนิด |
@@ -2506,6 +2770,12 @@ NOT_FOUND, VALIDATION_FAILED, RATE_LIMITED, APP_UPDATE_REQUIRED, INTERNAL_ERROR
 | TC-WEB-068 | Enter ส่ง / Shift+Enter ขึ้นบรรทัด / disabled ขณะ generating | RTL |
 | TC-WEB-069 | เปิด 2 tab: tab B เห็น stream ของ tab A | RTL+mock Echo |
 | TC-WEB-070 | "ส่งไปห้อง…" dialog เลือกห้อง (P1) | RTL |
+| TC-WEB-072 | Public Chat rail entry active เฉพาะ `/public-chat*` และ Conversations ไม่ติดพร้อมกัน; badge = summary.new + summary.problem | RTL |
+| TC-WEB-073 | List page: ทุก filter ถูกส่งเป็น query string ไป server และอยู่ใน query key (ไม่มีการกรอง list ที่ fetch มาแล้วใน memory) | RTL+MSW |
+| TC-WEB-074 | หน้าสนทนาฝั่ง agent ไม่มีปุ่ม call/meeting อยู่ใน tree เลย | RTL |
+| TC-WEB-075 | หน้า `/support/:code` mount นอก CallProvider/EchoProvider, แสดงข้อความตาม `room.locale` (`th` default), socket ล้ม → polling `?after_seq=` ทุก 5 วินาที | RTL+MSW |
+| TC-WEB-076 | หน้า visitor: ข้อความ agent แสดง `Provider (username)` เป็น text node; `customer_name` ที่มี HTML ไม่ถูก execute; ไม่มี raw `status` ปรากฏใน UI | RTL |
+| TC-WEB-077 | หน้า visitor เมื่อ `viewer.kind='member'`: composer ถูกแทนด้วยข้อความ "คุณลงชื่อเข้าใช้เป็น X — เปิดใน Public Chat" และส่งข้อความไม่ได้ (FR-PCHAT-013) | RTL |
 | TC-WEB-071 | Mobile (pointer:coarse): ตัวควบคุมกรอกข้อมูลทุกตัวที่มองเห็น (composer/login/ฯลฯ) computed font ≥16px, focus ไม่ zoom หน้า, viewport ไม่ปิด pinch zoom (DEC-058) | Playwright (mobile emulation) |
 
 **E2E (Playwright) — `TC-E2E-WEB-*`**: login → change password → create DM → send text → other browser sees it → edit → delete → create group → add member → upload image → mute → switch workspace → logout (10 flows) + AI: consent → new conversation → ส่งข้อความ → เห็น streaming จาก mock provider → stop → rename → memory page → delete conversation (3 flows)
@@ -2585,6 +2855,7 @@ jobs:
 | FR-OFF-001..003 | — | — | CORE-020..032, MOB-001..014 |
 | FR-I18N-001 | — | — | WEB-040..042, CORE-037..038 |
 | FR-WEB-001 | — | — | WEB-071 |
+| FR-PCHAT-001..034 | 200–203, 210–216, 220–228 | 080–085 | PCHAT-001..051, CORE-061..068, WEB-072..077 |
 | FR-AI-001..020 | 100–119 | 050–057 | AI-001..121, CORE-040..050, WEB-060..070, MOB-050..056, ADM-057..066, PERM-061..070 |
 | Section 6 | — | — | PERM-001..070 |
 
@@ -2851,6 +3122,21 @@ Size: S ≤ 1 วัน · M 2–3 วัน · L 4–5 วัน · XL > 1 ส�
 | DEC-056 | Secret rooms are an expiry feature, not end-to-end encryption, and the client must say so — the server and ordinary backups can still read the room until its deadline. DM and group both accept `secret: true` with an integer `expiry_days` 1–30; `secret_expires_at` is fixed at creation and never editable. The server denies every surface from `secret_expires_at` onward (`410 ROOM_EXPIRED`, realtime/call/media authorization deny, hidden from room list, search and unread) instead of waiting for `ExpireSecretRooms`, so a late or stopped scheduler can never widen access. Secret DMs live in their own `dm_key` namespace (`secret:` prefix): an ordinary DM between the same pair keeps deduplicating unchanged, and a fresh secret DM can reclaim the key once the old row is purged. Presigned attachment GET URLs are capped at the room deadline while the attachment is already bound to a secret room; URLs issued before binding (composer waiting for `attachment.ready`) keep the normal ≤60-minute TTL, so the cap is bounded, not absolute. Cleanup hard deletes room/messages/members/notes through FK cascade and queues the attachment file purge immediately, rather than soft delete plus the ordinary retention window. Expiry outranks both system-admin role and the 30-day moderation restore window: an expired secret room is denied to admins too, and a secret room soft deleted early is still purged at its original deadline. | The user asked for rooms that disappear on their own; promising secrecy we cannot deliver would be worse than promising expiry we can. Enforcing at the deadline rather than at sweep time makes the guarantee independent of scheduler health, and hard delete plus immediate file purge is what "gone" has to mean — at the cost of no moderation recovery after expiry. | 2026-09-16 |
 | DEC-057 | Admin-adjustable capacity for group calls and public meetings (`call.max_participants`, default 8, validated 2–50, Filament Settings). Verified against the deployed SFU: LiveKit `CreateRoom` does NOT update `max_participants` of an existing room (requested 2→5, actual stayed 2), so the setting is applied as a creation-time snapshot stored per room call / meeting link (`room_calls.capacity`, `meetings.capacity`, migration backfills 8 and 2 for existing dm calls). Admission checks under the existing admission locks and the SFU `CreateRoom` limit share the snapshot; direct rooms stay capped at 2. Changes apply to new calls/links only — active ones keep their snapshot (documented in the settings field helper), so no disconnects and no admission above what the SFU room actually enforces. Supersedes the fixed 8 in FR-CALL-001/FR-MEET-001. Capacity is an admission bound, not a media/network capacity promise. | Operators need headroom without a deploy; the snapshot keeps server admission and the SFU in exact agreement instead of racing a cacheable setting against an immutable room limit. | 2026-09-16 |
 | DEC-058 | Mobile browsers (notably iOS Safari) auto-zoom when an editable control with a computed font-size under 16px gains focus — the 13px chat composer made the whole conversation jump on every tap. Fix: `@media (pointer: coarse)` 16px floor on `input`/`select`/`textarea`/`contenteditable` (desktop typography untouched), viewport meta gains `interactive-widget=resizes-content` so the Android keyboard resizes the layout and keeps the composer visible; pinch zoom stays fully enabled (no `user-scalable=no`/`maximum-scale`). Regression: TC-WEB-071 sweeps visible editable controls for a ≥16px computed size under mobile emulation and asserts the viewport meta never disables zoom. | The zoom trigger is the computed font size, not the CSS source; a scoped floor fixes every editable surface (composer, login, tickets, notes, meeting lobby) without per-component rewrites and without sacrificing accessibility zoom. | 2026-09-16 |
+| DEC-060 | **Amend NG5 for public chat visitors only.** A visitor is an external party who reaches exactly ONE support conversation through ONE capability link: no workspace identity, no membership row, no app access/refresh token, no directory, no other room, message or member. Everything else in NG5 stands — there is still no cross-workspace guest user. | The requested feature is a customer-facing support surface; NG5 as written forbids it, and CLAUDE.md forbids shipping against the spec. The bound is stated explicitly so the next request cannot cite this as licence for general guest accounts. Rejected: a real guest user account (needs an identity, a login and a membership — everything NG5 exists to prevent). | 2026-09-16 |
+| DEC-061 | **Amend NG6 for one narrow partner API only.** The HMAC-signed partner integration may create, read the status of (never message bodies), close and rotate the link of support rooms it created, within its own workspace. It can never send a message, read a transcript, act as or on behalf of any user, or touch any other API. Bots, webhooks, outbound events and a general integration API remain out of scope. | Same reason and same discipline as DEC-060: amend exactly far enough, state the bound in the decision so it cannot be stretched. Rejected: a `bot` token type on the normal API (would let an external party act as a user, which is what NG6 forbids). | 2026-09-16 |
+| DEC-062 | **The brief's Decision C "stored hashed" is amended to encrypted-at-rest.** The partner secret is stored as `Crypt::encryptString` under APP_KEY with a `secret_last4` for display, mirroring `ai_providers.api_key_encrypted`. HMAC verification must recompute `hash_hmac('sha256', canonical, secret)` from the key material, so a sha256/bcrypt digest is mathematically unusable — "HMAC-signed" and "stored hashed" cannot both hold. The property Decision C actually wanted is preserved unchanged: the secret is shown exactly once at issuance and is never retrievable afterwards through any UI, API, export or log (model `$hidden`, no read-back path). The at-rest boundary moves from "DB dump" to "DB dump AND APP_KEY". Consequences that must be implemented, not assumed: a failed decrypt returns 401 `API_KEY_INVALID` with a critical log line, never a 500; and **rotating APP_KEY invalidates every partner secret**, so the APP_KEY rotation runbook must say that all partner keys are reissued. | Stated as a DEC because otherwise the next reviewer "fixes" it back to a hash and silently breaks every integration. The alternative that would preserve a true digest — a presented bearer secret compared by hash — is strictly weaker, because the secret would then travel on every request. | 2026-09-16 |
+| DEC-063 | **The 64-hex `code` is the visitor's only credential**, and possession of the link is the identity. No device binding, no per-visitor token in v1: the link must survive being forwarded from the customer's own email or desktop-to-phone, exactly as public meeting links do. Exposure is bounded by `expires_at`, by `no-referrer` / `no-store` / `access_log off` at the edge on both `/support/` and `/api/v1/public-chat/`, by the code never appearing in a query string or channel name, and by API-203 rotate-link, which is the remedy for a leaked URL short of ending the conversation. Accepted consequence: two tabs cannot be told apart and there is no "link already in use" error. | Rejected: a per-device visitor token layered on the code — it breaks the forwarded-link flow the customer controls and adds a second credential to leak, against a threat that expiry, hygiene and rotation already bound. | 2026-09-16 |
+| DEC-064 | **Public chat is an isolated bounded context**: its own tables, its own two serializers, its own two channels and its own three controller tiers; no `rooms`, `room_members` or `messages` row is ever created and no `RoomType` case is added. | For an unauthenticated customer-facing surface, structural isolation beats scattered `type != 'support'` guards whose failure mode is a silent leak of internal workspace messages. Because a public chat room is not a `rooms` row, the room list, search, workspace unread, `CallService`, the `room.{id}` channel callback, `RoomPolicy`, `MessageEditor`, `Jobs/NotifyMessage` and the room AI bot need no new branch at all — five independent membership gates would otherwise each have needed one, each with a silent leak as its failure mode. Honest costs, accepted: a second message-write pipeline and a second serializer that can drift from the internal ones, plus new web and admin components instead of reusing `ChatView`/`Composer`/`RoomList`/`RoomResource`. Rejected: `rooms.type='support'` with lazily materialised memberships (O(N) fan-out per visitor message, visitor messages producing zero notifications silently, nobody able to delete a visitor message, and support rooms leaking into the room list, search and the unread badge unless every one of those is excluded). | 2026-09-16 |
+| DEC-065 | **Two channels and two serializers with no shared base class.** `private-public-chat.{room_id}` carries the public payload; `private-public-chat-staff.{room_id}` carries the internal one. Both are keyed by the room ULID, never by the code. | A shared base class is precisely how a field added for staff leaks to the customer; keeping internal identity off the visitor channel at the wire level means a serializer bug cannot expose it. Two places to add a field is the intended cost. Channel names are public by construction — they appear in every subscribe frame, in devtools and in failed queued jobs — so the capability code must never be one. | 2026-09-16 |
+| DEC-066 | **`public_chat_messages.client_message_id` is NOT NULL with `UNIQUE (room_id, sender_kind, client_message_id)`.** Visitors must supply a UUID (422 otherwise), agents supply one too, and system rows get a server-generated ULID. | No column of the key is nullable, so the Postgres NULL-distinct behaviour that makes a partial index inert for NULL-sender rows cannot arise. Including `sender_kind` stops a visitor from squatting a client id that would replay their own message back to an agent as a 200. | 2026-09-16 |
+| DEC-067 | **Feature-off means writes stop and data survives.** Partner create/close/rotate and every agent and visitor write return 503 (partner only after signature verification, so "bad key" and "service paused" are distinguishable); partner status read and visitor GET still answer, the latter with `feature_enabled:false` over a readable transcript rather than an error page. Open conversations are not closed, expired, reassigned or deleted, and re-enabling resumes mid-conversation with no migration. A write already past the gate completes; sockets are not force-disconnected, they simply receive nothing. Filament is unaffected — an admin must be able to read what happened precisely when the feature is off. Public chat has no calls of its own and this switch never touches FR-CALL / FR-MEET. | An externally reachable surface needs a switch whose failure mode is "paused", not "data destroyed". A 503 on the visitor GET was rejected: it turns a paused service into a broken link for the customer. | 2026-09-16 |
+| DEC-068 | **The media pipeline is the one deliberately shared surface.** `attachments` + `UploadService` are reused, partitioned by a nullable `public_chat_room_id`, with sibling `createForPublicChat`/`completeForPublicChat` rather than widened signatures, `whereNull('public_chat_room_id')` on internal claims, and the `attachments_owner_chk` CHECK making an unowned attachment unrepresentable. `attachments.uploader_id` becomes nullable. | Forking mime sniffing, extension blocking and size caps would guarantee drift in exactly the checks that matter, and drift in a security check is worse than one partition column with fail-closed guards on both sides. This is also the feature's single point of failure and is covered by dedicated security tests. | 2026-09-16 |
+| DEC-069 | **A visitor message never auto-reopens a `done` conversation.** After close the visitor may still read the full transcript, but sending returns 409; any agent may move the room back to `in_progress`, which re-enables sending immediately. | A stale link could otherwise resurrect a closed ticket with no agent seeing it. Returning 404 for a closed room was also rejected: the customer keeps their receipt. | 2026-09-16 |
+| DEC-070 | **`WorkspaceScope` is kept on the public chat models AND every Tier-1/Tier-2 query filters `workspace_id` explicitly**, with `workspace_id` denormalised onto `public_chat_messages`. This resolves a conflict inside the accepted design, which argued in one place for removing the scope and in another for keeping it. | §4's own rule already requires every workspace-scoped table to query through the global scope (NFR-SEC-004), and on Tier 3 the scope genuinely protects a `find($id)`. On Tier 2 the room is resolved by `code` before context exists, so the scope is inert there by design — which is exactly why the explicit filter is mandatory and not optional: the scope no-ops silently with no exception and no log when no workspace context is set, so neither mechanism alone is sufficient. Model docblocks must say this. | 2026-09-16 |
+| DEC-071 | **The feature ships disabled** (`publicchat.enabled` default `false`). Enabling a customer-facing, externally reachable surface is a deliberate admin act, never a side effect of a deploy. Both numeric settings ship with matching `Settings::ranges()` entries in the same change, because the settings form destructures `ranges()[$key]` unguarded and a missing entry takes down the very page that turns the feature off. | A new externally reachable surface that turns itself on at migration time is a security default nobody chose. | 2026-09-16 |
+| DEC-072 | **Browser-executable uploads are refused outright on the PUBLIC CHAT surface only; internal uploads keep the specced SVG behaviour and are protected at READ time.** `App\Domain\Media\InlineSafety` is the one definition and it holds three separate lists that must never be merged. (1) On the public chat surface — API-213 visitor tickets and API-225 agent tickets, i.e. any row carrying `public_chat_room_id` — an upload is refused when `isBrowserExecutable()` matches the DECLARED mime at ticket time or the SNIFFED mime at complete time: the markup family (`text/html`, `application/xhtml+xml`, `image/svg+xml`, `application/xml`, `text/xml`, xslt and the `+xml` structured-syntax suffix) plus script sources, PHP, Flash and whole-page archive containers (`multipart/related`, `message/rfc822`). (2) INTERNAL authenticated uploads keep exactly the floor that already existed — `upload.file.blocked_extensions` plus the always-blocked mime set (html/php/script/flash/archive-container) — and still **accept** `svg` / `xml` / `xhtml`, because FR-MEDIA-004/005 specify precisely that: accept SVG, serve it as an attachment, never inline. Nothing that was blocked before this change is unblocked anywhere. (3) The PRIMARY control is read-time and applies to every stored object regardless of who uploaded it or when: `InlineSafety::s3ResponseOverrides` signs `ResponseContentDisposition: attachment` + `ResponseContentType: application/octet-stream` into every presigned GET for anything outside the short inline **allowlist** (raster image / video / audio), and `UploadController::file` applies the identical predicate plus `X-Content-Type-Options: nosniff` on the local-disk route, so the two paths cannot drift. Disposition is decided by the allowlist and never by a deny list, so a browser-renderable format that ships next year is inert by default rather than dangerous by default. | Read time is the only layer that reaches the objects ALREADY IN THE BUCKET: the extension list and the mime sniff both act at upload time and cannot reach backwards. It is also the layer that has to hold regardless, because the presigned PUT does not sign `Content-Type` — MinIO stores and replays whatever the uploading client chose — and production serves the bucket under the app's OWN origin, which makes a replayed `text/html` or `image/svg+xml` object a same-origin document running with the chat session's cookies. The two `Response*` parameters ride inside the signed query string, so a holder of the URL cannot strip them without invalidating the signature; that is what makes this a control and not a hint. Rejected: the first attempt, which blocked svg/xml at upload time on every surface — it silently changed specced FR-MEDIA-004/005 behaviour, broke a legitimate internal use case, and bought nothing the disposition control does not already provide (objects stored before it remain dangerous either way, which is the whole point). Rejected in the other direction: leaning on read-time alone for the unauthenticated surface, where refusing active content outright costs a promise nobody ever made to a visitor. | 2026-09-16 |
+| DEC-073 | **Completed-but-unreferenced public chat attachments are reclaimed after 24 h by a second sweep inside `PurgeExpiredUploads`.** The original sweep matches `status = pending AND expires_at < now()`, but `UploadService::finish()` sets `status = uploaded` AND `expires_at = NULL` — so a completed upload that is never spent on a message matched nothing, in any job, ever. On the internal surface that is untidy; on the public surface it is a resource-exhaustion primitive, because anyone holding one `/support/<code>` link can mint a ticket, PUT the bytes and call complete (10/min under `throttle:pchat-visitor-upload`, up to `upload.file.max_bytes` each) with no account and never send a message. The new sweep takes exactly the rows where `public_chat_room_id IS NOT NULL`, `status` ∈ {`uploaded`, `processing`, `ready`, `failed`}, `created_at` older than `PurgeExpiredUploads::PUBLIC_CHAT_ORPHAN_GRACE_HOURS = 24` and NOT EXISTS in **all four** attachment pivots (`public_chat_message_attachments`, `message_attachments`, `room_note_attachments`, `kanban_ticket_attachments`); the row is hard-deleted together with the original and every derived object. **Guarantee: a referenced attachment is never touched, and an internal attachment is never touched** — "internal" IS `public_chat_room_id IS NULL` (DEC-068), so scoping the sweep to the partition column makes that structural rather than a promise, and the DELETE re-asserts the same four NOT EXISTS clauses so a visitor claiming the attachment mid-sweep (under `claimAttachments`' `lockForUpdate`) makes the statement affect 0 rows and the file survives with its message. `created_at`, never `updated_at`: `ProcessAttachment` writes dimensions and scan results back onto the row, so an attacker able to keep a row being touched could otherwise hold it out of the sweep indefinitely. | The grace period is a class CONSTANT, not an §4.4 setting: FR-PCHAT-033's own rule is that a numeric key added without a matching `Settings::ranges()` entry throws for every admin on the settings page, and this is a storage-hygiene floor rather than a knob an operator has a reason to tune. 24 h is slack for the unhappy paths — a backed-up `ProcessAttachment` queue, a visitor who uploads, closes the tab and types the message the next morning, an agent staging a file before the customer replies — while still bounding growth to one day of uploads per leaked code instead of "forever". Shorter starts eating real customer files; longer stops bounding anything. The sweep lives in `PurgeExpiredUploads` rather than in a new job because that is the scheduled class that actually exists and already owns attachment reclamation, on the same table and the same disk handle — a separate schedule entry is one more thing to forget to register. (§4.3 also names a `PurgeOrphanAttachments` for the internal equivalent; no such class exists under `app/Jobs`, so the reference-counting rule stated there for `public_chat_message_attachments` is carried by the same `whereUnreferenced()` definition this sweep uses. Closing that gap for internal attachments is separate work.) The tick rate is not the bound on an orphan's life — the grace period is. | 2026-09-16 |
+| DEC-074 | **A status transition whose two sides project to the same public value emits NOTHING the visitor can observe.** `PublicChatStatus::public()` maps `new`/`in_progress`/`problem` → `open` and `done` → `closed`, so the field-level projection for an `in_progress` → `problem` flag was already perfect — and the mere EXISTENCE of a `status_changed` row rendered at the instant the agent clicked leaked the flag anyway, as a timing side-channel reading "status changed from open to open". Both visitor-facing halves are suppressed, because closing one alone would leave the other wide open: `PublicChatPublicSerializer::visibleToVisitor()` OMITS such a row from API-211 and from the `private-public-chat.{rid}` message frame (omitted, never replaced by a placeholder, and evaluated BEFORE the deleted-row branch so a staff-deleted zero-delta row cannot resurface as a tombstone carrying the same timing), and `PublicChatService::patch()` computes the delta INSIDE the row lock and passes `visitorVisible: false` down to `broadcastRoomChanged()`, suppressing the visitor EVT-081 frame whose `{id, status_public, can_send}` would have been byte-for-byte identical to the previous one. **Staff are unaffected in every respect**: the staff serializer, `private-public-chat-staff.{rid}`, the staff EVT-081 frame and the audit row all carry the true `from`/`to`, because an agent must see who changed what and when and an audit trail with holes is worse than none. Every other caller of `broadcastLifecycle()` (API-202 partner close, API-203 rotate) keeps the default `true` — those genuinely move `status_public` or `can_send`. | Assignment and reassignment never move the visitor projection either, which is why the test is on the projected value and not on "did we write a status row". The resulting permanent gap in the visitor's `seq` sequence costs nothing: the visitor page advances `after_seq` from the highest seq it has RECEIVED and never compares against `room.last_seq`, so it cannot drive a refetch loop. Rejected: emitting a placeholder or a redacted row — it re-leaks the exact timing the suppression exists to hide, in a different shape. Rejected: suppressing on the staff side too, for symmetry — the transition is real and internal, and this is the one surface that must record it. | 2026-09-16 |
 
 ---
 
@@ -2862,6 +3148,8 @@ Size: S ≤ 1 วัน · M 2–3 วัน · L 4–5 วัน · XL > 1 ส�
 
 | Version | Date | By | Change |
 |---|---|---|---|
+| 1.15.1 | 2026-09-16 | Claude | **Security round on §5.18 public chat, plus one pre-existing edge leak (DEC-072/073/074)**: DEC-072 — browser-executable uploads refused outright on the public chat surface (visitor API-213 and agent API-225 tickets), internal uploads keep the specced FR-MEDIA-004/005 SVG behaviour and are protected by the forced `Content-Disposition: attachment` + neutral `Content-Type` now signed into every presigned GET and applied identically on the local-disk route; DEC-073 — `PurgeExpiredUploads` gains a second sweep reclaiming completed-but-unreferenced public chat attachments after 24 h (§4.3 row updated), referenced and internal attachments never touched; DEC-074 — a zero-delta status transition emits no visitor system row and no visitor EVT-081 frame at all, closing the timing side-channel that revealed a `problem` flag, with staff still seeing the true transition (FR-PCHAT-007/009/020, FR-MEDIA-004, API-213/224/225, EVT-081 and TC-PCHAT-032 amended to match; §4.3 `PurgeExpiredUploads` row extended). `infra/nginx/prod.conf`: `error_log /dev/null` added to `^~ /support/`, matching its `/api/v1/public-chat/` and `/rtc` siblings, and a new `^~ /api/v1/public-meetings/` block giving the **shipped FR-MEET capability code** the same treatment — its access line was already redacted by the `banana_edge` log_format but the error line still wrote the 64-hex code verbatim. |
+| 1.15.0 | 2026-09-16 | Claude | §5.18 / FR-PCHAT-001..034 / DEC-060..071 / API-200..203, 210..216, 220..228 / EVT-080..085 / TC-PCHAT-001..051, TC-CORE-061..068, TC-WEB-072..077: **public support chat**. NG5 and NG6 amended (not deleted) in §1.3 and Appendix C to carve out exactly a single-conversation capability-link visitor and a create/read-status/close/rotate-only HMAC partner API. New `public_chat_api_keys` / `public_chat_rooms` / `public_chat_messages` / `public_chat_message_attachments` / `public_chat_reads` tables in an isolated bounded context (no `rooms`/`room_members`/`messages` row, no new `RoomType`); `attachments.uploader_id` becomes nullable with `public_chat_room_id` and `attachments_owner_chk`. Adds §6.5, the `PCHAT_*`/`API_*` error codes in §7.1, §8.10 and the partner secret stored encrypted under APP_KEY rather than hashed (DEC-062). Ships disabled by default (DEC-071). |
 | 1.14.0 | 2026-09-16 | Claude | §5.17 / FR-WEB-001 / DEC-058 / TC-WEB-071: 16px computed-font floor on `(pointer: coarse)` editable controls so mobile browsers stop auto-zooming on focus; `interactive-widget=resizes-content` viewport; pinch zoom deliberately preserved. |
 | 1.13.0 | 2026-09-16 | Claude | FR-CALL-006 / DEC-057 / TC-CALL-020..024: admin-adjustable `call.max_participants` (2–50, default 8) applied as a creation-time snapshot on room calls and meeting links; direct rooms stay at 2; active calls and existing links keep their snapshot. Supersedes the fixed 8 in FR-CALL-001/FR-MEET-001. |
 | 1.12.0 | 2026-09-16 | Claude | FR-ROOM-012 / DEC-056 / API-020 / EVT-003 / TC-ROOM-070..082 / TC-CORE-060: secret rooms with 1–30 day expiry, separate `secret:` dm_key namespace, deadline-time denial (`410 ROOM_EXPIRED`) ahead of the `ExpireSecretRooms` sweeper, presigned-URL capping, FK-cascade hard delete and client cache eviction. Expiry outranks admin role and the 30-day restore window. |
@@ -2935,6 +3223,7 @@ Size: S ≤ 1 วัน · M 2–3 วัน · L 4–5 วัน · XL > 1 ส�
 | OQ-016 | `ai.admin_review_enabled` เป็น false โดย default ตาม DEC-020 ใช่ไหม (นโยบาย HR/Legal) | PO/Legal | ไม่ |
 | OQ-018 | Infrastructure resolved: user supplied media.gamecoms.net → 165.22.63.119; trusted certificate, renewal dry-run and forced TURN TLS production tests passed (TC-CALL-011). Physical camera/microphone/speaker checks on supported user devices remain open; synthetic QA does not certify device compatibility. | IT / QA | No infrastructure blocker; device acceptance pending |
 | OQ-017 | System prompt ระดับองค์กร (ชื่อองค์กร, ข้อห้าม, ภาษา) ใครเขียน/อนุมัติ | PO | ก่อน PH2 AI |
+| OQ-019 | nginx `limit_req zone=edge_api` (300r/m burst=150) คีย์ด้วย `$binary_remote_addr` แต่ partner ของ FR-PCHAT ยิงมาจาก IP เดียว — จะ (ก) sizing ให้อยู่ใต้เพดานนั้น หรือ (ข) เพิ่ม location block ยกเว้น/แยก zone สำหรับ `/api/v1/partner/public-chat/` ที่คีย์ด้วย `X-PChat-Key` | Tony / INF | **ใช่ ก่อนเปิด `publicchat.enabled` ให้ลูกค้ารายแรก** |
 
 ### 17.2 Risks
 | Risk | Impact | Mitigation |
@@ -2952,6 +3241,9 @@ Size: S ≤ 1 วัน · M 2–3 วัน · L 4–5 วัน · XL > 1 ส�
 | AI ตอบผิด/hallucinate ในเรื่องงาน | ตัดสินใจผิด | disclaimer ในหน้า AI, system prompt ให้บอกเมื่อไม่แน่ใจ, v1 ไม่ให้ AI เข้าถึงข้อมูลห้องแชท |
 | Memory เก็บข้อมูลอ่อนไหวโดยไม่ตั้งใจ | PDPA | ข้อห้ามใน extraction prompt + snapshot test, ผู้ใช้เห็น/ลบได้, cap 200, ไม่แชร์ข้าม user |
 | Token estimate ต่ำกว่าจริง → overflow | request ล้มเหลว | margin 10%+2%, calibrate ratio, sync compaction + retry (FR-AI-005) |
+| capability link ของ public chat ถูก forward/หลุด | คนนอกอ่าน-ตอบ conversation นั้นได้ | DEC-063: expiry, `no-referrer`/`no-store`/`access_log off` ทั้ง `/support/` และ `/api/v1/public-chat/`, code ไม่อยู่ใน query string หรือชื่อ channel, และ API-203 rotate-link เป็นทางแก้เมื่อรู้ว่าหลุด; ต้องเขียนเรื่องนี้ไว้เด่น ๆ ในเอกสาร integration ของลูกค้า |
+| pipeline เขียนข้อความสองชุด (internal vs public chat) drift กัน | บั๊กที่ถูกแก้ฝั่งหนึ่งยังอยู่อีกฝั่ง | ต้นทุนที่ยอมรับของ DEC-064; เขียน method ให้โครงเหมือนกันโดยตั้งใจ, TC-PCHAT-010 ยืนยัน seq ไม่มีช่องว่าง, และตั้ง diff review เป็นงวด — ไม่มี guard อัตโนมัติ |
+| `->whereNull('public_chat_room_id')` ถูกลบออกจาก internal attachment claim ในอนาคต | ไฟล์ของ visitor ถูก claim โดยข้อความภายใน | DEC-068: CHECK ที่ระดับ DB + การเทียบ `uploader_id === $actor->id` ซึ่ง NULL ไม่มีวันตรง (fail-closed ตามธรรมชาติ) + TC-PCHAT-021/022/043 เป็น security test ห้าม skip |
 
 ---
 
@@ -2989,7 +3281,7 @@ AI_MOCK_PROVIDER_URL=http://mock-ai:8080/v1   # dev/CI เท่านั้น
 ```
 
 ## Appendix C — Parking Lot (ไอเดียที่ไม่ทำใน v1)
-Reactions · Pin message · Forward · Link preview · Threads · Voice message ·  Bots/Webhooks · SSO · Scheduled messages · Message translation · Read-only announcement rooms · Custom emoji · Room templates · Desktop app (Tauri) · Guest access · **AI**: @ai ในห้องแชท · สรุปห้องแชทด้วย AI (RAG) · แนบรูป/ไฟล์ให้ AI (FR-AI-016) · หลาย provider ให้ผู้ใช้เลือกโมเดล · tool use / function calling · แชร์ conversation เป็นลิงก์ · memory แยกต่อ workspace · Anthropic/OpenAI native provider
+Reactions · Pin message · Forward · Link preview · Threads · Voice message ·  Bots/Webhooks *(ทั่วไป — **ยกเว้น** partner API แบบ HMAC ของ public chat: สร้าง/อ่านสถานะ/ปิด/หมุนลิงก์ ห้อง support เท่านั้น ส่งข้อความหรือทำแทน user ไม่ได้ — DEC-061, §5.18)* · SSO · Scheduled messages · Message translation · Read-only announcement rooms · Custom emoji · Room templates · Desktop app (Tauri) · Guest access *(ทั่วไป — **ยกเว้น** public chat visitor: capability link 1 ใบ ต่อ 1 support conversation ไม่มี workspace identity และไม่เป็น member — DEC-060, §5.18)* · **AI**: @ai ในห้องแชท · สรุปห้องแชทด้วย AI (RAG) · แนบรูป/ไฟล์ให้ AI (FR-AI-016) · หลาย provider ให้ผู้ใช้เลือกโมเดล · tool use / function calling · แชร์ conversation เป็นลิงก์ · memory แยกต่อ workspace · Anthropic/OpenAI native provider
 
 ### DEC-RING-001 / Changelog 2026-09-11: recipient ringtone
 

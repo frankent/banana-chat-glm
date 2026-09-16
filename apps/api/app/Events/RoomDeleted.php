@@ -16,7 +16,7 @@ use Illuminate\Broadcasting\Channel;
 class RoomDeleted extends RealtimeEvent
 {
     /**
-     * @param  array<int, string>  $memberIds captured before the room vanished from lists
+     * @param  array<int, string>  $memberIds  captured before the room vanished from lists
      */
     public function __construct(
         public readonly string $roomId,

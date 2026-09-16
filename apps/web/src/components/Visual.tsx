@@ -26,6 +26,10 @@ const paths = {
   menu: <path d="M4 6h16M4 12h16M4 18h16" />,
   arrow: <path d="M4 12h16m-6-6 6 6-6 6" />,
   lock: <><rect x="5" y="10" width="14" height="11" rx="3" /><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3" /></>,
+  // FR-PCHAT-003 — the Public Chat rail entry. `Icon` takes keyof typeof paths
+  // from this CLOSED map, so a missing key is a TypeScript error rather than a
+  // runtime fallback: the rail button cannot ship without this glyph.
+  lifebuoy: <><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3.6" /><path d="m5.7 5.7 3.8 3.8M14.5 14.5l3.8 3.8M18.3 5.7l-3.8 3.8M9.5 14.5l-3.8 3.8" /></>,
 };
 export function Icon({ name, size = 20 }: { name: keyof typeof paths; size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;

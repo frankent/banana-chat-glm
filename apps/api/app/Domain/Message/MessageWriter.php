@@ -148,7 +148,8 @@ class MessageWriter
 
     /**
      * FR-MSG-002 — every id must be the sender's own, in this workspace,
-     * ready|processing, not an avatar, and not yet attached to any message.
+     * ready|processing, not an avatar, not partitioned to a public chat room
+     * (FR-PCHAT-020), and not yet attached to any message.
      * Unscoped query: pending rows from another workspace must 404-ish into
      * one uniform 422, never leak existence.
      *
@@ -172,6 +173,16 @@ class MessageWriter
 
             $ok = $attachment !== null
                 && $attachment->workspace_id === $room->workspace_id
+                // FR-PCHAT-020 / DEC-068 — THE PARTITION, INTERNAL SIDE.
+                // An attachment carrying public_chat_room_id belongs to a
+                // customer-facing conversation and can NEVER be spent on an
+                // internal message. The uploader test below is NOT sufficient:
+                // it fails closed for a visitor ticket only because NULL never
+                // equals a ULID, but an API-225 AGENT support ticket has the
+                // sender's own uploader_id and would otherwise pass every check
+                // here — a file uploaded into a customer's room resurfacing in
+                // an internal room. TC-PCHAT-021.
+                && $attachment->public_chat_room_id === null
                 && $attachment->uploader_id === $sender->id
                 && $attachment->deleted_at === null
                 && $attachment->kind !== AttachmentKind::Avatar
