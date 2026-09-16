@@ -50,7 +50,7 @@ class ModerationService
             $ids = $room->members()->pluck('users.id')->all();
             $room->forceFill(['deleted_at' => now(), 'purge_after' => now()->addDays(app(SettingsService::class)->int('room.deleted_purge_days'))])->save();
             $this->audit($actor, 'room.deleted_admin', $room);
-            DB::afterCommit(fn () => broadcast(new RoomDeleted($room, $ids)));
+            DB::afterCommit(fn () => broadcast(RoomDeleted::forRoom($room, $ids)));
         });
     }
 
@@ -64,6 +64,10 @@ class ModerationService
             }
             if (! $room->purge_after || $room->purge_after->isPast()) {
                 throw ValidationException::withMessages(['room' => 'The recovery window has expired.']);
+            }
+            if ($room->isExpired()) {
+                // FR-ROOM-012 — restoring must not resurrect dead secret content
+                throw ValidationException::withMessages(['room' => 'This secret room has expired and cannot be restored.']);
             }
             $room->forceFill(['deleted_at' => null, 'purge_after' => null])->save();
             $this->audit($actor, 'room.restored', $room);

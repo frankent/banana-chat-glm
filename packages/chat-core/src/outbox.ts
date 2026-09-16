@@ -177,6 +177,19 @@ export class Outbox {
     if (this.online) void this.flush();
   }
 
+  /**
+   * FR-ROOM-012 — drop every entry of one room (deleted room / expired
+   * secret room): bodies and attachment drafts must not linger after the
+   * room is gone. In-flight sends for removed entries land on a detached
+   * object and persist() writes the already-filtered list, so nothing
+   * re-queues.
+   */
+  async removeRoom(roomId: string): Promise<void> {
+    this.entries = this.entries.filter((e) => e.room_id !== roomId);
+    await this.persist();
+    this.emit();
+  }
+
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener);
     return () => {

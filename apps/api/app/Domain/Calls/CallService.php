@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\DB;
 
 class CallService
 {
-    public function __construct(private MediaServer $media) {}
+    public function __construct(private MediaServer $media, private CallCapacity $capacity) {}
 
     public function allowed(string $uid, string $rid): bool
     {
@@ -26,7 +26,10 @@ class CallService
             })
             ->join('users as u', 'u.id', '=', 'wm.user_id')
             ->where('r.id', $rid)->where('u.id', $uid)->whereNull('r.deleted_at')->where('w.status', 'active')->where('u.status', 'active')->where('u.must_change_password', false)
-            ->where('wm.status', 'active')->whereNull('rm.left_at')->exists();
+            ->where('wm.status', 'active')->whereNull('rm.left_at')
+            // FR-ROOM-012 — expired secret rooms deny call access immediately
+            ->where(fn ($q) => $q->where('r.is_secret', false)->orWhere('r.secret_expires_at', '>', now()))
+            ->exists();
     }
 
     public function participantAllowed(CallParticipant $p, RoomCall $call): bool
@@ -67,8 +70,11 @@ class CallService
             if ($existing) {
                 return $existing;
             }
-            $call = RoomCall::create(['room_id' => $room->id, 'workspace_id' => $room->workspace_id, 'started_by' => $uid, 'kind' => $kind]);
-            $this->media->request('CreateRoom', 'call-'.$call->id, ['name' => 'call-'.$call->id, 'empty_timeout' => 60, 'departure_timeout' => 20, 'max_participants' => $room->isDm() ? 2 : config('calls.max_participants')]);
+            // FR-CALL-006 / DEC-057: snapshot the live setting — LiveKit CreateRoom never
+            // updates max_participants of an existing room, so admission and the SFU limit
+            // must share this stored value for the whole life of the call.
+            $call = RoomCall::create(['room_id' => $room->id, 'workspace_id' => $room->workspace_id, 'started_by' => $uid, 'kind' => $kind, 'capacity' => $this->capacity->forRoom($room->isDm())]);
+            $this->media->request('CreateRoom', 'call-'.$call->id, ['name' => 'call-'.$call->id, 'empty_timeout' => 60, 'departure_timeout' => 20, 'max_participants' => $call->capacity]);
             $this->changed($call);
             foreach (DB::table('room_members')->where('room_id', $room->id)->whereNull('left_at')->where('user_id', '!=', $uid)->pluck('user_id') as $recipientId) {
                 $recipient = User::find($recipientId);
@@ -93,8 +99,7 @@ class CallService
             abort_unless($this->allowed($uid, $call->room_id), 404);
             $existing = CallParticipant::where('call_id', $call->id)->where('user_id', $uid)->whereNull('left_at')->first();
             abort_if($existing && $existing->session_id !== $session, 409, 'Already joined on another device.');
-            $isDm = Room::withoutGlobalScopes()->findOrFail($call->room_id)->isDm();
-            abort_if(! $existing && CallParticipant::where('call_id', $call->id)->whereNull('left_at')->count() >= ($isDm ? 2 : config('calls.max_participants')), 409, 'Call is full.');
+            abort_if(! $existing && CallParticipant::where('call_id', $call->id)->whereNull('left_at')->count() >= $call->capacity, 409, 'Call is full.');
             $p = $existing ?? CallParticipant::create(['call_id' => $call->id, 'user_id' => $uid, 'session_id' => $session]);
             if ($existing) {
                 $p->touch();

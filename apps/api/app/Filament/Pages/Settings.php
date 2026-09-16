@@ -32,11 +32,17 @@ class Settings extends Page
         $this->form->fill(collect(app(SettingsService::class)->all())->undot()->all());
     }
 
+    /** FR-CALL-006 / DEC-057: policy notes shown next to the generated fields. */
+    public const HELPERS = [
+        'call.max_participants' => 'Maximum participants for NEW group calls and public meeting links (direct rooms stay at 2). Active calls and existing links keep the capacity they were created with.',
+    ];
+
     public static function ranges(): array
     {
         return [
             'message.max_length' => [1, 32000], 'message.edit_window_minutes' => [0, 525600], 'message.max_attachments' => [1, 20],
             'room.group.max_members' => [2, 10000], 'room.deleted_purge_days' => [1, 365],
+            'call.max_participants' => [2, 50],
             'auth.password.min_length' => [8, 128], 'auth.lockout.threshold' => [3, 100], 'auth.lockout.minutes' => [1, 1440],
             'auth.access_token_ttl_minutes' => [5, 1440], 'auth.refresh_token_ttl_days' => [1, 90], 'auth.max_sessions_per_user' => [1, 100],
             'upload.image.max_bytes' => [1024, 1073741824], 'upload.video.max_bytes' => [1024, 2147483647], 'upload.file.max_bytes' => [1024, 2147483647],
@@ -71,6 +77,9 @@ class Settings extends Page
                 } else {
                     $field->nullable()->helperText('Leave empty for unlimited storage.');
                 }
+            }
+            if (isset(self::HELPERS[$key])) {
+                $field->helperText(self::HELPERS[$key]);
             }
             $groups[explode('.', $key)[0]][] = $field->label($label);
         }

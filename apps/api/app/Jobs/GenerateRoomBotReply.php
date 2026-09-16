@@ -51,7 +51,7 @@ class GenerateRoomBotReply implements ShouldBeUnique, ShouldQueue
 
     private function active(Message $source, Room $room): bool
     {
-        return $room->deleted_at === null && $source->deleted_at === null && ! $room->isDm()
+        return $room->deleted_at === null && ! $room->isExpired() && $source->deleted_at === null && ! $room->isDm() // FR-ROOM-012
             && RoomMember::where('room_id', $room->id)->where('user_id', $source->sender_id)->whereNull('left_at')->exists()
             && WorkspaceMember::where('workspace_id', $room->workspace_id)->where('user_id', $source->sender_id)->where('status', 'active')->exists();
     }

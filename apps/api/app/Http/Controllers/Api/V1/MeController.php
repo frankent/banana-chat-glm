@@ -75,9 +75,12 @@ class MeController extends Controller
 
         $query = Message::query()
             ->join('message_mentions', 'message_mentions.message_id', '=', 'messages.id')
+            ->join('rooms', 'rooms.id', '=', 'messages.room_id')
             ->where('message_mentions.user_id', $user->id)
             ->where('message_mentions.workspace_id', $workspaceId)
             ->whereNull('messages.deleted_at')
+            ->whereNull('rooms.deleted_at')
+            ->where(fn ($q) => $q->where('rooms.is_secret', false)->orWhere('rooms.secret_expires_at', '>', now())) // FR-ROOM-012
             ->with([
                 'sender:id,username,display_name,avatar_attachment_id',
                 'replyTo:id,room_id,seq,sender_id,body,deleted_at',

@@ -85,6 +85,7 @@ class NotificationController extends Controller
         $room = Room::query()
             ->whereNull('deleted_at')
             ->whereKey($roomId)
+            ->where(fn ($q) => $q->where('is_secret', false)->orWhere('secret_expires_at', '>', now())) // FR-ROOM-012
             ->whereHas('members', fn ($q) => $q->where('room_members.user_id', $user->id)->whereNull('room_members.left_at'))
             ->first();
 

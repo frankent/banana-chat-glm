@@ -7,13 +7,27 @@ use Illuminate\Broadcasting\Channel;
 
 /**
  * EVT-003 `room.deleted` — private-room.{rid} + private-user.{uid} for every member.
+ *
+ * Carries scalar ids only (FR-ROOM-012): the event is queued, and
+ * SerializesModels would rehydrate the Room by primary key on the worker —
+ * impossible after the secret-room purge hard-deletes the row. Builders
+ * snapshot via forRoom() before the room disappears.
  */
 class RoomDeleted extends RealtimeEvent
 {
-    /** @param array<int, string> $memberIds captured before the room vanished from lists */
-    public function __construct(public readonly Room $room, public readonly array $memberIds)
+    /**
+     * @param  array<int, string>  $memberIds captured before the room vanished from lists
+     */
+    public function __construct(
+        public readonly string $roomId,
+        public readonly string $workspaceId,
+        public readonly array $memberIds,
+    ) {}
+
+    /** Snapshot the ids while the row still exists. */
+    public static function forRoom(Room $room, array $memberIds): self
     {
-        //
+        return new self($room->id, $room->workspace_id, $memberIds);
     }
 
     public function eventName(): string
@@ -26,7 +40,7 @@ class RoomDeleted extends RealtimeEvent
      */
     public function channels(): array
     {
-        $channels = [new Channel("room.{$this->room->id}")];
+        $channels = [new Channel("room.{$this->roomId}")];
 
         foreach ($this->memberIds as $id) {
             $channels[] = new Channel("user.{$id}");
@@ -37,7 +51,7 @@ class RoomDeleted extends RealtimeEvent
 
     protected function workspaceId(): ?string
     {
-        return $this->room->workspace_id;
+        return $this->workspaceId;
     }
 
     /**
@@ -45,6 +59,6 @@ class RoomDeleted extends RealtimeEvent
      */
     protected function payload(): array
     {
-        return ['room_id' => $this->room->id];
+        return ['room_id' => $this->roomId];
     }
 }

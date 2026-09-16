@@ -11,8 +11,17 @@ use Illuminate\Support\Facades\Broadcast;
 |--------------------------------------------------------------------------
 */
 
-// private-room.{rid} — active members only (left/removed lose access immediately)
+// private-room.{rid} — active members only (left/removed lose access
+// immediately); expired secret rooms deny realtime too (FR-ROOM-012)
 Broadcast::channel('room.{roomId}', function (User $user, string $roomId) {
+    $room = App\Models\Room::withoutGlobalScopes()
+        ->whereNull('deleted_at')
+        ->find($roomId);
+
+    if ($room === null || $room->isExpired()) {
+        return false;
+    }
+
     $member = RoomMember::query()
         ->where('room_id', $roomId)
         ->where('user_id', $user->id)

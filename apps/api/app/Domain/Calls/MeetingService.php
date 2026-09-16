@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\DB;
 /** FR-MEET-001..004: public media capabilities never confer chat membership. */
 class MeetingService
 {
-    public function __construct(private MediaServer $media) {}
+    public function __construct(private MediaServer $media, private CallCapacity $capacity) {}
 
     public function available(Meeting $m): bool
     {
@@ -57,10 +57,12 @@ class MeetingService
             if (! $p && ! $user) {
                 validator(['name' => $name], ['name' => ['required', 'string', 'min:1', 'max:80']])->validate();
             }
-            abort_if(! $p && MeetingParticipant::where('meeting_id', $m->id)->whereNull('left_at')->count() >= config('calls.max_participants'), 409);
+            abort_if(! $p && MeetingParticipant::where('meeting_id', $m->id)->whereNull('left_at')->count() >= $m->capacity, 409);
             // Explicit creation wakes an empty SFU room while auto_create stays disabled.
+            // FR-CALL-006 / DEC-057: the SFU limit is the link's creation-time snapshot —
+            // CreateRoom does not update max_participants of an existing LiveKit room.
             $remote = 'meeting-'.$m->id;
-            $this->media->request('CreateRoom', $remote, ['name' => $remote, 'empty_timeout' => 60, 'departure_timeout' => 20, 'max_participants' => config('calls.max_participants')]);
+            $this->media->request('CreateRoom', $remote, ['name' => $remote, 'empty_timeout' => 60, 'departure_timeout' => 20, 'max_participants' => $m->capacity]);
             $secret = bin2hex(random_bytes(32));
             if (! $p) {
                 $p = new MeetingParticipant(['meeting_id' => $m->id, 'user_id' => $user?->id, 'session_id' => $session, 'name' => $user?->display_name ?? $name]);

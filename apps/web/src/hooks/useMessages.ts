@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { endpoints } from '../lib/api';
 import { roomCache } from '../lib/cache';
+import { isRoomEvicted } from '../lib/room-eviction';
 import { roomStore } from '../lib/room-stores';
 import { useSession } from '../state/session';
 
@@ -16,6 +17,11 @@ export function useMessagePage(roomId: string | undefined, slug: string | undefi
     queryFn: async () => {
       const page = await endpoints.messages(roomId!, slug!, aroundSeq !== undefined ? { around_seq: aroundSeq } : {});
       fetched.current = true;
+      // FR-ROOM-012 — a request that resolved after the room was evicted
+      // (secret expiry / deletion) must not re-persist its content
+      if (scope !== null && isRoomEvicted(scope, roomId!)) {
+        return page;
+      }
       store!.mergePage(page.messages);
       if (scope) await roomCache(scope).saveMessages(roomId!, store!.getState().messages);
       return page;
@@ -27,7 +33,8 @@ export function useMessagePage(roomId: string | undefined, slug: string | undefi
   useEffect(() => {
     let cancelled = false;
     fetched.current = false;
-    if (roomId && scope && store?.getState().messages.length === 0) {
+    // FR-ROOM-012 — never seed an evicted (expired secret) room from cache
+    if (roomId && scope && store?.getState().messages.length === 0 && !isRoomEvicted(scope, roomId)) {
       void roomCache(scope).loadMessages(roomId).then(cached => {
         if (!cancelled && !fetched.current && cached && store.getState().messages.length === 0) store.mergePage(cached);
       });

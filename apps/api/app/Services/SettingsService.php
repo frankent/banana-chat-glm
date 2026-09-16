@@ -29,6 +29,7 @@ class SettingsService
         'upload.multipart_part_bytes' => 8388608, // 8MB parts (S3 min 5MB, max 10k parts)
         'room.group.max_members' => 500,
         'room.deleted_purge_days' => 30,
+        'call.max_participants' => 8, // FR-CALL-006 / DEC-057: group calls + public meetings (dm stays 2)
         'auth.password.min_length' => 10,
         'auth.lockout.threshold' => 10,
         'auth.lockout.minutes' => 15,

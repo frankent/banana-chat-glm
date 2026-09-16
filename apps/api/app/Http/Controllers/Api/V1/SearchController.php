@@ -184,6 +184,7 @@ class SearchController extends Controller
             ->where('room_members.user_id', $userId)
             ->whereNull('room_members.left_at')
             ->whereNull('rooms.deleted_at') // TC-SRCH-003
+            ->where(fn ($q) => $q->where('rooms.is_secret', false)->orWhere('rooms.secret_expires_at', '>', now())) // FR-ROOM-012
             ->select('room_members.room_id');
     }
 

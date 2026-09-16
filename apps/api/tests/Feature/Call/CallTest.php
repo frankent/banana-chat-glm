@@ -11,6 +11,7 @@ use App\Models\RoomCall;
 use App\Models\User;
 use App\Models\UserNotificationSetting;
 use App\Models\Workspace;
+use App\Services\SettingsService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
@@ -148,7 +149,7 @@ test('TC-CALL-007 Twirp deletion uses roomCreate grant and empty requests serial
 });
 
 test('TC-CALL-002 capacity is enforced before issuing a third participant token', function () {
-    config(['calls.max_participants' => 2]);
+    app(SettingsService::class)->set('call.max_participants', 2);
     $this->room->update(['type' => 'group']);
     $this->room->members()->attach($this->outsider->id, ['workspace_id' => $this->ws->id, 'role' => 'member']);
     $c = $this->postJson('/api/v1/rooms/'.$this->room->id.'/calls', ['kind' => 'video'], $this->headers)->json('data');

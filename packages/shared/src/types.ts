@@ -35,6 +35,13 @@ export interface Room {
   last_seq: number;
   member_count: number;
   last_message_at: string | null;
+  /**
+   * FR-ROOM-012 — secret room (creator-chosen expiry, DEC-056). Optional
+   * because rows cached before the field shipped (and old fixtures) lack it;
+   * treat undefined as an ordinary room.
+   */
+  is_secret?: boolean;
+  secret_expires_at?: string | null;
 }
 
 export interface RoomListItem {
@@ -240,6 +247,7 @@ export const ERROR_CODES = {
   ROOM_FORBIDDEN: 403,
   ROOM_DM_IMMUTABLE: 422,
   ROOM_FULL: 422,
+  ROOM_EXPIRED: 410,
   MSG_TOO_LONG: 422,
   MSG_EMPTY: 422,
   VALIDATION_FAILED: 422,

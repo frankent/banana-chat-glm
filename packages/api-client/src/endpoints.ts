@@ -43,6 +43,23 @@ export interface RoomDetail {
   unread_count: number;
 }
 
+/**
+ * FR-ROOM-012 — secret-room creation options. `secret: true` requires
+ * `expiryDays` 1..30 (server-validated); omit or pass `secret: false` for an
+ * ordinary room.
+ */
+export interface SecretRoomOptions {
+  secret?: boolean;
+  expiryDays?: number;
+}
+
+function secretBody(opts?: SecretRoomOptions): Record<string, unknown> {
+  if (opts?.secret !== true) {
+    return {};
+  }
+  return { secret: true, expiry_days: opts.expiryDays };
+}
+
 /** Typed endpoint wrappers — one method per API row in spec §8. */
 export class Endpoints {
   constructor(private readonly api: ApiClient) {}
@@ -136,18 +153,18 @@ export class Endpoints {
     return this.api.request<RoomListItem[]>(`/api/v1/rooms${query}`, { workspaceSlug: slug });
   }
 
-  createDm(userId: string, slug: string) {
+  createDm(userId: string, slug: string, secret?: SecretRoomOptions) {
     return this.api.request<RoomDetail>('/api/v1/rooms', {
       method: 'POST',
-      body: { type: 'dm', user_id: userId },
+      body: { type: 'dm', user_id: userId, ...secretBody(secret) },
       workspaceSlug: slug,
     });
   }
 
-  createGroup(name: string, memberIds: string[], slug: string, description?: string) {
+  createGroup(name: string, memberIds: string[], slug: string, description?: string, secret?: SecretRoomOptions) {
     return this.api.request<RoomDetail>('/api/v1/rooms', {
       method: 'POST',
-      body: { type: 'group', name, member_ids: memberIds, description },
+      body: { type: 'group', name, member_ids: memberIds, description, ...secretBody(secret) },
       workspaceSlug: slug,
     });
   }

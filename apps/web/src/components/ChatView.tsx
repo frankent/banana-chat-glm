@@ -1,11 +1,13 @@
 import {CallButtons} from './calls/CallProvider';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { EventEnvelope, Message } from '@banana-chat/shared';
-import { continuesMessage, RoomSync, ReadReceiptReporter, type OutboxEntry } from '@banana-chat/chat-core';
+import { ApiError } from '@banana-chat/api-client';
+import { continuesMessage, RoomSync, ReadReceiptReporter, secretExpiryAbsolute, secretExpiryState, isSecretRoomActive, type OutboxEntry } from '@banana-chat/chat-core';
 import { sessionOutbox } from '../lib/outbox';
 import { endpoints } from '../lib/api';
+import { evictRoom } from '../lib/room-eviction';
 import { useMessageStore, roomStore } from '../lib/room-stores';
 import { useMessagePage } from '../hooks/useMessages';
 import { useEcho } from '../echo/EchoProvider';
@@ -25,6 +27,7 @@ export function ChatView() {
   const { roomId } = useParams<{ roomId: string }>();
   const { me, currentWorkspace } = useSession();
   const { echo, connected } = useEcho();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const slug = currentWorkspace?.workspace.slug;
   const [searchParams, setSearchParams] = useSearchParams();
@@ -145,14 +148,26 @@ export function ChatView() {
     channel.listen('.message.created', onMessage).listen('.room.read', onRead)
       .listen('.message.updated', onUpdated)
       .listen('.message.deleted', onDeleted);
+
+    // EVT-003 room.deleted on the room channel — owner deletion or secret
+    // expiry (FR-ROOM-012): leave immediately, purging every local layer
+    // (cache, store, outbox, query content) via the envelope's workspace.
+    const onRoomDeleted = (envelope: EventEnvelope<{ room_id: string }>) => {
+      const workspaceId = envelope.workspace_id || currentWorkspace!.workspace.id;
+      void evictRoom({ userId: me.id, workspaceId }, roomId);
+      navigate('/');
+    };
+    channel.listen('.room.deleted', onRoomDeleted);
+
     return () => {
       channel.stopListening('.message.created');
       channel.stopListening('.room.read');
       channel.stopListening('.message.updated');
       channel.stopListening('.message.deleted');
+      channel.stopListening('.room.deleted');
       echo.leave(`room.${roomId}`);
     };
-  }, [echo, roomId, slug, me, queryClient]);
+  }, [echo, roomId, slug, me, queryClient, currentWorkspace, navigate]);
 
   // gap-fill whenever the store flags a hole (TC-CORE-004)
   useEffect(() => {
@@ -209,12 +224,65 @@ export function ChatView() {
     }
   }, [aroundSeq, query.isLoading, state.messages, roomId, searchParams, setSearchParams]);
 
+  // FR-ROOM-012 — a secret room past its deadline: the server already purged
+  // it; evict local traces and explain instead of a generic error. (Kept
+  // above the early returns so hook order stays stable.)
+  //
+  // Offline path: while offline/asleep no 410 or EVT arrives, so the cached
+  // room-list metadata decides — re-checked on visibility/pageshow so a
+  // laptop that slept past the deadline never shows cached secret messages.
+  const [offlineExpired, setOfflineExpired] = useState(false);
+  useEffect(() => {
+    if (roomId === undefined || slug === undefined) {
+      return;
+    }
+    const check = () => {
+      const rooms = queryClient.getQueryData<{ room: { id: string; is_secret?: boolean; secret_expires_at?: string | null } }[]>(['rooms', slug, 'all']) ?? [];
+      const meta = rooms.find((item) => item.room.id === roomId)?.room;
+      setOfflineExpired(meta !== undefined && secretExpiryState(meta).kind === 'expired');
+    };
+    check();
+    document.addEventListener('visibilitychange', check);
+    window.addEventListener('pageshow', check);
+    return () => {
+      document.removeEventListener('visibilitychange', check);
+      window.removeEventListener('pageshow', check);
+    };
+  }, [roomId, slug, queryClient, connected]);
+
+  const roomExpired = offlineExpired
+    || [query.error, roomQuery.error].some(
+      (e) => e instanceof ApiError && (e.code === 'ROOM_EXPIRED' || e.status === 410),
+    );
+  useEffect(() => {
+    if (roomExpired && roomId !== undefined && slug !== undefined && me !== null && currentWorkspace !== null) {
+      void evictRoom({ userId: me.id, workspaceId: currentWorkspace.workspace.id }, roomId);
+    }
+  }, [roomExpired, roomId, slug, me, currentWorkspace, queryClient]);
+
   if (roomId === undefined || slug === undefined || me === null) {
     return null;
   }
 
+  if (roomExpired) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center" data-testid="secret-room-expired">
+        <p className="text-4xl" aria-hidden="true">🔒</p>
+        <h2 className="text-lg font-semibold">This secret room has expired</h2>
+        <p className="max-w-sm text-sm text-slate-500">
+          Messages, files, notes and calls were deleted from the server at expiry. Secret rooms are expiring rooms —
+          not end-to-end encryption — and content may persist in normal server backups until those rotate.
+        </p>
+        <button onClick={() => navigate('/')} className="rounded-lg bg-yellow-400 px-4 py-2 text-sm font-semibold">
+          Back to conversations
+        </button>
+      </div>
+    );
+  }
+
   if (query.isError || roomQuery.isError) return <p role="alert" className="p-4">Unable to open this room. Check your connection and room access.</p>;
   const room = roomQuery.data;
+  const secretActive = room !== undefined && isSecretRoomActive(room.room);
   const title = room?.room.type === 'dm' ? room.other_user?.display_name ?? membersQuery.data?.find(member => member.id !== me.id)?.display_name ?? 'Direct message' : room?.room.name ?? '…';
   const myMessages = state.messages.filter((m) => m.sender_id === me.id && m.deleted_at === null);
   const myNewestSeq = myMessages.length > 0 ? myMessages[myMessages.length - 1]!.seq : 0;
@@ -247,6 +315,11 @@ export function ChatView() {
             <p className="text-xs text-slate-400">{room.room.member_count} members</p>
           )}
           {room?.room.type === 'dm' && <p className="bc-caption">Direct conversation</p>}
+          {secretActive && room?.room.secret_expires_at != null && (
+            <p className="text-xs font-medium text-amber-600" data-testid="secret-expiry-header" title="Secret room — messages and files are deleted at expiry; not end-to-end encrypted">
+              🔒 Secret — deletes {secretExpiryAbsolute(room.room.secret_expires_at)}
+            </p>
+          )}
           </div>
         </div>
         <div className="flex items-center gap-2">

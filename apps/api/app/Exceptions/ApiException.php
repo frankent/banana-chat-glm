@@ -94,6 +94,17 @@ class ApiException extends RuntimeException
         return new self('ROOM_OWNER_CANNOT_LEAVE', 'เจ้าของห้องต้องโอนความเป็นเจ้าของก่อนออกจากห้อง', 422);
     }
 
+    /**
+     * FR-ROOM-012 — secret room past its expiry: every read/write/media/call
+     * path denies immediately, before the scheduler purges the row.
+     */
+    public static function roomExpired(?string $expiresAt = null): self
+    {
+        return new self('ROOM_EXPIRED', 'ห้องลับนี้หมดอายุแล้ว ข้อความและไฟล์ทั้งหมดถูกลบ', 410, [
+            'expires_at' => $expiresAt,
+        ]);
+    }
+
     // ---- Message errors (FR-MSG-001, §7.1) ----
 
     public static function msgTooLong(int $maxLength): self

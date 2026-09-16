@@ -131,6 +131,27 @@ export class DexieCacheAdapter implements CacheAdapter {
     return rows.map((r) => r.message);
   }
 
+  /**
+   * FR-ROOM-012 — full local purge of one room: cached messages, the
+   * rooms-list row and queued outbox entries (bodies/attachment drafts).
+   */
+  async deleteRoom(roomId: string): Promise<void> {
+    await this.guard.check();
+    const roomKey = this.roomKey(roomId);
+    await this.db.transaction('rw', this.db.messages, this.db.rooms, this.db.outbox, async () => {
+      await this.db.messages.where('room').equals(roomKey).delete();
+      const row = await this.db.rooms.get(this.scope);
+      if (row !== undefined) {
+        await this.db.rooms.put({ k: this.scope, rooms: row.rooms.filter((item) => item.room.id !== roomId) });
+      }
+      const outboxRows = await this.db.outbox.where('k').startsWith(this.k('outbox')).toArray();
+      const dead = outboxRows.filter((r) => r.entry.room_id === roomId).map((r) => r.k);
+      if (dead.length > 0) {
+        await this.db.outbox.bulkDelete(dead);
+      }
+    });
+  }
+
   async saveOutbox(entries: OutboxEntry[]): Promise<void> {
     await this.guard.check();
     const k = this.k('outbox');

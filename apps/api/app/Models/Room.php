@@ -33,6 +33,8 @@ class Room extends Model
         'settings',
         'member_count', // denormalized counter, maintained by Domain actions only
         'last_message_at',
+        'is_secret',
+        'secret_expires_at',
     ];
 
     protected function casts(): array
@@ -46,7 +48,35 @@ class Room extends Model
             'member_count' => 'integer',
             'purge_after' => 'datetime',
             'deleted_at' => 'datetime',
+            'is_secret' => 'boolean',
+            'secret_expires_at' => 'datetime',
         ];
+    }
+
+    /**
+     * FR-ROOM-012 — query scope: rooms that have not passed their secret
+     * expiry (ordinary rooms always qualify). Used by every listing/unread/
+     * search path so an expired secret room vanishes the moment it dies,
+     * even before the scheduler hard-deletes the row.
+     */
+    public function scopeNotExpired($query): void
+    {
+        $query->where(fn ($q) => $q
+            ->where('is_secret', false)
+            ->orWhereNull('secret_expires_at')
+            ->orWhere('secret_expires_at', '>', now()));
+    }
+
+    public function isSecret(): bool
+    {
+        return (bool) $this->is_secret;
+    }
+
+    public function isExpired(): bool
+    {
+        return $this->isSecret()
+            && $this->secret_expires_at !== null
+            && $this->secret_expires_at->lessThanOrEqualTo(now());
     }
 
     public function workspace(): BelongsTo

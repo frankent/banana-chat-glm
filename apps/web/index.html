@@ -3,7 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- DEC-058: resizes-content keeps the composer above the Android on-screen keyboard.
+         Pinch zoom must stay enabled — never add user-scalable=no / maximum-scale here. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
     <title>Banana Chat</title>
   </head>
   <body>

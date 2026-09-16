@@ -34,6 +34,20 @@ export function roomStore(roomId: string): MessageStore {
   return entryFor(roomId).store;
 }
 
+/**
+ * FR-ROOM-012 — dispose one room's in-memory store (secret expiry / room
+ * deletion): the entries map and the store's listeners must not outlive the
+ * room, or a stale snapshot could re-render (and re-seed) its messages.
+ */
+export function disposeRoomStore(scope: { userId: string; workspaceId: string }, roomId: string): void {
+  const key = `${scope.userId}:${scope.workspaceId}:${roomId}`;
+  const entry = entries.get(key);
+  if (entry !== undefined) {
+    entry.store.dispose();
+    entries.delete(key);
+  }
+}
+
 registerSessionCleanup(() => {
   for (const entry of entries.values()) entry.store.dispose();
   entries.clear();

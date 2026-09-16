@@ -38,9 +38,9 @@ class MediaUrls
     /**
      * Presigned GET for any storage key on the active disk (FR-MEDIA-004: 1h).
      */
-    public function temporaryGetUrl(FilesystemAdapter $disk, string $key, int $minutes = AttachmentSerializer::URL_TTL_MINUTES): string
+    public function temporaryGetUrl(FilesystemAdapter $disk, string $key, int|\DateTimeInterface $expiration = AttachmentSerializer::URL_TTL_MINUTES): string
     {
-        return $disk->temporaryUrl($key, now()->addMinutes($minutes));
+        return $disk->temporaryUrl($key, is_int($expiration) ? now()->addMinutes($expiration) : $expiration);
     }
 
     /**

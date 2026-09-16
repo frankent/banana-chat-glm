@@ -2,15 +2,23 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ApiError } from '@banana-chat/api-client';
+import { SECRET_EXPIRY_MAX_DAYS, SECRET_EXPIRY_MIN_DAYS } from '@banana-chat/chat-core';
 import type { UserStub } from '@banana-chat/shared';
 import { endpoints } from '../lib/api';
 import { useDirectory } from '../hooks/useRooms';
+
+const EXPIRY_CHOICES = Array.from(
+  { length: SECRET_EXPIRY_MAX_DAYS - SECRET_EXPIRY_MIN_DAYS + 1 },
+  (_, i) => SECRET_EXPIRY_MIN_DAYS + i,
+);
 
 export function NewRoomDialog({ slug }: { slug: string }) {
   const [open, setOpen] = useState<'dm' | 'group' | null>(null);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [groupName, setGroupName] = useState('');
+  const [secret, setSecret] = useState(false);
+  const [expiryDays, setExpiryDays] = useState(7);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -22,7 +30,7 @@ export function NewRoomDialog({ slug }: { slug: string }) {
   };
 
   const createDm = useMutation({
-    mutationFn: (userId: string) => endpoints.createDm(userId, slug),
+    mutationFn: (userId: string) => endpoints.createDm(userId, slug, secret ? { secret: true, expiryDays } : undefined),
     onSuccess: (detail) => {
       invalidate();
       setOpen(null);
@@ -32,7 +40,7 @@ export function NewRoomDialog({ slug }: { slug: string }) {
   });
 
   const createGroup = useMutation({
-    mutationFn: () => endpoints.createGroup(groupName.trim(), [...selected], slug),
+    mutationFn: () => endpoints.createGroup(groupName.trim(), [...selected], slug, undefined, secret ? { secret: true, expiryDays } : undefined),
     onSuccess: (detail) => {
       invalidate();
       setOpen(null);
@@ -80,14 +88,14 @@ export function NewRoomDialog({ slug }: { slug: string }) {
           value={groupName}
           onChange={(e) => setGroupName(e.target.value)}
           placeholder="Group name"
-          className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+          className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
         />
       )}
       <input
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search people…"
-        className="w-full rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+        className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
         autoFocus
       />
       <ul className="max-h-48 space-y-0.5 overflow-y-auto">
@@ -109,6 +117,37 @@ export function NewRoomDialog({ slug }: { slug: string }) {
           </li>
         ))}
       </ul>
+
+      {/* FR-ROOM-012 — secret opt-in with explicit expiry + honest disclosure */}
+      <div className="rounded-lg border border-slate-200 bg-white p-2">
+        <label className="flex items-center gap-2 text-sm font-medium" data-testid="secret-toggle">
+          <input type="checkbox" checked={secret} onChange={(e) => setSecret(e.target.checked)} />
+          🔒 Secret room (auto-deletes)
+        </label>
+        {secret && (
+          <div className="mt-2 space-y-2" data-testid="secret-options">
+            <label className="flex items-center gap-2 text-sm">
+              Delete after
+              <select
+                value={expiryDays}
+                onChange={(e) => setExpiryDays(Number(e.target.value))}
+                className="rounded-lg border border-slate-300 px-2 py-1 text-sm"
+                data-testid="secret-expiry"
+              >
+                {EXPIRY_CHOICES.map((d) => (
+                  <option key={d} value={d}>{d} day{d > 1 ? 's' : ''}</option>
+                ))}
+              </select>
+            </label>
+            <p className="text-xs leading-relaxed text-slate-500" data-testid="secret-explain">
+              Messages, files, notes and calls are deleted from the server when the room expires
+              ({SECRET_EXPIRY_MIN_DAYS}–{SECRET_EXPIRY_MAX_DAYS} days from creation). Secret means expiring — it is
+              not end-to-end encrypted, and messages may still exist in normal server backups until those rotate.
+            </p>
+          </div>
+        )}
+      </div>
+
       {open === 'group' && (
         <button
           onClick={() => createGroup.mutate()}
@@ -117,6 +156,11 @@ export function NewRoomDialog({ slug }: { slug: string }) {
         >
           Create group ({selected.size} members)
         </button>
+      )}
+      {open === 'dm' && secret && (
+        <p className="text-xs text-slate-400">
+          This creates a separate secret conversation — your ordinary DM with this person stays untouched.
+        </p>
       )}
     </div>
   );

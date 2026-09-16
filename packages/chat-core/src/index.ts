@@ -36,3 +36,26 @@ export { CallAttempt, canRingCall } from './call.js';
 export { meetingGuestName, meetingReturnPath } from './meeting.js';
 export { editMarkdown } from './markdown-editor.js';
 export type { MarkdownAction } from './markdown-editor.js';
+export {
+  focusedCallTrack,
+  resolveCallStage,
+  callTrackId,
+  DEFAULT_CALL_GAIN,
+  CALL_GAIN_MAX,
+  CALL_GAIN_FALLBACK_MAX,
+  callPlaybackGain,
+  callGainCeiling,
+  callGainPercent,
+} from './call-presentation.js';
+export type { CallTrackLike, CallStage, CallStageMode } from './call-presentation.js';
+export {
+  SECRET_EXPIRY_MIN_DAYS,
+  SECRET_EXPIRY_MAX_DAYS,
+  secretExpiryState,
+  isSecretRoomActive,
+  secretExpiryShort,
+  secretExpiryAbsolute,
+  filterExpiredRooms,
+  nextSecretDeadline,
+} from './secret-room.js';
+export type { SecretRoomLike, SecretExpiryState } from './secret-room.js';

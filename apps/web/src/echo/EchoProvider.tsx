@@ -7,6 +7,7 @@ import type { ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import type { EventEnvelope } from '@banana-chat/shared';
 import { endpoints, tokenManager } from '../lib/api';
+import { evictRoom } from '../lib/room-eviction';
 import { useSession } from '../state/session';
 import { handleAiEvent } from '../state/ai';
 import type { AiStreamEvent } from '@banana-chat/shared';
@@ -171,6 +172,21 @@ export function EchoProvider({ children }: { children: ReactNode }) {
       void queryClient.invalidateQueries({ queryKey: ['workspaces'] });
     });
 
+    // EVT-003 room.deleted — owner deletion and secret-room expiry (FR-ROOM-
+    // 012) both fan out here: drop the room from every list and purge its
+    // local content. The scope comes from envelope.workspace_id, NOT the
+    // currently-open workspace — the user channel is account-wide, so the
+    // event may describe a room of a workspace the user has since switched
+    // away from (its cache lives under that workspace's scope).
+    channel.listen('.room.deleted', (envelope: EventEnvelope<{ room_id: string }>) => {
+      const roomId = envelope.data?.room_id;
+      const workspaceId = envelope.workspace_id;
+      if (roomId === undefined || workspaceId === '') {
+        return;
+      }
+      void evictRoom({ userId: me.id, workspaceId }, roomId);
+    });
+
     // EVT-015 room.activity — message in a room we are not subscribed to
     // (only the open room has a private-room channel — DEC-009). This is the
     // only realtime source of preview + unread badge for background rooms
@@ -207,6 +223,7 @@ export function EchoProvider({ children }: { children: ReactNode }) {
         channel.stopListening(`.${name}`);
       }
       channel.stopListening('.room.created');
+      channel.stopListening('.room.deleted');
       channel.stopListening('.room.activity');
       channel.stopListening('.workspace.unread_changed');
       channel.stopListening('.workspace.member_added');

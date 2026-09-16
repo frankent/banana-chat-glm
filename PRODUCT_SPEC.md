@@ -353,6 +353,8 @@ Unique: `(workspace_id, user_id)`; Index: `(user_id, status)`
 | settings | jsonb | `{who_can_add_members: 'everyone'|'admins', who_can_edit_info: 'everyone'|'admins'}` |
 | deleted_at | timestamptz NULL | soft delete |
 | purge_after | timestamptz NULL | = deleted_at + 30d |
+| is_secret | boolean default false | FR-ROOM-012 — ห้องลับ (หมดอายุตามที่ผู้สร้างกำหนด) |
+| secret_expires_at | timestamptz NULL | จุดหมดอายุ = created + expiry_days (1..30); NULL สำหรับห้องปกติ |
 
 Index: `(workspace_id, last_message_at desc)`, `(workspace_id, type)`
 
@@ -598,6 +600,7 @@ Index: `(user_id, importance desc, last_used_at desc)`, GIN trgm `content`
 | Job | ความถี่ | ทำอะไร |
 |---|---|---|
 | `PurgeExpiredUploads` | ทุก 15 นาที | ลบ attachments `pending` ที่ `expires_at < now()` ทั้งใน DB และ MinIO |
+| `ExpireSecretRooms` | ทุกนาที | FR-ROOM-012 — ห้องลับที่ `secret_expires_at <= now()` (รวมห้องที่ถูก soft delete ไปก่อนหน้า) → จบ call ที่ค้าง, broadcast EVT-003, mark attachments ลบ + queue ลบไฟล์ทันที, hard delete room/messages/members/notes (access ถูกปฏิเสธตั้งแต่จุดหมดอายุแล้ว — job นี้ยกเลิกพื้นที่จัดเก็บเท่านั้น) |
 | `PurgeDeletedRooms` | ทุกวัน 03:00 | ห้องที่ `purge_after < now()` → hard delete messages, attachments, members |
 | `ApplyRetentionPolicy` | ทุกวัน 03:30 | ตาม `workspaces.message_retention_days` → soft delete `delete_reason=retention` |
 | `PurgeOrphanAttachments` | ทุกวัน 04:00 | attachments ที่ไม่มี message/avatar อ้างถึง > 24 ชม. |
@@ -624,6 +627,7 @@ Index: `(user_id, importance desc, last_used_at desc)`, GIN trgm `content`
 | `upload.file.blocked_extensions` | exe, bat, cmd, sh, ps1, msi, scr, js, jar, com, vbs | ป้องกัน malware |
 | `room.group.max_members` | 500 | FR-ROOM-002 |
 | `room.deleted_purge_days` | 30 | FR-ROOM-008 |
+| `call.max_participants` | 8 (แก้ได้ 2–50) | FR-CALL-006 — snapshot ตอนสร้าง call/meeting ใหม่เท่านั้น; dm คงที่ 2 |
 | `auth.password.min_length` | 10 | FR-AUTH-005 |
 | `auth.lockout.threshold` | 10 ครั้ง/15 นาที | FR-AUTH-006 |
 | `auth.lockout.minutes` | 15 | |
@@ -808,6 +812,22 @@ Index: `(user_id, importance desc, last_used_at desc)`, GIN trgm `content`
 #### FR-ROOM-011 ข้อมูลห้อง & สมาชิก — P0 · PH1
 - `GET /rooms/{id}` (รวม settings, my_role, member_count), `GET /rooms/{id}/members?cursor` (role, presence, joined_at)
 - **Refs**: API-030..031, TC-ROOM-053..055
+
+#### FR-ROOM-012 ห้องลับ (secret room — หมดอายุอัตโนมัติ) — P0 — DEC-056
+- ผู้สร้างห้องเลือก secret ได้ทั้ง DM และ group พร้อม `expiry_days` จำนวนเต็ม 1..30 นับจากจุดสร้าง (`secret_expires_at = created + expiry_days` คงที่ แก้ไม่ได้)
+- `POST /rooms {type, ..., secret: true, expiry_days}` — `secret=false`/ไม่ส่ง → ห้องปกติทุกประการ; `expiry_days` ห้ามส่งเมื่อไม่มี `secret:true`
+- **Secret DM แยกจาก DM ปกติ**: `dm_key` ของ secret อยู่ namespace ของตัวเอง (`secret:` prefix) — DM ปกติคู่เดียวกันยัง dedupe ตามเดิม, secret DM dedupe ใน namespace ตัวเองขณะยังไม่หมดอายุ; หมดอายุแล้วสร้างใหม่ได้ (job ไปตัด row เก่าที่ครอง unique key ก่อน insert ซ้ำ)
+- **ที่จุดหมดอายุ (`secret_expires_at <= now()`) เซิร์ฟเวอร์ปฏิเสธทันทีทุกช่องทาง** ก่อน scheduler ขึ้นทำงาน: room detail/members/messages/read/read-status/notes/pins/typing/edit/delete/leave/patch → `410 ROOM_EXPIRED`; call start/join + media auth + `private-room.{rid}` channel → deny; room list / unread badge / mentions / search ไม่แสดงผล; attachment metadata refresh (`GET /attachments/{id}`) → `410`, direct signed URL (`GET /attachments/{id}/file/{variant}`) → `404`; admin ก็ถูกปฏิเสธเช่นกัน (expiry สูงกว่า role)
+- **Presigned URL capping**: S3/local presigned GET ของ attachment ที่ผูกกับห้องลับถูกหรี่อายุไม่เกิน `secret_expires_at` ณ ตอนออก URL — URL ที่ออกหลัง bind ไม่มีชีวิตเกินห้อง; URL ที่ออกก่อน bind (ช่วง composer รอ `attachment.ready`) คงอายุปกติ ≤60 นาที — ข้อจำกัดแบบ bounded ตาม DEC-056
+- **Cleanup (`ExpireSecretRooms` ทุกนาที)**: จบ call ค้าง (persist ก่อนแตะ SFU — SFU ล่มไม่บล็อก purge), broadcast `EVT room.deleted` (scalar snapshot — ไม่พึ่ง model rehydration หลัง hard delete; ห้องที่ถูก soft delete ไปแล้วไม่ broadcast ซ้ำ), mark attachments `deleted_at` + dispatch `PurgeAttachmentFiles` ทันที (ไม่รอหน้าต่าง 24 ชม. ของ moderator), hard delete room/messages/members/notes ผ่าน FK cascade, audit `room.secret_expired`; รวมห้องลับที่ถูก soft delete ไว้ด้วย (expiry สูงกว่าหน้าต่างกู้คืน 30 วัน)
+- **Client**: room creator มี toggle + เลือก 1..30 วัน พร้อมคำอธิบายชัดเจนว่า "secret = หมดอายุ ไม่ใช่ E2EE" และข้อจำกัด backup ปกติ; หัวห้อง/list แสดง 🔒 + วันหมดอายุ; ได้รับ `EVT room.deleted` หรือเจอ `410 ROOM_EXPIRED` → เอาห้องออก + ลบ message cache ในเครื่อง (offline cache) + ออกจากห้องที่เปิดอยู่; outbox entry ของห้อง fail ทันที (4xx)
+- **AC**
+  - [ ] `expiry_days` 0/31/ไม่ใช่จำนวนเต็ม/ส่งโดยไม่มี `secret` → `422`; ขอบ 1 และ 30 ผ่าน
+  - [ ] วินาทีสุดท้ายก่อน expiry ใช้ได้ปกติ; ณ จุดหมดอายุทุก endpoint → `410 ROOM_EXPIRED`
+  - [ ] secret DM กับ DM ปกติคนเดียวกันเป็นคนละห้อง อยู่ร่วมกันได้; DM ปกติ dedupe ไม่กระทบ
+  - [ ] หลัง expiry: room row หาย, messages/members/notes หาย, attachment ถูก mark + queue ลบไฟล์, audit มีแถว, ห้องปกติไม่ถูกแตะ
+  - [ ] ห้องปกติ (ไม่ secret) พฤติกรรมไม่เปลี่ยนทุกอย่าง รวมถึงหลัง travel ข้ามปี
+- **Refs**: API-020, EVT-003, TC-ROOM-070..082
 
 ### 5.4 PROFILE — โปรไฟล์ผู้ใช้
 
@@ -1041,19 +1061,27 @@ API-140 GET /board; API-141 POST /board/lanes; API-142 PATCH /board/lanes/{id}; 
 
 | ID | Acceptance criteria | Tests |
 |---|---|---|
-| FR-CALL-001 | Active room members start/join one shared video call in a dm/group; voice-only calls in dm. Maximum 8 participants. Concurrent starts return the existing call. | TC-CALL-001,002 |
+| FR-CALL-001 | Active room members start/join one shared video call in a dm/group; voice-only calls in dm. Maximum 8 participants (default only — admin-adjustable per FR-CALL-006/DEC-057; dm stays 2). Concurrent starts return the existing call. | TC-CALL-001,002 |
 | FR-CALL-002 | Incoming call banner with caller/room, accept/decline; unanswered dm expires after 60 seconds. Leaving dm ends it; group continues until last participant leaves. Starter may end for everyone. | TC-CALL-003,004 |
 | FR-CALL-003 | Camera/microphone controls, participant names/grid, screen sharing for video, browser audio playback recovery, explicit device errors. Calls survive navigation; logout/leave releases devices. | TC-CALL-008,009 |
 | FR-CALL-004 | Server-issued room-specific grants; voice grants microphone-only. Current user, login session, workspace and room membership required at signaling admission. Reconcile every 10 seconds to evict revoked members/sessions; end on deleted/archived room/workspace. Private room calls allow no guests; public meetings use FR-MEET below. No recording or AI participation. | TC-CALL-005,006,007 |
 | FR-CALL-005 | Self-hosted LiveKit SFU; trusted HTTPS signaling and TURN/TLS relay. Feature remains disabled until configured. Test actual two-way media and three-way video; synthetic QA is not physical-device or network capacity certification. | TC-CALL-010,011 |
+| FR-CALL-006 | System admins adjust group-call/public-meeting capacity at Admin → Settings (`call.max_participants`, 2–50, default 8, DEC-057). The value is a creation-time snapshot stored on each room call and meeting link: admission (under the existing admission locks) and SFU `CreateRoom` `max_participants` share the same stored snapshot. Direct rooms stay capped at 2. Admin changes apply to new calls and meeting links only — active ones keep their snapshot (no disconnects; LiveKit `CreateRoom` never updates an existing room's `max_participants`). Capacity is an admission bound, not a promise that the SFU/network sustains it. Supersedes the fixed 8 in FR-CALL-001/FR-MEET-001. | TC-CALL-020..024 |
 
 API-150 GET /calls (active calls in member rooms); API-151 POST /rooms/{id}/calls {kind:voice|video}; API-152 POST /calls/{id}/join returns short-lived media token + url; API-153 POST /calls/{id}/leave; API-154 POST /calls/{id}/end (starter only); API-155 POST /calls/{id}/decline; API-156 GET /calls/authorize-media (JWT-only signaling authorization, 204/401/403). EVT-070 call.changed private user channels (metadata only, never media tokens). All ordinary calls use existing auth/workspace middleware. Store room_calls and call_participants; session-bound opaque participant IDs. No browser-closed push ringing in this release.
+
+#### Meeting presentation and playback — TASK-WEB/CORE/QA-045
+
+| ID | Acceptance criteria | Tests |
+|---|---|---|
+| FR-CALL-007 | All private calls and public meetings join with camera off; only the participant enables it. Concurrent screen sharing by multiple participants is allowed. First available screen fills the main stage automatically; viewer can select any participant/guest or screen, request browser fullscreen, and return to automatic focus. A removed selection falls back to another share or grid. Browser fullscreen requires a user gesture; automatic focus expands inside the meeting. | TC-CALL-030,032 |
+| FR-CALL-008 | Playback uses 150% default gain with a 0–300% session volume control and compressor for loud peaks. Browser microphone processing explicitly requests echo cancellation, noise suppression and automatic gain. Audio-unlock and standard playback fallback remain available; disconnect releases the AudioContext. Synthetic transport/signal tests do not certify physical speaker loudness. | TC-CALL-031 |
 
 ### 5.9c MEET — public meeting links (TASK-BE/WEB/CORE/QA-043)
 
 | ID | Acceptance criteria | Tests |
 |---|---|---|
-| FR-MEET-001 | Active workspace members create named public video meetings and copy an unguessable link. Creator lists/manages only own links within the workspace, with explicit expiry (1–168 hours, default 168), capacity 8. No room/message access is granted by a meeting link. | TC-MEET-001,002 |
+| FR-MEET-001 | Active workspace members create named public video meetings and copy an unguessable link. Creator lists/manages only own links within the workspace, with explicit expiry (1–168 hours, default 168), capacity snapshotted from `call.max_participants` at link creation (FR-CALL-006, default 8). No room/message access is granted by a meeting link. | TC-MEET-001,002 |
 | FR-MEET-002 | Public lobby works without login. Active signed-in accounts use their server-owned display name, never a supplied name; anonymous visitors must enter a trimmed 1–80 character name. Guests are labeled Guest in media. Invalid supplied credentials do not silently become anonymous. | TC-MEET-003,004 |
 | FR-MEET-003 | Participants join audio/video and screen share using room-scoped media credentials. A private browser participant token permits rejoin/leave only for that participant; member participation also binds the login session. Capacity checks serialize; absent reservations expire after 30 seconds. | TC-MEET-005,006 |
 | FR-MEET-004 | Creator can end/revoke a link. Expired/ended meetings, archived workspaces and revoked creator membership deny new joins and evict active participants within 10 seconds. Member logout/suspension revokes that participant. Empty media rooms can sleep and are recreated on the next valid join; a link never grants chat membership. | TC-MEET-007,008,009 |
@@ -1408,6 +1436,16 @@ EVT-060 room.notes_changed; EVT-061 room.pins_changed; EVT-062 room.typing {room
 
 ---
 
+## 5.17 Mobile browser input ergonomics — DEC-058 (2026-09-16)
+
+Web shell only; no API, event or native app change. Accessibility zoom stays a hard constraint (NFR-A11Y-001).
+
+| ID | Requirement and acceptance criteria | Tests |
+|---|---|---|
+| FR-WEB-001 | Focusing an editable control on a touch device must never auto-zoom the page. Mobile browsers (notably iOS Safari) zoom when the focused control's *computed* font-size is under 16px, so `@media (pointer: coarse)` forces a 16px floor on `input` (excluding button/submit/reset/checkbox/radio/range/file/color/image/hidden), `select`, `textarea` and `[contenteditable="true"]` — one scoped rule covering composer, login, tickets, notes and meeting lobby; desktop typography is unchanged. Pinch zoom remains fully available: the viewport meta never sets `user-scalable=no` or `maximum-scale`. The viewport meta declares `interactive-widget=resizes-content` so the Android on-screen keyboard resizes the layout instead of covering the composer. | TC-WEB-071 |
+
+---
+
 ## 6. Permission Matrix
 
 สัญลักษณ์: ✅ ทำได้ · ❌ ไม่ได้ · 🔒 ทำได้ตาม `room.settings` · Ⓢ = System Admin (ผ่าน Admin Panel เท่านั้น ไม่ผ่าน client API)
@@ -1488,7 +1526,7 @@ AUTH_REFRESH_EXPIRED, AUTH_REFRESH_REUSED, AUTH_PASSWORD_CHANGE_REQUIRED, AUTH_P
 AUTH_PASSWORD_REUSED, AUTH_CURRENT_PASSWORD_WRONG,
 WS_HEADER_REQUIRED, WS_FORBIDDEN, WS_ARCHIVED,
 ROOM_DM_SELF, ROOM_FULL, ROOM_FORBIDDEN, ROOM_NOT_MEMBER, ROOM_OWNER_CANNOT_LEAVE, ROOM_DM_IMMUTABLE,
-ROOM_PIN_LIMIT,
+ROOM_PIN_LIMIT, ROOM_EXPIRED (410 — ห้องลับหมดอายุ, FR-ROOM-012),
 MSG_EMPTY, MSG_TOO_LONG, MSG_EDIT_WINDOW_EXPIRED, MSG_NOT_EDITABLE, MSG_ATTACHMENT_INVALID,
 MSG_REPLY_INVALID, MSG_TOO_MANY_ATTACHMENTS,
 MEDIA_TOO_LARGE, MEDIA_TYPE_BLOCKED, MEDIA_MIME_MISMATCH, MEDIA_SIZE_MISMATCH, MEDIA_NOT_READY,
@@ -1536,7 +1574,7 @@ NOT_FOUND, VALIDATION_FAILED, RATE_LIMITED, APP_UPDATE_REQUIRED, INTERNAL_ERROR
 ### 8.3 Rooms
 | ID | Method | Path | Guard | Body / Query | Response | FR |
 |---|---|---|---|---|---|---|
-| API-020 | POST | `/rooms` | auth ws | `{type:'dm', user_id}` หรือ `{type:'group', name, description?, member_ids[]}` | 200/201 `{room}` | ROOM-001/002 |
+| API-020 | POST | `/rooms` | auth ws | `{type:'dm', user_id}` หรือ `{type:'group', name, description?, member_ids[]}` · เพิ่ม `{secret?: true, expiry_days?: 1..30}` (ต้องมาคู่กัน — FR-ROOM-012) | 200/201 `{room}` | ROOM-001/002/012 |
 | API-021 | GET | `/rooms` | auth ws | `?cursor&limit&filter=all,unread,hidden` | `{data:[room_summary]}` | ROOM-003 |
 | API-030 | GET | `/rooms/{id}` | member | — | `{room, my_membership}` | ROOM-011 |
 | API-022 | PATCH | `/rooms/{id}` | 🔒 | `{name?, description?, avatar_attachment_id?, settings?}` | `{room}` | ROOM-007 |
@@ -1590,7 +1628,9 @@ NOT_FOUND, VALIDATION_FAILED, RATE_LIMITED, APP_UPDATE_REQUIRED, INTERNAL_ERROR
 { "id": "…", "type": "group", "name": "Platform", "avatar": {...}|null, "member_count": 12,
   "other_user": user|null, "last_message": message_preview|null, "last_seq": 1200,
   "unread_count": 3, "my_role": "member", "notification": {"mode":"all","muted_until":null},
-  "hidden": false, "pinned_at": null, "updated_at": "…" }
+  "hidden": false, "pinned_at": null, "updated_at": "…",
+  // FR-ROOM-012 — ห้องลับเท่านั้นที่ is_secret=true (room detail ส่งสองฟิลด์นี้เหมือนกัน)
+  "is_secret": false, "secret_expires_at": null|"…" }
 
 // message
 { "id": "…", "room_id": "…", "seq": 1200, "type": "text", "sender": user|null,
@@ -1937,6 +1977,22 @@ NOT_FOUND, VALIDATION_FAILED, RATE_LIMITED, APP_UPDATE_REQUIRED, INTERNAL_ERROR
 | TC-ROOM-053 | GET room มี settings, my_role, member_count | Feature |
 | TC-ROOM-054 | GET members paginate + presence | Feature |
 | TC-ROOM-055 | non-member GET → 404 | Feature |
+| TC-ROOM-070 | secret DM สร้างได้ แยกจาก DM ปกติคนเดียวกัน (namespace `dm_key` แยก); DM ปกติ dedupe ไม่กระทบ; secret DM dedupe ใน namespace ตัวเองขณะยังมีชีวิต | Feature |
+| TC-ROOM-071 | secret group → 201; `secret_expires_at = created + expiry_days`; สมาชิกครบ; wire มี `is_secret`/`secret_expires_at` | Feature |
+| TC-ROOM-072 | `expiry_days` 0/31/-1/ไม่ใช่ int → 422; มี `secret` ไม่มี `expiry_days` → 422; มี `expiry_days` ไม่มี `secret` → 422; ขอบ 1/30 ผ่าน (ทั้ง dm/group) | Feature |
+| TC-ROOM-073 | วินาทีสุดท้ายก่อน expiry ใช้ได้; ณ จุดหมดอายุ — room detail/messages/send/read/read-status/members/notes/pins/typing/edit/delete → `410 ROOM_EXPIRED` | Feature |
+| TC-ROOM-073b | ณ จุดหมดอายุ — group patch/leave/remove member/change role/delete room → `410` | Feature |
+| TC-ROOM-073c | non-member ของห้องลับที่ยังมีชีวิต → `403 ROOM_NOT_MEMBER` เหมือนห้องปกติ (ห้องลับไม่รั่วผ่าน error code) | Feature |
+| TC-ROOM-074 | ณ จุดหมดอายุ — `private-room.{rid}` auth 403; call start 404 (ก่อนหน้านั้นผ่าน) | Feature |
+| TC-ROOM-075 | ณ จุดหมดอายุ — ห้องหายจาก room list, search ไม่เจอ, unread ไม่นับ; ห้องปกติใน ws เดียวกันยังอยู่ครบ | Feature |
+| TC-ROOM-076 | attachment URL: ก่อนหมดอายุ GET ผ่าน; หลังหมดอายุ signed file URL → 404, `GET /attachments/{id}` → 410 | Feature |
+| TC-ROOM-077 | presigned GET TTL ของ attachment ที่ผูกห้องลับ ≤ `secret_expires_at` ณ ตอนออก URL; ห้องปกติได้ 60 นาทีเต็ม | Feature |
+| TC-ROOM-078 | scheduler: room/messages/members/notes หาย (cascade), attachment mark deleted + queue `PurgeAttachmentFiles` ทันที, audit `room.secret_expired`, EVT-003 ไปถึงทุก member (scalar snapshot), ห้องปกติไม่ถูกแตะ, รันซ้ำ idempotent | Feature |
+| TC-ROOM-079 | ห้องลับที่ถูก soft delete (moderation) ก่อนกำหนด — scheduler ยังกวาดที่ deadline เดิม; ไม่ broadcast ซ้ำ | Feature |
+| TC-ROOM-080 | call ค้างถูกจบตอน expiry แม้ SFU ตอบ 503 ทุกคำขอ (persist ก่อนแตะ SFU) | Feature |
+| TC-ROOM-081 | สร้าง secret DM ใหม่คู่เดิมได้หลังอันเก่าหมดอายุ (reclaim `dm_key`) และใช้งานได้ทันที | Feature |
+| TC-ROOM-082 | ห้องปกติ: ไม่มี `is_secret` ใน wire, พฤติกรรมไม่เปลี่ยนแม้ travel ข้ามปี (send/read ยังผ่าน) | Feature |
+| TC-CORE-060 | (client) `deleteRoom` adapter — ลบ messages + แถวใน rooms list + outbox entries ของห้องนั้น โดยไม่กระทบห้องอื่น; outbox `removeRoom` ตัด entry ค้างใน memory/persist; hydrate จาก cache กรองห้องลับหมดอายุก่อนแสดง (offline) | Unit chat-core |
 
 #### PROF
 | TC | ทดสอบ | ชนิด |
@@ -2106,6 +2162,15 @@ NOT_FOUND, VALIDATION_FAILED, RATE_LIMITED, APP_UPDATE_REQUIRED, INTERNAL_ERROR
 | TC-NOTI-022 | PUT notification-settings validate เวลา | Feature |
 | TC-NOTI-023 | badge = รวม unread ทุก ws ไม่นับ muted | Unit |
 | TC-NOTI-024 | user deactivated → ไม่ส่ง | Unit |
+
+#### CALL
+| TC | ทดสอบ | ชนิด |
+|---|---|---|
+| TC-CALL-020 | `call.max_participants=2` → group call ใหม่เก็บ snapshot `capacity=2`, `CreateRoom` ส่ง `max_participants=2`, คนที่ 3 join → 409 | Feature |
+| TC-CALL-021 | dm คงที่ 2 แม้ตั้งค่าเป็น 50 — snapshot=2, `CreateRoom` 2, คนที่ 3 join → 409 (admission เป็นตัวกั้น ไม่ใช่จำนวนสมาชิก) | Feature |
+| TC-CALL-022 | เปลี่ยนค่าระหว่าง call ที่ active → snapshot เดิมไม่ขยับ, ไม่มี `CreateRoom` ด้วยค่าใหม่, ไม่มีใครหลุด; call ถัดไปในห้องเดิมได้ค่าใหม่ครบทั้ง snapshot/admission/SFU | Feature |
+| TC-CALL-023 | meeting link snapshot capacity ตอนสร้าง — lobby คืนค่า snapshot, เปลี่ยนค่าทีหลังไม่ขยายลิงก์เดิม, ลิงก์ใหม่ได้ค่าใหม่ | Feature |
+| TC-CALL-024 | Admin → Settings มี `call.max_participants` (default 8, range 2–50, helper ระบุว่ามีผลเฉพาะ call/link ใหม่); ค่าที่เล็ดลอด validation ถูก clamp เป็น 2/50 | Feature |
 
 #### SRCH
 | TC | ทดสอบ | ชนิด |
@@ -2441,6 +2506,7 @@ NOT_FOUND, VALIDATION_FAILED, RATE_LIMITED, APP_UPDATE_REQUIRED, INTERNAL_ERROR
 | TC-WEB-068 | Enter ส่ง / Shift+Enter ขึ้นบรรทัด / disabled ขณะ generating | RTL |
 | TC-WEB-069 | เปิด 2 tab: tab B เห็น stream ของ tab A | RTL+mock Echo |
 | TC-WEB-070 | "ส่งไปห้อง…" dialog เลือกห้อง (P1) | RTL |
+| TC-WEB-071 | Mobile (pointer:coarse): ตัวควบคุมกรอกข้อมูลทุกตัวที่มองเห็น (composer/login/ฯลฯ) computed font ≥16px, focus ไม่ zoom หน้า, viewport ไม่ปิด pinch zoom (DEC-058) | Playwright (mobile emulation) |
 
 **E2E (Playwright) — `TC-E2E-WEB-*`**: login → change password → create DM → send text → other browser sees it → edit → delete → create group → add member → upload image → mute → switch workspace → logout (10 flows) + AI: consent → new conversation → ส่งข้อความ → เห็น streaming จาก mock provider → stop → rename → memory page → delete conversation (3 flows)
 
@@ -2507,7 +2573,7 @@ jobs:
 |---|---|---|---|
 | FR-AUTH-001..007 | 001–007 | 025 | AUTH-001..032 |
 | FR-WS-001..005 | 010–015, 050 | 020,021,024 | WS-001..021 |
-| FR-ROOM-001..011 | 020–031 | 001–006 | ROOM-001..055, PERM-021..056 |
+| FR-ROOM-001..012 | 020–031 | 001–006 | ROOM-001..055, ROOM-070..082, CORE-060, PERM-021..056 |
 | FR-PROF-001 | 008–009 | 022 | PROF-001..005 |
 | FR-MSG-001..009 | 040–044 | 010–012,015 | MSG-001..054, CORE-001..008 |
 | FR-MEDIA-001..006 | 060–062 | 030 | MEDIA-001..035 |
@@ -2518,6 +2584,7 @@ jobs:
 | FR-ADM-001..013 | (Filament) | 020,021,023 | ADM-001..056 |
 | FR-OFF-001..003 | — | — | CORE-020..032, MOB-001..014 |
 | FR-I18N-001 | — | — | WEB-040..042, CORE-037..038 |
+| FR-WEB-001 | — | — | WEB-071 |
 | FR-AI-001..020 | 100–119 | 050–057 | AI-001..121, CORE-040..050, WEB-060..070, MOB-050..056, ADM-057..066, PERM-061..070 |
 | Section 6 | — | — | PERM-001..070 |
 
@@ -2780,10 +2847,21 @@ Size: S ≤ 1 วัน · M 2–3 วัน · L 4–5 วัน · XL > 1 ส�
 
 ---
 
+| DEC-059 | Interpret contradictory camera wording as off by default, matching the request that participants turn it on themselves. Shared renderer handles private/public calls, automatic in-app screen focus and explicit browser fullscreen. Multiple participants may each publish a screen simultaneously. Boost receiving audio 1.5x by default with adjustable gain and peak compression; preserve browser audio unlock. | User-requested meeting usability and louder playback; automatic browser fullscreen is prohibited without a user gesture. | 2026-09-16 |
+| DEC-056 | Secret rooms are an expiry feature, not end-to-end encryption, and the client must say so — the server and ordinary backups can still read the room until its deadline. DM and group both accept `secret: true` with an integer `expiry_days` 1–30; `secret_expires_at` is fixed at creation and never editable. The server denies every surface from `secret_expires_at` onward (`410 ROOM_EXPIRED`, realtime/call/media authorization deny, hidden from room list, search and unread) instead of waiting for `ExpireSecretRooms`, so a late or stopped scheduler can never widen access. Secret DMs live in their own `dm_key` namespace (`secret:` prefix): an ordinary DM between the same pair keeps deduplicating unchanged, and a fresh secret DM can reclaim the key once the old row is purged. Presigned attachment GET URLs are capped at the room deadline while the attachment is already bound to a secret room; URLs issued before binding (composer waiting for `attachment.ready`) keep the normal ≤60-minute TTL, so the cap is bounded, not absolute. Cleanup hard deletes room/messages/members/notes through FK cascade and queues the attachment file purge immediately, rather than soft delete plus the ordinary retention window. Expiry outranks both system-admin role and the 30-day moderation restore window: an expired secret room is denied to admins too, and a secret room soft deleted early is still purged at its original deadline. | The user asked for rooms that disappear on their own; promising secrecy we cannot deliver would be worse than promising expiry we can. Enforcing at the deadline rather than at sweep time makes the guarantee independent of scheduler health, and hard delete plus immediate file purge is what "gone" has to mean — at the cost of no moderation recovery after expiry. | 2026-09-16 |
+| DEC-057 | Admin-adjustable capacity for group calls and public meetings (`call.max_participants`, default 8, validated 2–50, Filament Settings). Verified against the deployed SFU: LiveKit `CreateRoom` does NOT update `max_participants` of an existing room (requested 2→5, actual stayed 2), so the setting is applied as a creation-time snapshot stored per room call / meeting link (`room_calls.capacity`, `meetings.capacity`, migration backfills 8 and 2 for existing dm calls). Admission checks under the existing admission locks and the SFU `CreateRoom` limit share the snapshot; direct rooms stay capped at 2. Changes apply to new calls/links only — active ones keep their snapshot (documented in the settings field helper), so no disconnects and no admission above what the SFU room actually enforces. Supersedes the fixed 8 in FR-CALL-001/FR-MEET-001. Capacity is an admission bound, not a media/network capacity promise. | Operators need headroom without a deploy; the snapshot keeps server admission and the SFU in exact agreement instead of racing a cacheable setting against an immutable room limit. | 2026-09-16 |
+| DEC-058 | Mobile browsers (notably iOS Safari) auto-zoom when an editable control with a computed font-size under 16px gains focus — the 13px chat composer made the whole conversation jump on every tap. Fix: `@media (pointer: coarse)` 16px floor on `input`/`select`/`textarea`/`contenteditable` (desktop typography untouched), viewport meta gains `interactive-widget=resizes-content` so the Android keyboard resizes the layout and keeps the composer visible; pinch zoom stays fully enabled (no `user-scalable=no`/`maximum-scale`). Regression: TC-WEB-071 sweeps visible editable controls for a ≥16px computed size under mobile emulation and asserts the viewport meta never disables zoom. | The zoom trigger is the computed font size, not the CSS source; a scoped floor fixes every editable surface (composer, login, tickets, notes, meeting lobby) without per-component rewrites and without sacrificing accessibility zoom. | 2026-09-16 |
+
+---
+
 ## 16. Changelog
 
 | Version | Date | By | Change |
 |---|---|---|---|
+| 1.14.0 | 2026-09-16 | Claude | §5.17 / FR-WEB-001 / DEC-058 / TC-WEB-071: 16px computed-font floor on `(pointer: coarse)` editable controls so mobile browsers stop auto-zooming on focus; `interactive-widget=resizes-content` viewport; pinch zoom deliberately preserved. |
+| 1.13.0 | 2026-09-16 | Claude | FR-CALL-006 / DEC-057 / TC-CALL-020..024: admin-adjustable `call.max_participants` (2–50, default 8) applied as a creation-time snapshot on room calls and meeting links; direct rooms stay at 2; active calls and existing links keep their snapshot. Supersedes the fixed 8 in FR-CALL-001/FR-MEET-001. |
+| 1.12.0 | 2026-09-16 | Claude | FR-ROOM-012 / DEC-056 / API-020 / EVT-003 / TC-ROOM-070..082 / TC-CORE-060: secret rooms with 1–30 day expiry, separate `secret:` dm_key namespace, deadline-time denial (`410 ROOM_EXPIRED`) ahead of the `ExpireSecretRooms` sweeper, presigned-URL capping, FK-cascade hard delete and client cache eviction. Expiry outranks admin role and the 30-day restore window. |
+| 1.11.0 | 2026-09-16 | Codex | TASK-WEB/CORE/QA-045, FR-CALL-007/008, DEC-059: camera opt-in, participant/screen focus, concurrent sharing, fullscreen control and louder adjustable playback. |
 | 1.6.1 | 2026-09-11 | Codex | FR-ADM-001, FR-AUTH-005, TC-ADM-079: declare password_hash as the authentication password column so Laravel admin-login rehash does not update the nonexistent password column. Reproduced during production validation. |
 | 1.10.0 | 2026-09-11 | Codex | TASK-BE/WEB/CORE/QA-044 / FR-KAN-006 / DEC-055: multiple ticket images, exclusive attachment ownership, versioned edits and Markdown toolbar/preview. Validation in docs/reviews/2026-09-11/kanban-images. |
 | 1.9.0 | 2026-09-11 | Codex | TASK-BE/WEB/CORE/QA-043 / FR-MEET-001..005 / DEC-054: deployed public meeting links, verified member names, named guests, shared media controls, expiry and creator revocation; production forced-TURN tests and private-call regression verified. |

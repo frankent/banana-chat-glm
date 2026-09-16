@@ -57,6 +57,15 @@ export interface CacheAdapter {
   saveOutbox(entries: OutboxEntry[]): Promise<void>;
   loadOutbox(): Promise<OutboxEntry[] | null>;
   clearAll(): Promise<void>;
+  /**
+   * FR-ROOM-012 — full local purge of one room (deleted, or a secret room
+   * that expired): cached messages, the rooms-list row (preview, unread,
+   * secret expiry metadata) and queued outbox entries (bodies/attachment
+   * drafts) all leave the device with the room. Optional so older adapters
+   * (mobile SQLite) keep compiling; callers fall back to leaving stale rows
+   * until the next saveRooms overwrite.
+   */
+  deleteRoom?(roomId: string): Promise<void>;
 }
 
 /**
@@ -140,6 +149,19 @@ export class MemoryCacheAdapter implements CacheAdapter {
       return null;
     }
     return (this.store.get(this.k(`msg:${roomId}`)) as Message[] | undefined) ?? null;
+  }
+
+  async deleteRoom(roomId: string): Promise<void> {
+    await this.guard.check();
+    this.store.delete(this.k(`msg:${roomId}`));
+    const rooms = this.store.get(this.k('rooms')) as RoomListItem[] | undefined;
+    if (rooms !== undefined) {
+      this.store.set(this.k('rooms'), rooms.filter((item) => item.room.id !== roomId));
+    }
+    const outbox = this.store.get(this.k('outbox')) as OutboxEntry[] | undefined;
+    if (outbox !== undefined) {
+      this.store.set(this.k('outbox'), outbox.filter((entry) => entry.room_id !== roomId));
+    }
   }
 
   async saveOutbox(entries: OutboxEntry[]): Promise<void> {

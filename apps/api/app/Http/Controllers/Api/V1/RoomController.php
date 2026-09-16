@@ -68,6 +68,7 @@ class RoomController extends Controller
             ->whereNull('room_members.left_at')
             ->join('rooms', 'rooms.id', '=', 'room_members.room_id')
             ->whereNull('rooms.deleted_at')
+            ->where(fn ($q) => $q->where('rooms.is_secret', false)->orWhere('rooms.secret_expires_at', '>', now()))
             ->orderByDesc('rooms.last_message_at')
             ->select([
                 'rooms.*',
@@ -108,19 +109,28 @@ class RoomController extends Controller
             'description' => ['nullable', 'string', 'max:500'],
             'member_ids' => ['nullable', 'array', 'max:499'],
             'member_ids.*' => ['ulid'],
+            // FR-ROOM-012 — secret room opt-in; expiry 1..30 days from creation
+            'secret' => ['nullable', 'boolean'],
+            'expiry_days' => [
+                'nullable', 'integer', 'min:1', 'max:30',
+                'required_if:secret,true',
+                'prohibited_unless:secret,true',
+            ],
         ]);
 
         /** @var User $user */
         $user = $request->user();
+        $expiryDays = ($data['secret'] ?? false) ? (int) $data['expiry_days'] : null;
 
         if ($data['type'] === 'dm') {
-            [$room, $created] = $action->createDm($user, (string) $data['user_id']);
+            [$room, $created] = $action->createDm($user, (string) $data['user_id'], $expiryDays);
         } else {
             [$room, $created] = $action->createGroup(
                 $user,
                 (string) $data['name'],
                 $data['description'] ?? null,
                 $data['member_ids'] ?? [],
+                $expiryDays,
             );
         }
 
@@ -157,6 +167,8 @@ class RoomController extends Controller
                     'last_seq' => $room->last_seq,
                     'last_message_at' => $room->last_message_at?->toIso8601String(),
                     'created_at' => $room->created_at?->toIso8601String(),
+                    'is_secret' => $room->isSecret(),
+                    'secret_expires_at' => $room->secret_expires_at?->toIso8601String(),
                 ],
                 'my_role' => $membership->role->value,
                 'my_last_read_seq' => $membership->last_read_seq,
@@ -251,7 +263,7 @@ class RoomController extends Controller
             'purge_after' => now()->addDays($this->settings->int('room.deleted_purge_days')),
         ])->save();
 
-        broadcast(new RoomDeleted($room, $memberIds));
+        broadcast(RoomDeleted::forRoom($room, $memberIds));
         $this->audit->log('room.deleted', actor: $user, targetType: 'room', targetId: $room->id);
 
         return response()->noContent();
@@ -465,7 +477,7 @@ class RoomController extends Controller
                 'deleted_at' => now(),
                 'purge_after' => now()->addDays($this->settings->int('room.deleted_purge_days')),
             ])->save();
-            broadcast(new RoomDeleted($room, [$user->id]));
+            broadcast(RoomDeleted::forRoom($room, [$user->id]));
             $this->audit->log('room.deleted', actor: $user, targetType: 'room', targetId: $room->id, context: ['reason' => 'last_member_left']);
 
             return response()->noContent();
@@ -613,6 +625,10 @@ class RoomController extends Controller
                     'member_count' => (int) $row->member_count,
                     'last_message_at' => $row->last_message_at !== null
                         ? Carbon::parse($row->last_message_at)->toIso8601String()
+                        : null,
+                    'is_secret' => (bool) ($row->is_secret ?? false),
+                    'secret_expires_at' => $row->secret_expires_at !== null
+                        ? Carbon::parse($row->secret_expires_at)->toIso8601String()
                         : null,
                 ],
                 'last_message' => $lastMessage !== null ? [

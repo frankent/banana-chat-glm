@@ -169,6 +169,13 @@ components:
             last_seq: { type: integer }
             member_count: { type: integer }
             last_message_at: { type: [string, 'null'] }
+            is_secret:
+              type: boolean
+              description: FR-ROOM-012 — secret (auto-expiring) room
+            secret_expires_at:
+              type: [string, 'null']
+              format: date-time
+              description: expiry instant; every room-scoped access returns 410 ROOM_EXPIRED from this moment
         my_role: { type: string, enum: [owner, admin, member] }
         other_user: { $ref: '#/components/schemas/UserStub' }
         last_message:
@@ -669,7 +676,7 @@ paths:
                 type: array
                 items: { $ref: '#/components/schemas/RoomListItem' }
     post:
-      summary: API-021 create dm or group
+      summary: API-021 create dm or group (secret variant: FR-ROOM-012)
       parameters: [{ $ref: '#/components/parameters/workspaceSlug' }]
       requestBody:
         content:
@@ -681,6 +688,8 @@ paths:
                   properties:
                     type: { type: string, enum: [dm] }
                     user_id: { type: string }
+                    secret: { type: boolean, description: opt-in; requires expiry_days }
+                    expiry_days: { type: integer, minimum: 1, maximum: 30, description: days from creation; required iff secret=true, prohibited otherwise }
                 - type: object
                   required: [type, name, member_ids]
                   properties:
@@ -688,9 +697,26 @@ paths:
                     name: { type: string }
                     member_ids: { type: array, items: { type: string } }
                     description: { type: string }
+                    secret: { type: boolean }
+                    expiry_days: { type: integer, minimum: 1, maximum: 30 }
       responses:
         '201': {description: 'created'}
+        '200': {description: 'existing dm reused (dm_key dedupe; secret DMs dedupe in a separate namespace)'}
         '422': {description: 'ROOM_DM_SELF / ROOM_FULL / VALIDATION_FAILED'}
+  /rooms/{roomId}/expired:
+    parameters:
+      - { name: roomId, in: path, required: true, schema: { type: string } }
+    get:
+      summary: (Documentation-only) ROOM_EXPIRED semantics
+      description: >
+        Not a real route. Every room-scoped endpoint (detail, members, messages,
+        read, read-status, notes, pins, typing, calls, notifications settings)
+        returns 410 `{error:{code:ROOM_EXPIRED, details:{expires_at}}}` once a
+        secret room passes secret_expires_at — before the scheduler purges the
+        rows. Direct attachment file URLs return 404; presigned GET TTLs are
+        capped at the deadline once the attachment is bound (FR-ROOM-012).
+      responses:
+        '410': {description: 'ROOM_EXPIRED'}
   /rooms/{roomId}:
     parameters:
       - { name: roomId, in: path, required: true, schema: { type: string } }

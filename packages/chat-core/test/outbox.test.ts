@@ -269,3 +269,38 @@ it('TC-MSG-060 preserves reply target and attachments across restart and retry',
   expect(restored.all()[0]?.attachments[0]?.attachment_id).toBe('video');
   await restored.dispose(); await outbox.dispose();
 });
+
+describe('FR-ROOM-012 — room eviction drops queued bodies (TC-ROOM-078 client half)', () => {
+  it('removeRoom drops entries of that room from memory and persistence, keeps other rooms', async () => {
+    const { cache, outbox } = makeOutbox();
+    await outbox.enqueue({ roomId: 'secret-1', workspaceId: 'ws-1', body: 'burn after expiry' });
+    await outbox.enqueue({ roomId: 'plain-1', workspaceId: 'ws-1', body: 'keep me' });
+
+    await outbox.removeRoom('secret-1');
+
+    expect(outbox.all().map((e) => e.room_id)).toEqual(['plain-1']);
+    const persisted = await cache.loadOutbox();
+    expect(persisted?.map((e) => e.room_id)).toEqual(['plain-1']);
+    await outbox.dispose();
+  });
+
+  it('an in-flight send for a removed room does not repersist its body', async () => {
+    let releaseSend: (() => void) | null = null;
+    const sender: OutboxSendFn = () => new Promise((resolve) => {
+      releaseSend = () => resolve({ ok: false, retryable: true, error: 'ROOM_EXPIRED' });
+    });
+    const { cache, outbox } = makeOutbox({ sender });
+    await outbox.enqueue({ roomId: 'secret-1', workspaceId: 'ws-1', body: 'in flight when the room died' });
+    outbox.setOnline(true);
+    await vi.waitFor(() => expect(outbox.get(outbox.all()[0]!.id)?.status).toBe('sending'));
+
+    await outbox.removeRoom('secret-1');
+    releaseSend!();
+    await vi.advanceTimersByTimeAsync(0);
+
+    const persisted = await cache.loadOutbox();
+    expect(persisted ?? []).toEqual([]);
+    expect(outbox.all()).toEqual([]);
+    await outbox.dispose();
+  });
+});

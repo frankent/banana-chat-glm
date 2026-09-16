@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Media\AttachmentSerializer;
+use App\Domain\Media\SecretAttachmentExpiry;
 use App\Domain\Media\UploadService;
 use App\Enums\AttachmentStatus;
 use App\Exceptions\ApiException;
@@ -86,6 +87,11 @@ class UploadController extends Controller
     {
         $attachment = $this->findOrFail($attachmentId);
 
+        // FR-ROOM-012 — attachments of an expired secret room stop resolving
+        if (SecretAttachmentExpiry::boundToExpiredRoom($attachment)) {
+            throw ApiException::roomExpired();
+        }
+
         return response()->json([
             'data' => ['attachment' => $this->serializer->toArray($attachment)],
         ]);
@@ -118,6 +124,11 @@ class UploadController extends Controller
     public function file(Request $request, string $attachmentId, string $variant): StreamedResponse
     {
         $attachment = Attachment::withoutGlobalScopes()->findOrFail($attachmentId);
+
+        // FR-ROOM-012 — direct (signed) URLs die with the room; 404, no leak
+        if (SecretAttachmentExpiry::boundToExpiredRoom($attachment)) {
+            abort(404);
+        }
 
         $key = $variant === 'original'
             ? $attachment->storage_key

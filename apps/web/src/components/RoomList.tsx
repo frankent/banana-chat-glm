@@ -1,5 +1,6 @@
 import { useRooms } from '../hooks/useRooms';
 import type { RoomListItem } from '@banana-chat/shared';
+import { secretExpiryShort } from '@banana-chat/chat-core';
 import { NavLink } from 'react-router-dom';
 import { Avatar } from './Visual';
 import { NewRoomDialog } from './NewRoomDialog';
@@ -12,6 +13,8 @@ function roomTitle(item: RoomListItem): string {
 }
 
 function RoomRow({ item }: { item: RoomListItem }) {
+  // FR-ROOM-012 — remaining lifetime of a live secret room (null otherwise)
+  const secretBadge = secretExpiryShort(item.room);
   return (
     <NavLink
       to={`/rooms/${item.room.id}`}
@@ -30,6 +33,15 @@ function RoomRow({ item }: { item: RoomListItem }) {
         )}
         </span>
       </span>
+      {secretBadge !== null && (
+        <span
+          className="ml-2 shrink-0 rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-600"
+          title="Secret room — auto-deletes at expiry"
+          data-testid="secret-room-badge"
+        >
+          {secretBadge}
+        </span>
+      )}
       {item.unread_count > 0 && (
         <span className="ml-2 shrink-0 rounded-full bg-yellow-400 px-2 py-0.5 text-xs font-bold text-slate-900">
           {item.unread_count > 99 ? '99+' : item.unread_count}

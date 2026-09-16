@@ -214,3 +214,25 @@ h1,h2,h3 { font-family:Manrope,'DM Sans',system-ui,sans-serif; }
 .bc-ticket-image small {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .bc-ticket-image span {font-size:11px;}.bc-ticket-image [role=alert] {color:#a63b32;}
 .bc-ticket-image>button {font-size:12px;align-self:flex-start;}.bc-ticket-image-grid>button {min-width:0;}
+
+/* DEC-058 / TC-WEB-071: mobile browsers (notably iOS Safari) auto-zoom the page when an
+   editable control with a computed font-size under 16px gets focus — the chat composer
+   (13px) made the whole conversation jump on every tap. Force a 16px floor on
+   touch-primary devices only, so the desktop typography above stays untouched.
+   !important is required: per-component sizes (.bc-compose-box textarea 13px, login
+   inputs 14px, ticket drawer 12px, note/board inputs, meeting lobby) load from several
+   stylesheets after this one. Pinch zoom remains available; the viewport meta never
+   disables user scaling. Excludes non-textual controls that never trigger the zoom. */
+@media (pointer: coarse) {
+  input:where(:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]):not([type="image"]):not([type="hidden"])),
+  select,
+  textarea,
+  /* Any editable host, not only contenteditable="true": the bare attribute and
+     `plaintext-only` are equally editable and equally zoom-triggering. */
+  [contenteditable]:not([contenteditable="false"]) { font-size: 16px !important; }
+
+  /* The floor lifts this box from 11px to 16px; its fixed 65px width was sized
+     for the smaller text and would clip a three-digit lane limit. Widen the
+     control rather than exempting it — it genuinely triggers the zoom. */
+  .bc-lane-editor input[type=number] { width: auto; min-width: 84px; }
+}

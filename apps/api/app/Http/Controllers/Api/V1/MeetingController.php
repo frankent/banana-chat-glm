@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Calls\CallCapacity;
 use App\Domain\Calls\MeetingService;
 use App\Enums\UserStatus;
 use App\Http\Controllers\Controller;
@@ -13,7 +14,7 @@ use Illuminate\Support\Facades\Auth;
 
 class MeetingController extends Controller
 {
-    public function __construct(private MeetingService $meetings, private WorkspaceContext $context) {}
+    public function __construct(private MeetingService $meetings, private WorkspaceContext $context, private CallCapacity $capacity) {}
 
     private function enabled(): void
     {
@@ -52,7 +53,8 @@ class MeetingController extends Controller
     {
         $this->enabled();
         $d = $r->validate(['title' => ['required', 'string', 'max:120'], 'expires_in_hours' => ['sometimes', 'integer', 'min:1', 'max:168']]);
-        $m = Meeting::create(['workspace_id' => $this->context->id(), 'created_by' => $r->user()->id, 'title' => $d['title'], 'code' => bin2hex(random_bytes(32)), 'expires_at' => now()->addHours($d['expires_in_hours'] ?? 168)]);
+        // FR-CALL-006 / DEC-057: the link snapshots the live capacity at creation.
+        $m = Meeting::create(['workspace_id' => $this->context->id(), 'created_by' => $r->user()->id, 'title' => $d['title'], 'code' => bin2hex(random_bytes(32)), 'expires_at' => now()->addHours($d['expires_in_hours'] ?? 168), 'capacity' => $this->capacity->group()]);
 
         return response()->json(['data' => $this->meetings->summary($m)], 201);
     }
@@ -70,7 +72,7 @@ class MeetingController extends Controller
         $u = $this->identity($r);
         $m = $this->find($code);
 
-        return response()->json(['data' => ['title' => $m->title, 'expires_at' => $m->expires_at, 'capacity' => config('calls.max_participants'), 'identity' => $u ? ['name' => $u->display_name, 'member' => true] : null]])->header('Cache-Control', 'no-store');
+        return response()->json(['data' => ['title' => $m->title, 'expires_at' => $m->expires_at, 'capacity' => $m->capacity, 'identity' => $u ? ['name' => $u->display_name, 'member' => true] : null]])->header('Cache-Control', 'no-store');
     }
 
     public function join(Request $r, string $code)

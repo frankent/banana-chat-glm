@@ -1,5 +1,6 @@
 <?php
 
+use App\Jobs\ExpireSecretRooms;
 use App\Jobs\NotifyDueTickets;
 use App\Jobs\PurgeDeletedAiConversations;
 use App\Jobs\PurgeExpiredUploads;
@@ -34,3 +35,7 @@ Schedule::call(fn () => app()->call([new ReconcileCalls, 'handle']))->name('call
 
 // FR-MEET-004: public meeting expiry and guest/member revocation.
 Schedule::call(fn () => app()->call([new ReconcileMeetings, 'handle']))->name('meetings:reconcile')->everyTenSeconds()->onOneServer()->withoutOverlapping();
+
+// FR-ROOM-012 / DEC-056 — purge expired secret rooms (access already denies
+// at secret_expires_at; this reclaims rows, messages and upload objects).
+Schedule::job(new ExpireSecretRooms)->everyMinute()->onOneServer()->withoutOverlapping();

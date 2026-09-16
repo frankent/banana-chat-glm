@@ -22,6 +22,12 @@ class RoomPolicy
 
     public function membership(Room $room, User $user): ?RoomMember
     {
+        // FR-ROOM-012 — an expired secret room denies every member equally,
+        // before any read/write/media/call path proceeds (410 ROOM_EXPIRED).
+        if ($room->isExpired()) {
+            throw ApiException::roomExpired($room->secret_expires_at?->toIso8601String());
+        }
+
         return RoomMember::query()
             ->where('room_id', $room->id)
             ->where('user_id', $user->id)

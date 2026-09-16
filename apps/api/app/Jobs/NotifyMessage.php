@@ -47,6 +47,12 @@ class NotifyMessage implements ShouldQueue
         }
 
         $room = $message->room()->firstOrFail();
+
+        // FR-ROOM-012 — expired secret rooms never notify
+        if ($room->deleted_at !== null || $room->isExpired()) {
+            return;
+        }
+
         $senderUser = $message->sender()->first();
 
         if ($senderUser === null) {

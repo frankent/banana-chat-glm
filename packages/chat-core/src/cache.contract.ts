@@ -162,6 +162,30 @@ export function runCacheAdapterContractTests(
       expect(loaded?.[0]?.status).toBe('pending');
     });
 
+    // FR-ROOM-012 — optional per-room eviction (secret rooms); exercised
+    // only when the adapter implements it (older mobile adapters skip).
+    it('TC-CORE-060 deleteRoom fully evicts one room — messages, list row and outbox entries', async () => {
+      const adapter = await make();
+      if (typeof adapter.deleteRoom !== 'function') {
+        return;
+      }
+      await adapter.saveRooms([roomItem('r1'), roomItem('r2')]);
+      await adapter.saveMessages('r1', [msg(1, 'r1'), msg(2, 'r1')]);
+      await adapter.saveMessages('r2', [msg(1, 'r2')]);
+      await adapter.saveOutbox([{ ...outboxEntry(1), room_id: 'r1' }, { ...outboxEntry(2), room_id: 'r2' }]);
+
+      await adapter.deleteRoom('r1');
+
+      // messages, rooms-list row and queued bodies/attachments are gone…
+      await expect(adapter.loadMessages('r1')).resolves.toBeNull();
+      const rooms = await adapter.loadRooms();
+      expect(rooms?.map((r) => r.room.id)).toEqual(['r2']);
+      const outbox = await adapter.loadOutbox();
+      expect(outbox?.map((e) => e.room_id)).toEqual(['r2']);
+      // …while the neighbouring room is untouched
+      await expect(adapter.loadMessages('r2')).resolves.toHaveLength(1);
+    });
+
     it('returns null when nothing was written', async () => {
       const adapter = await make();
       await expect(adapter.loadRooms()).resolves.toBeNull();

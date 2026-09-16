@@ -230,8 +230,8 @@ function MeetingLobby({ code }: { code: string }) {
                 {busy ? "Connecting…" : "Join meeting"}
               </button>
               <p className="bc-meeting-hint">
-                Your browser will ask for camera and microphone access. You can
-                turn either off in the meeting.
+                Your microphone starts on. Your camera starts off; you can turn
+                it on using the meeting controls.
               </p>
             </form>
           )}

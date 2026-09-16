@@ -30,6 +30,7 @@ class WorkspaceSummaryBuilder
                 ->where('room_members.workspace_id', $membership->workspace_id)
                 ->whereNull('room_members.left_at')
                 ->whereNull('rooms.deleted_at')
+                ->where(fn ($q) => $q->where('rooms.is_secret', false)->orWhere('rooms.secret_expires_at', '>', now())) // FR-ROOM-012
                 ->whereColumn('room_members.last_read_seq', '<', 'rooms.last_user_seq')
                 ->whereNotExists(function ($query) use ($membership) {
                     $query->selectRaw('1')->from('room_notification_settings')
@@ -48,6 +49,8 @@ class WorkspaceSummaryBuilder
                 ->where('room_members.user_id', $membership->user_id)
                 ->where('room_members.workspace_id', $membership->workspace_id)
                 ->whereNull('room_members.left_at')
+                ->whereNull('rooms.deleted_at')
+                ->where(fn ($q) => $q->where('rooms.is_secret', false)->orWhere('rooms.secret_expires_at', '>', now())) // FR-ROOM-012
                 ->where('message_mentions.user_id', $membership->user_id)
                 ->whereNull('messages.deleted_at')
                 ->whereColumn('messages.seq', '>', 'room_members.last_read_seq')

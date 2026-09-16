@@ -297,6 +297,7 @@ class MessageController extends Controller
             ->whereNull('room_members.left_at')
             ->join('rooms', 'rooms.id', '=', 'room_members.room_id')
             ->whereNull('rooms.deleted_at')
+            ->where(fn ($q) => $q->where('rooms.is_secret', false)->orWhere('rooms.secret_expires_at', '>', now())) // FR-ROOM-012
             ->whereColumn('room_members.last_read_seq', '<', 'rooms.last_user_seq')
             ->whereNotExists(function ($q) use ($userId): void {
                 $q->selectRaw('1')

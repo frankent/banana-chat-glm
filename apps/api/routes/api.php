@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\V1\SearchController;
 use App\Http\Controllers\Api\V1\UploadController;
 use App\Http\Controllers\Api\V1\WorkspaceController;
 use App\Http\Controllers\SetupController;
+use App\Http\Middleware\DenyExpiredSecretAttachment;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
 
@@ -166,10 +167,18 @@ Route::prefix('v1')->group(function (): void {
 
     // Local-disk media plumbing — signature-checked, no bearer/ws headers
     // (same trust model as an S3 presigned URL; see MediaUrls).
-    Route::prefix('v1')->middleware('signed')->group(function (): void {
+    Route::prefix('v1')->group(function (): void {
         Route::put('/uploads/{attachment}/binary', [UploadController::class, 'binary'])
+            ->middleware('signed')
             ->whereUlid('attachment')->name('uploads.binary');
+
+        // FR-ROOM-012 — the secret-room deadline is checked BEFORE `signed` so
+        // an expired secret attachment answers 404 ("no leak") instead of the
+        // 403 that stale signature validation would emit first. Ordering is
+        // load-bearing: group middleware always runs ahead of route middleware,
+        // so `signed` is declared per-route here rather than on the group.
         Route::get('/attachments/{attachment}/file/{variant}', [UploadController::class, 'file'])
+            ->middleware([DenyExpiredSecretAttachment::class, 'signed'])
             ->whereUlid('attachment')
             ->whereIn('variant', ['original', 'thumb_sm', 'thumb_md', 'poster'])
             ->name('attachments.file');
