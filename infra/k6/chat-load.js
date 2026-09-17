@@ -177,6 +177,59 @@ export function race(data) {
   }
 }
 
+/**
+ * k6 exits 99 on ANY breached threshold and the default summary only marks the
+ * offender with a `✗` buried in the metric table — which is unreadable unless you
+ * can open the Actions log, and job logs need repo-admin rights. Six of the first
+ * ten nightlies failed and none of them said which threshold went, so this writes
+ * the verdict somewhere the workflow can publish without auth (see load-test.yml,
+ * which appends k6-verdict.md to $GITHUB_STEP_SUMMARY).
+ *
+ * Reported per threshold: the expression, pass/fail, and the ACTUAL value — a
+ * bare "write_latency failed" does not distinguish 301ms from 3000ms, and the two
+ * call for completely different fixes.
+ */
+export function handleSummary(data) {
+  const rows = [];
+  let failed = 0;
+
+  for (const [metric, detail] of Object.entries(data.metrics)) {
+    if (!detail.thresholds) continue;
+    for (const [expression, result] of Object.entries(detail.thresholds)) {
+      // k6 reports `{ ok: bool }`; older builds used `{ passes, fails }`
+      const ok = result.ok !== undefined ? result.ok : result.fails === 0;
+      if (!ok) failed += 1;
+      // pick the statistic the expression actually asserts on
+      const stat = expression.includes('p(95)')
+        ? `p95=${(detail.values['p(95)'] ?? 0).toFixed(1)}ms`
+        : expression.includes('rate')
+          ? `rate=${((detail.values.rate ?? 0) * 100).toFixed(2)}%`
+          : `count=${detail.values.count ?? 0}`;
+      rows.push(`| ${ok ? '✅' : '❌'} | \`${metric}\` | \`${expression}\` | ${stat} |`);
+    }
+  }
+
+  const verdict = [
+    `## k6 — NFR-PERF thresholds: ${failed === 0 ? 'PASS' : `FAIL (${failed} breached)`}`,
+    '',
+    `TARGET=${TARGET} DURATION=${DURATION} VUS=${VUS} RACE_VUS=${RACE_VUS}`,
+    '',
+    '| | metric | threshold | actual |',
+    '| --- | --- | --- | --- |',
+    ...rows,
+    '',
+    `iterations=${data.metrics.iterations?.values?.count ?? 0} · ` +
+      `http_reqs=${data.metrics.http_reqs?.values?.count ?? 0}`,
+    '',
+  ].join('\n');
+
+  return {
+    stdout: `\n${verdict}\n`,
+    'k6-verdict.md': verdict,
+    'k6-summary.json': JSON.stringify(data, null, 2),
+  };
+}
+
 export function teardown(data) {
   // FR-MSG-001 audit — the 50 race messages must be one unique, gapless seq run
   const auth = { Authorization: `Bearer ${tokenFor(data, 1)}`, ...wsHeaders };

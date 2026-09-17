@@ -105,6 +105,29 @@ jobs:
           DURATION: ${{ github.event.inputs.duration || '2m' }}
           VUS: ${{ github.event.inputs.vus || '8' }}
           RACE_VUS: ${{ github.event.inputs.race_vus || '50' }}
+      # Publish the verdict where it can be read WITHOUT repo-admin rights: job
+      # logs and artifacts both need auth to download, and that is what made the
+      # earlier nightly failures undiagnosable — exit 99 with no indication of
+      # which of the five thresholds went. The step summary renders on the run
+      # page itself. `always()`: a passing run's numbers are the baseline you
+      # need to judge the next failure against.
+      - name: Publish k6 verdict
+        if: always()
+        run: |
+          if [ -f k6-verdict.md ]; then
+            cat k6-verdict.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## k6 — no verdict written (k6 died before handleSummary)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload k6 summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-summary
+          path: |
+            apps/api/k6-summary.json
+            apps/api/k6-verdict.md
+          if-no-files-found: warn
       - name: Serve log on failure
         if: failure()
         run: tail -100 serve.log
