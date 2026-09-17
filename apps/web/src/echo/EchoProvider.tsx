@@ -1,11 +1,13 @@
 import { NotificationGate } from '@banana-chat/chat-core';
+import { showDesktopNotification } from '../lib/desktop-notification';
 import { playNotificationAudio } from '../lib/notification-audio';
 import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import type { EventEnvelope } from '@banana-chat/shared';
+import { useNavigate } from 'react-router-dom';
+import type { EventEnvelope, RoomListItem } from '@banana-chat/shared';
 import { endpoints, tokenManager } from '../lib/api';
 import { evictRoom } from '../lib/room-eviction';
 import { useSession } from '../state/session';
@@ -36,6 +38,7 @@ export function useEcho(): EchoContextValue {
 export function EchoProvider({ children }: { children: ReactNode }) {
   const { status, me, currentWorkspace, logout } = useSession();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [connected, setConnected] = useState(false);
   const echoRef = useRef<Echo<'reverb'> | null>(null);
   const [instance, setInstance] = useState<Echo<'reverb'> | null>(null);
@@ -102,8 +105,38 @@ export function EchoProvider({ children }: { children: ReactNode }) {
       void queryClient.invalidateQueries({queryKey: ['notifications']});
       const data = envelope.data;
       if (!data?.id) return;
-      const focused = data.kind === 'message' && data.room_id === openRoomId() && document.visibilityState === 'visible' && document.hasFocus();
+      // `focused` gates the chime: only a message in the room you are actually
+      // looking at is "already seen". For the OS popup we want the same rule but
+      // for every kind -- a call or a mention arriving while you stare at that
+      // room does not need a popup either.
+      const lookingAtRoom = data.room_id !== null && data.room_id === openRoomId()
+        && document.visibilityState === 'visible' && document.hasFocus();
+      const focused = data.kind === 'message' && lookingAtRoom;
       if (notifications.accept(data.id, true, focused, Date.now())) playNotificationAudio();
+
+      // FR-NOTI-003 foreground branch. Rendered here rather than in a second
+      // channel.listen('.notification.alert', ...) on purpose: laravel-echo's
+      // stopListening(event) with no callback unbinds EVERY listener for that
+      // event, so a second registration is a cleanup hazard (see the note at the
+      // room-channel teardown below).
+      if (!lookingAtRoom) {
+        // ['rooms', slug, filter] -- the slug and filter are not in scope here, and
+        // endpoints.rooms() resolves to RoomListItem[] directly, so scan every
+        // cached rooms query for the id instead of reconstructing the key.
+        const room = queryClient
+          .getQueriesData<RoomListItem[]>({ queryKey: ['rooms'] })
+          .flatMap(([, list]) => list ?? [])
+          .find((r) => r.room.id === data.room_id);
+        showDesktopNotification(
+          {
+            id: data.id,
+            kind: data.kind,
+            roomName: room?.room.name ?? room?.other_user?.display_name ?? null,
+            href: data.room_id !== null ? `/rooms/${data.room_id}` : '/',
+          },
+          navigate,
+        );
+      }
     });
     const openRoomId = () => /^\/rooms\/([^/]+)/.exec(window.location.pathname)?.[1];
 
