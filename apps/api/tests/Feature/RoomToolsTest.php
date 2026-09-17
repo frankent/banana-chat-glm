@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 
 beforeEach(function () {
@@ -122,9 +123,9 @@ it('TC-NOTE-003 paginates notes without capping total number', function () {
 });
 
 it('TC-AI-102 ignores DM mentions and partial mention tokens', function () {
-    Illuminate\Support\Facades\Queue::fake([App\Jobs\GenerateRoomBotReply::class]);
+    Queue::fake([GenerateRoomBotReply::class]);
     $dm = $this->postJson('/api/v1/rooms', ['type' => 'dm', 'user_id' => $this->peer->id], $this->headers)->assertCreated()->json('data.room.id');
     $this->postJson('/api/v1/rooms/'.$dm.'/messages', ['body' => '@ai hello', 'client_message_id' => (string) Str::uuid()], $this->headers)->assertCreated();
     $this->postJson('/api/v1/rooms/'.$this->roomId.'/messages', ['body' => 'mail@ai.com @aiden', 'client_message_id' => (string) Str::uuid()], $this->headers)->assertCreated();
-    Illuminate\Support\Facades\Queue::assertNotPushed(App\Jobs\GenerateRoomBotReply::class);
+    Queue::assertNotPushed(GenerateRoomBotReply::class);
 });

@@ -4,8 +4,11 @@ use App\Domain\Media\MediaUrls;
 use App\Enums\AttachmentStatus;
 use App\Events\AttachmentProcessed;
 use App\Jobs\ProcessAttachment;
-use App\Models\{Attachment, User, Workspace};
-use Illuminate\Support\Facades\{Event, Storage};
+use App\Models\Attachment;
+use App\Models\User;
+use App\Models\Workspace;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Storage;
 
 it('TC-MEDIA-022 builds WebP thumbnails from palette images without altering originals', function (string $format) {
     Event::fake([AttachmentProcessed::class]);
