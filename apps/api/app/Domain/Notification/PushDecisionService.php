@@ -102,9 +102,19 @@ class PushDecisionService
      * @param  array{unread_rooms_count?: int, total_unread?: int}  $badge
      * @return array{title: string, body: string, data: array<string, mixed>, collapse_key: string, badge: int}
      */
-    public function payload(Message $message, Room $room, User $sender, int $badge): array
+    public function payload(Message $message, Room $room, User $sender, int $badge, ?User $recipient = null): array
     {
-        $previewInPush = $sender->notificationSetting?->preview_in_push ?? true;
+        // preview_in_push is the RECIPIENT's privacy control -- "do not put message
+        // text on my lock screen". Reading it off $sender inverted it: your own
+        // setting governed what appeared on OTHER people's screens, and never your
+        // own. NotifyPublicChatMessage.php:171 already had it right ($recipient);
+        // this is the same rule for the internal path. $recipient is nullable so the
+        // existing call signature keeps working, but callers that send a push MUST
+        // pass it -- falling back to $sender would silently restore the inversion,
+        // so the fallback is "show the preview", the safe default when unknown.
+        $previewInPush = $recipient !== null
+            ? ($recipient->notificationSetting?->preview_in_push ?? true)
+            : true;
 
         $title = $room->type === RoomType::Dm
             ? $sender->display_name

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { desktopNotificationPermission, requestDesktopNotificationPermission } from '../lib/desktop-notification';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { InAppNotification } from '@banana-chat/shared';
@@ -30,6 +31,14 @@ export function NotificationCenter() {
   });
 
   const settings = useQuery({queryKey: ['notification-settings', me?.id], queryFn: () => endpoints.me(), enabled: me !== null});
+  // TC-WEB-030 — the browser prompt must follow an explicit press, never page load,
+  // so this is deliberately a button and not an effect.
+  const [desktopPermission, setDesktopPermission] = useState<NotificationPermission | 'unsupported'>(
+    () => desktopNotificationPermission(),
+  );
+  const askDesktopPermission = async () => {
+    setDesktopPermission(await requestDesktopNotificationPermission());
+  };
   const sound = (settings.data?.settings as {notification?: {sound?: boolean}} | undefined)?.notification?.sound ?? true;
   const toggleSound = async () => {
     if (!slug) return;
@@ -127,6 +136,20 @@ export function NotificationCenter() {
           </div>
 
           <label className="flex items-center gap-2 px-2 py-2 text-sm"><input type="checkbox" checked={sound} disabled={savingSound || !settings.data} onChange={() => void toggleSound()} />Notification sound</label>
+          {desktopPermission === 'default' && (
+            <button
+              onClick={() => void askDesktopPermission()}
+              data-testid="enable-desktop-notifications"
+              className="mx-2 mb-2 rounded-lg bg-yellow-100 px-2 py-2 text-left text-sm font-medium text-slate-700 hover:bg-yellow-200"
+            >
+              Enable desktop notifications
+            </button>
+          )}
+          {desktopPermission === 'denied' && (
+            <p className="px-2 pb-2 text-xs text-slate-400">
+              Desktop notifications are blocked in your browser settings.
+            </p>
+          )}
           {soundError && <p role="alert" className="px-2 text-sm text-red-600">Could not save sound preference. Try again.</p>}
           {query.isLoading && <p className="px-2 py-3 text-sm text-slate-400">Loading…</p>}
           {!query.isLoading && notifications.length === 0 && (

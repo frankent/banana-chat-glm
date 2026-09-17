@@ -17,6 +17,7 @@ use App\Models\UserNotificationSetting;
 use App\Models\Workspace;
 use Carbon\Carbon;
 use Illuminate\Http\Client\Request as HttpRequest;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
@@ -27,8 +28,34 @@ use Illuminate\Support\Str;
  * NotifyMessage idempotency + FCM failure handling, settings APIs
  * (TC-NOTI-001..024).
  */
+/**
+ * A throwaway RSA key for signing the FCM service-account assertion in tests.
+ * Generated per process, never written to disk, never leaves the test run.
+ */
+function testServiceAccountKey(): string
+{
+    static $pem = null;
+    if ($pem === null) {
+        $res = openssl_pkey_new(['private_key_bits' => 2048, 'private_key_type' => OPENSSL_KEYTYPE_RSA]);
+        openssl_pkey_export($res, $pem);
+    }
+
+    return $pem;
+}
+
 beforeEach(function () {
-    config(['services.fcm.server_key' => 'test-key']);
+    // FCM HTTP v1: a project id plus an inline service-account JSON. The private key
+    // is a throwaway generated for tests -- FcmPushSender signs an RS256 assertion
+    // with it, and the oauth2 mint is faked below, so nothing leaves the process.
+    config([
+        'services.fcm.project_id' => 'test-project',
+        'services.fcm.credentials' => json_encode([
+            'client_email' => 'push@test-project.iam.gserviceaccount.com',
+            'private_key' => testServiceAccountKey(),
+            'token_uri' => 'https://oauth2.googleapis.com/token',
+        ]),
+    ]);
+    Cache::forget('fcm:token:'.sha1('push@test-project.iam.gserviceaccount.com'));
 
     $this->tony = User::factory()->create(['username' => 'tony']);
     $this->somchai = User::factory()->create(['username' => 'somchai']);
@@ -241,11 +268,32 @@ test('TC-NOTI-012..015 payload shapes', function () {
     $img->id = (string) Str::ulid();
     expect($service->payload($img, $this->room, $this->tony, 0)['body'])->toEndWith('📷 รูปภาพ');
 
+    // TC-NOTI-014 — preview_in_push belongs to the RECIPIENT. This assertion used to
+    // set it on $this->tony and then pass tony as the *sender*, which codified the
+    // inversion: a user's own setting governed the previews other people saw, and
+    // never their own lock screen. somchai is the one receiving here.
+    UserNotificationSetting::query()->create([
+        'user_id' => $this->somchai->id, 'preview_in_push' => false, 'sound' => true,
+    ]);
+    expect($service->payload($groupMessage, $this->room, $this->tony, 0, $this->somchai->refresh())['body'])
+        ->toContain('ข้อความใหม่');
+});
+
+test('preview_in_push is the recipient setting, not the sender one', function () {
+    $service = app(PushDecisionService::class);
+
+    // sender opts out of previews; recipient did not. The recipient's lock screen
+    // must still show the text -- the sender has no say over it.
     UserNotificationSetting::query()->create([
         'user_id' => $this->tony->id, 'preview_in_push' => false, 'sound' => true,
     ]);
-    $this->tony->refresh();
-    expect($service->payload($groupMessage, $this->room, $this->tony->refresh(), 0)['body'])->toContain('ข้อความใหม่');
+
+    $message = Message::query()->make(['type' => MessageType::Text, 'body' => 'ลับมาก', 'seq' => 9]);
+    $message->id = (string) Str::ulid();
+
+    $body = $service->payload($message, $this->room, $this->tony->refresh(), 0, $this->somchai)['body'];
+
+    expect($body)->toContain('ลับมาก')->not->toContain('ข้อความใหม่');
 });
 
 // ---- job behavior (TC-NOTI-011/016/017/018) ----
@@ -267,7 +315,12 @@ test('TC-NOTI-016 FCM UNREGISTERED deletes the token', function () {
     ]);
 
     Http::fake([
-        'fcm.googleapis.com/*' => Http::response(['failure' => 1, 'results' => [['error' => 'UNREGISTERED']]], 200),
+        'oauth2.googleapis.com/*' => Http::response(['access_token' => 'tok', 'expires_in' => 3600]),
+        // v1 reports a dead token as a real 404 with error.details[].errorCode,
+        // not a 200 carrying results[].error like the legacy API did.
+        'fcm.googleapis.com/*' => Http::response([
+            'error' => ['status' => 'NOT_FOUND', 'details' => [['errorCode' => 'UNREGISTERED']]],
+        ], 404),
     ]);
 
     (new NotifyMessage(sendMessageRaw($this, $this->tonyToken, $this->room->id, 'ping')->id))
@@ -282,7 +335,8 @@ test('TC-NOTI-017 FCM 5xx bumps push_failed_count; 5 strikes disables', function
     ]);
 
     Http::fake([
-        'fcm.googleapis.com/*' => Http::response(['error' => 'InternalError'], 500),
+        'oauth2.googleapis.com/*' => Http::response(['access_token' => 'tok', 'expires_in' => 3600]),
+        'fcm.googleapis.com/*' => Http::response(['error' => ['status' => 'INTERNAL']], 500),
     ]);
 
     // fake the queue so the deferred sync dispatch doesn't add a hidden first strike
@@ -309,7 +363,10 @@ test('TC-NOTI-018 rerunning the job sends only once per device', function () {
         'user_id' => $this->somchai->id, 'platform' => 'web', 'push_token' => 'ok-tok', 'push_provider' => 'fcm',
     ]);
 
-    Http::fake(['fcm.googleapis.com/*' => Http::response(['success' => 1], 200)]);
+    Http::fake([
+        'oauth2.googleapis.com/*' => Http::response(['access_token' => 'tok', 'expires_in' => 3600]),
+        'fcm.googleapis.com/*' => Http::response(['name' => 'projects/test-project/messages/1'], 200),
+    ]);
 
     $message = sendMessageRaw($this, $this->tonyToken, $this->room->id, 'once only');
     $job = new NotifyMessage($message->id);
@@ -317,7 +374,13 @@ test('TC-NOTI-018 rerunning the job sends only once per device', function () {
     $job->handle(app(PushDecisionService::class), app(FcmPushSender::class));
     $job->handle(app(PushDecisionService::class), app(FcmPushSender::class));
 
-    Http::assertSentCount(1);
+    // v1 makes two HTTP calls per send (oauth2 mint, then the send), and the token is
+    // cached, so assert on the number of SENDS rather than total requests.
+    $sends = collect(Http::recorded())
+        ->filter(fn ($pair) => str_contains($pair[0]->url(), 'fcm.googleapis.com'))
+        ->count();
+
+    expect($sends)->toBe(1);
 });
 
 test('a push actually goes out for an offline member with a token', function () {
@@ -325,18 +388,30 @@ test('a push actually goes out for an offline member with a token', function () 
         'user_id' => $this->somchai->id, 'platform' => 'web', 'push_token' => 'live-tok', 'push_provider' => 'fcm',
     ]);
 
-    Http::fake(['fcm.googleapis.com/*' => Http::response(['success' => 1], 200)]);
+    Http::fake([
+        'oauth2.googleapis.com/*' => Http::response(['access_token' => 'tok', 'expires_in' => 3600]),
+        'fcm.googleapis.com/*' => Http::response(['name' => 'projects/test-project/messages/1'], 200),
+    ]);
 
     (new NotifyMessage(sendMessageRaw($this, $this->tonyToken, $this->room->id, 'real push')->id))
         ->handle(app(PushDecisionService::class), app(FcmPushSender::class));
 
+    // FCM HTTP v1 wire shape: OAuth2 bearer, a single {"message": {...}} envelope
+    // with `token` (not `to`), and every `data` value a string.
     Http::assertSent(function (HttpRequest $request) {
-        $body = $request->data();
+        if (! str_contains($request->url(), 'fcm.googleapis.com')) {
+            return false;
+        }
 
-        return $request->hasHeader('Authorization', 'key=test-key')
-            && $body['to'] === 'live-tok'
-            && $body['notification']['title'] === 'Engineering'
-            && $body['data']['room_id'] === $this->room->id;
+        $m = $request->data()['message'] ?? [];
+
+        return $request->hasHeader('Authorization', 'Bearer tok')
+            && str_contains($request->url(), '/v1/projects/test-project/messages:send')
+            && $m['token'] === 'live-tok'
+            && $m['notification']['title'] === 'Engineering'
+            && $m['data']['room_id'] === $this->room->id
+            && $m['android']['notification']['channel_id'] === 'messages'
+            && $m['apns']['headers']['apns-collapse-id'] === $this->room->id;
     });
 });
 

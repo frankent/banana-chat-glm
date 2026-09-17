@@ -136,7 +136,7 @@ class NotifyMessage implements ShouldQueue
                 Redis::connection()->expire($sentKey, 86_400);
 
                 try {
-                    $sender->send($device, $decision->payload($message, $room, $senderUser, $badge));
+                    $sender->send($device, $decision->payload($message, $room, $senderUser, $badge, $recipient));
                 } catch (Throwable $e) {
                     // drop this device from the set so the retry re-attempts it
                     Redis::connection()->srem($sentKey, $device->id);
