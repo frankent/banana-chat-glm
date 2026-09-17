@@ -38,8 +38,14 @@ return [
     ],
 
     // FR-NOTI-002 — empty key = stub mode (pushes logged, not delivered)
+    // FR-NOTI-002/003 — FCM HTTP v1 (Appendix A). The old FCM_SERVER_KEY was a
+    // legacy-API credential for an endpoint Google decommissioned; v1 authenticates
+    // with a service account instead. Absent credentials => FcmPushSender logs a
+    // warning and sends nothing, so dev/CI need no secrets.
     'fcm' => [
-        'server_key' => env('FCM_SERVER_KEY', ''),
+        'project_id' => env('FCM_PROJECT_ID', ''),
+        // Path to the service-account JSON, or the JSON itself.
+        'credentials' => env('FCM_CREDENTIALS_JSON', ''),
     ],
 
     // FR-MEDIA-006 — clamd (TASK-INF-010 container, or 127.0.0.1 on host dev).
