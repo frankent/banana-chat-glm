@@ -259,29 +259,45 @@ class OpenAiCompatibleProvider
     }
 
     /**
-     * SSRF guard (FR-AI-019): base_url must be https and its host must
-     * not resolve to a private range unless explicitly allowed.
+     * SSRF guard (FR-AI-019, amended by DEC-075): base_url must be http(s) and its
+     * host must not resolve to a private range unless explicitly allowed.
+     *
+     * http is accepted so an operator can point at a provider on their own network
+     * that terminates no TLS (a self-hosted gateway, an on-prem appliance). The
+     * scheme test is now environment-INDEPENDENT: it previously only ran under
+     * `production`, so outside production ANY scheme passed this guard — file://,
+     * gopher:// and friends reached Guzzle. Restricting it to exactly http/https in
+     * every environment is strictly tighter there, and the private-range lookup
+     * below (the part that actually stops SSRF) is unchanged and still applies to
+     * http and https alike.
      */
     private function guardHost(): void
     {
         $host = (string) parse_url($this->config->base_url, PHP_URL_HOST);
         $scheme = (string) parse_url($this->config->base_url, PHP_URL_SCHEME);
 
-        if ($host === '' || (! in_array($scheme, ['https'], true) && app()->environment('production'))) {
-            throw new AiProviderException('AI_PROVIDER_ERROR', 'base_url must be a valid https host');
+        if ($host === '' || ! in_array(strtolower($scheme), ['http', 'https'], true)) {
+            throw new AiProviderException('AI_PROVIDER_ERROR', 'base_url must be an http:// or https:// URL with a valid host');
         }
 
         if (config('ai.allow_private_hosts', false)) {
             return;
         }
 
-        $ip = gethostbyname($host);
-        if ($ip === $host) { // resolution failed — let the request surface the error
+        // An IP literal must be checked directly. gethostbyname() returns its input
+        // unchanged for one, which used to hit the "resolution failed" branch below and
+        // skip the private-range test altogether — so `http://10.0.0.1/v1` walked
+        // straight past this guard. Harmless while the scheme test kept production on
+        // https; with http allowed (DEC-075) it is a plaintext SSRF primitive, so the
+        // literal case is now resolved first and never takes the bail-out.
+        $literal = filter_var($host, FILTER_VALIDATE_IP) !== false;
+        $ip = $literal ? $host : gethostbyname($host);
+        if (! $literal && $ip === $host) { // resolution failed — let the request surface the error
             return;
         }
 
         $private = filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false;
-        if ($private && ! in_array($ip, ['127.0.0.1', '::1'])) {
+        if ($private && ! in_array($ip, ['127.0.0.1', '::1'], true)) {
             throw new AiProviderException('AI_PROVIDER_ERROR', "host resolves to private address {$ip}");
         }
     }

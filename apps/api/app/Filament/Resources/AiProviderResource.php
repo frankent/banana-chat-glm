@@ -64,14 +64,22 @@ class AiProviderResource extends Resource
                             ->label('Base URL')
                             ->required()
                             ->url()
-                            ->startsWith('https://')
+                            // DEC-075: http:// is accepted for providers on the operator's own
+                            // network. The API key still travels in cleartext over http, and the
+                            // private-range SSRF check in OpenAiCompatibleProvider still applies.
+                            ->rule(fn () => function (string $attribute, $value, \Closure $fail): void {
+                                $scheme = strtolower((string) parse_url((string) $value, PHP_URL_SCHEME));
+                                if (! in_array($scheme, ['http', 'https'], true)) {
+                                    $fail('Base URL ต้องขึ้นต้นด้วย http:// หรือ https://');
+                                }
+                            })
                             ->rule(fn () => function (string $attribute, $value, \Closure $fail): void {
                                 if (str_ends_with(rtrim((string) $value, '/'), '/chat/completions')) {
                                     $fail('ระบบจะเรียก {base}/chat/completions เอง — ตัด "/chat/completions" ท้าย URL ออก');
                                 }
                             })
                             ->formatStateUsing(fn ($state) => rtrim((string) $state, '/'))
-                            ->helperText('เช่น https://api.z.ai/api/coding/paas/v4'),
+                            ->helperText('เช่น https://api.z.ai/api/coding/paas/v4 — ใช้ http:// ได้สำหรับ provider ในเครือข่ายภายใน (API key จะถูกส่งแบบไม่เข้ารหัส)'),
                         TextInput::make('api_key')
                             ->label('API Key')
                             ->password()->revealable()
