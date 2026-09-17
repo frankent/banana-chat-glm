@@ -144,40 +144,24 @@ AWS_ENDPOINT=https://chat.example.com
 
 **`VITE_REVERB_*` and `REVERB_APP_KEY` are nginx build args.** Changing them later means `up -d --build nginx`, not a restart.
 
-## 4. MinIO images are no longer on Docker Hub
+## 4. A compose wrapper
 
-`docker-compose.prod.yml` still references `minio/minio` and `minio/mc`. Both now fail:
-
-```
-pull access denied for minio/minio, repository does not exist or may require 'docker login'
-```
-
-MinIO publishes on **quay.io**. Add an overlay (and include it in every later compose call):
-
-```bash
-cat > infra/docker-compose.minio-quay.yml <<'YML'
-services:
-  minio:
-    image: quay.io/minio/minio:latest
-  minio-init:
-    image: quay.io/minio/mc:latest
-YML
-```
-
-A small wrapper keeps the `-f` list consistent — every command after this uses `./dc`:
+The prod stack always needs `--env-file infra/.env -f infra/docker-compose.prod.yml`. A one-line wrapper keeps that consistent — every command below uses `./dc`:
 
 ```bash
 cat > dc <<'SH'
 #!/bin/bash
 cd "$(dirname "$0")"
-exec docker compose --env-file infra/.env \
-  -f infra/docker-compose.prod.yml \
-  -f infra/docker-compose.minio-quay.yml "$@"
+exec docker compose --env-file infra/.env -f infra/docker-compose.prod.yml "$@"
 SH
 chmod +x dc
 ```
 
+Add further `-f` overlays to that one line if you need host-specific overrides (a non-default LiveKit port, say) rather than editing the tracked compose file.
+
 If your user isn't in the `docker` group: `sudo usermod -aG docker "$USER"` and open a new shell. Detached builds cannot answer a `sudo` password prompt.
+
+> **MinIO note:** the compose files pull MinIO from `quay.io`, not Docker Hub. Upstream removed `minio/minio` and `minio/mc` from Docker Hub — an older checkout fails with `pull access denied for minio/minio, repository does not exist`.
 
 ## 5. Build and start
 
@@ -339,7 +323,7 @@ Changing `VITE_*` or `REVERB_APP_KEY` requires `--build` (they are nginx build a
 | Stack unrecoverable after first `up` | a bind-mount path didn't exist, so Docker made a root-owned directory — `down -v` and redo step 2 |
 | Every attachment 403s | `AWS_ENDPOINT` has a `/storage` path — must be host root |
 | WebSockets fail only for remote users | `VITE_REVERB_HOST` still `localhost`; rebuild nginx |
-| `pull access denied for minio/minio` | Docker Hub images are gone — add the quay.io overlay (step 4) |
+| `pull access denied for minio/minio` | checkout predates the quay.io switch — `git pull`, or repoint the two `image:` lines in `infra/docker-compose*.yml` |
 | `/rtc` handshake returns 500 | the API answered non-2xx/401/403 — usually `CALLS_ENABLED=false` or an empty `LIVEKIT_*` **in the container** |
 | Calls connect then drop on reconnect | media tokens carry a hard-coded **60-second** `exp`; a reconnect later than that is refused and the client ends the call |
 | A setting change has no effect on workers | `worker`/`scheduler`/`reverb` cache env at boot — restart them |
