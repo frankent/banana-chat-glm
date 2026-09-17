@@ -319,6 +319,7 @@ Changing `VITE_*` or `REVERB_APP_KEY` requires `--build` (they are nginx build a
 
 | Symptom | Cause |
 |---|---|
+| `api-assets` / `minio-init` show `Exited (0)` in `docker ps -a` | **Not a fault.** Both are one-shot jobs (`restart: "no"`): one copies Filament assets into a volume for nginx, the other creates the `orgchat` bucket. `Exited (0)` is their success state — `api` won't even start until `api-assets` has completed. Only a **non-zero** exit code means something failed. Plain `docker ps` (no `-a`) hides finished jobs. |
 | Wizard 500s with an empty log | `apps/api/.env` is root-owned — `chown 82:82` |
 | Stack unrecoverable after first `up` | a bind-mount path didn't exist, so Docker made a root-owned directory — `down -v` and redo step 2 |
 | Every attachment 403s | `AWS_ENDPOINT` has a `/storage` path — must be host root |
