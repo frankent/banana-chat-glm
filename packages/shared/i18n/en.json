@@ -49,6 +49,7 @@
   "ai.memories.clear": "Clear all",
   "settings.title": "Settings",
   "settings.notifications": "Notifications",
+  "settings.changePassword": "Change password",
   "settings.logout": "Log out",
   "push.permissionDenied": "Notifications are off — enable them in Settings > Notifications",
   "common.ok": "OK",

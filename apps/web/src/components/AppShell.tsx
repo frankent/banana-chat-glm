@@ -61,7 +61,10 @@ export function AppShell() {
             <div className="bc-rail-divider" />
             <button className={location.pathname.startsWith('/ai') ? 'active' : ''} aria-label="AI Assistant" title="AI Assistant" onClick={() => navigate('/ai')}><Icon name="sparkle" size={23} /></button>
           </div>
-          <div className="bc-rail-bottom"><button onClick={() => void logout()} aria-label="Sign out" title="Sign out"><Icon name="logout" /></button><Avatar name={me?.display_name ?? ''} /></div>
+          {/* Until now /change-password was reachable ONLY through the forced flow
+              (AppShell's must_change_password redirect and LoginPage), so a user
+              could never change their own password voluntarily. */}
+          <div className="bc-rail-bottom"><button onClick={() => navigate('/change-password')} aria-label="Change password" title="Change password"><Icon name="lock" /></button><button onClick={() => void logout()} aria-label="Sign out" title="Sign out"><Icon name="logout" /></button><Avatar name={me?.display_name ?? ''} /></div>
         </nav>
         {sidebarOpen && <button className="bc-sidebar-shade" aria-label="Close conversations" onClick={() => setSidebarOpen(false)} />}
         <aside className={`bc-sidebar ${sidebarOpen ? 'is-open' : ''}`} onClick={(event) => { if ((event.target as HTMLElement).closest('a[href]')) setSidebarOpen(false); }}>

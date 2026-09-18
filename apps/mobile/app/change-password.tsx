@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { endpoints } from '../src/lib/api';
-import { tokenManager } from '../src/lib/api';
 import { tr } from '../src/lib/i18n';
 import { theme } from '../src/lib/theme';
 
@@ -25,8 +24,12 @@ export default function ChangePasswordScreen() {
     setError(null);
     try {
       await endpoints.changePassword(current, next);
-      tokenManager.clear();
-      router.replace('/login');
+      // FR-AUTH-004 revokes every OTHER session and deliberately keeps this one
+      // (ChangePasswordAction: whereKeyNot($currentSession->id)), so clearing the
+      // token here forced a re-login the server never asked for. Harmless-looking
+      // in the forced flow, but wrong once a user changes their password
+      // voluntarily from Settings -- web already stays signed in and goes home.
+      router.replace('/rooms');
     } catch {
       setError(t('common.error'));
     } finally {

@@ -84,6 +84,15 @@ export default function SettingsScreen() {
         </Pressable>
       </View>
 
+      {/* /change-password existed but was only ever reached by the forced flow
+          (app/index.tsx and app/login.tsx redirect on must_change_password), so a
+          user had no way to change their own password. */}
+      <View style={[styles.card, { marginTop: 16 }]}>
+        <Pressable style={[styles.linkRow, { borderTopWidth: 0 }]} onPress={() => router.push('/change-password')}>
+          <Text style={styles.link}>{t('settings.changePassword')} →</Text>
+        </Pressable>
+      </View>
+
       <Pressable style={styles.logout} onPress={() => void logout()}>
         <Text style={styles.logoutText}>{t('settings.logout')}</Text>
       </Pressable>

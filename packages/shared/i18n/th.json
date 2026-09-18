@@ -49,6 +49,7 @@
   "ai.memories.clear": "ล้างทั้งหมด",
   "settings.title": "ตั้งค่า",
   "settings.notifications": "การแจ้งเตือน",
+  "settings.changePassword": "เปลี่ยนรหัสผ่าน",
   "settings.logout": "ออกจากระบบ",
   "push.permissionDenied": "การแจ้งเตือนถูกปิด — เปิดได้จาก ตั้งค่า > การแจ้งเตือน",
   "common.ok": "ตกลง",
