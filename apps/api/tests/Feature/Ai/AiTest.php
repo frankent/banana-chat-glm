@@ -525,3 +525,28 @@ test('TC-AI-073 GenerateTitle sets a short auto title once', function () {
     (new GenerateTitle($conversation->id))->handle();
     expect($conversation->refresh()->title)->toBe('ชื่อของฉัน');
 });
+
+// ---- ShouldBroadcastNow isolation ----
+
+test('a Reverb outage mid-stream loses frames, not the answer', function () {
+    fakeAiProvider();
+
+    // AiEvent is ShouldBroadcastNow, so broadcast() publishes on the job's own
+    // thread. Without the guard in AiBroadcast::toUser this exception unwinds
+    // into GenerateAiReply's catch (Throwable) and the reply dies as
+    // AI_PROVIDER_ERROR even though the provider answered fine.
+    $this->mock(Illuminate\Contracts\Broadcasting\Factory::class)
+        ->shouldReceive('event')->andThrow(new RuntimeException('reverb down'));
+
+    $conversation = makeConversation($this);
+
+    $res = $this->postJson("/api/v1/ai/conversations/{$conversation->id}/messages", [
+        'client_message_id' => (string) Str::uuid(), 'content' => 'สวัสดี AI',
+    ], wsHeaders($this->tonyToken, 'acme'))->assertStatus(202);
+
+    $assistant = AiMessage::query()->findOrFail($res->json('data.assistant_message.id'));
+
+    expect($assistant->status)->toBe('completed')
+        ->and($assistant->content)->toBe('สวัสดีครับ')
+        ->and($assistant->error_code)->toBeNull();
+});

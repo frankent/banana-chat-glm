@@ -5,6 +5,8 @@ namespace App\Domain\Ai;
 use App\Events\AiEvent;
 use App\Models\AiConversation;
 use App\Models\AiMessage;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * Serialization + fan-out helpers shared by the AI jobs and controller.
@@ -64,8 +66,26 @@ class AiBroadcast
         ];
     }
 
+    /**
+     * AiEvent is ShouldBroadcastNow, so this publishes to Reverb on the calling
+     * thread — which for deltas is the middle of GenerateAiReply's stream loop.
+     * A transport hiccup there used to be its own tiny queue job; now it would
+     * escape into the job's catch (Throwable) and fail the whole answer as
+     * AI_PROVIDER_ERROR. The answer is persisted either way and the client
+     * refetches, so a lost frame is worth far less than a lost reply.
+     */
     public static function toUser(string $userId, string $event, array $data): void
     {
-        broadcast(new AiEvent($userId, $event, $data));
+        try {
+            broadcast(new AiEvent($userId, $event, $data));
+        } catch (Throwable $e) {
+            Log::warning('ai.broadcast.failed', [
+                'event' => $event,
+                'user_id' => $userId,
+                'conversation_id' => $data['conversation_id'] ?? null,
+                'message_id' => $data['message_id'] ?? null,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 }
