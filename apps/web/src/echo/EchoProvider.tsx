@@ -234,6 +234,7 @@ export function EchoProvider({ children }: { children: ReactNode }) {
     const aiEvents = [
       'ai.message.started',
       'ai.message.delta',
+      'ai.message.tool',
       'ai.message.completed',
       'ai.message.failed',
       'ai.conversation.updated',

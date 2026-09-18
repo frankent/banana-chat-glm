@@ -18,7 +18,7 @@ class AiBroadcast
      *
      * @return array<string, mixed>
      */
-    public static function message(AiMessage $message, ?string $partial = null, ?int $lastIndex = null): array
+    public static function message(AiMessage $message, ?string $partial = null, ?int $lastIndex = null, array $steps = []): array
     {
         $payload = [
             'id' => $message->id,
@@ -42,6 +42,10 @@ class AiBroadcast
         if ($partial !== null) {
             $payload['partial_content'] = $partial;
             $payload['last_index'] = $lastIndex;
+        }
+
+        if ($steps !== []) {
+            $payload['steps'] = $steps;
         }
 
         return $payload;

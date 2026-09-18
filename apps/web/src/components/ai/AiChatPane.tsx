@@ -3,6 +3,7 @@ import { useAiStore } from '../../state/ai';
 import { AiConsentDialog } from './AiConsentDialog';
 import { AiShareDialog } from './AiShareDialog';
 import { Markdown } from './Markdown';
+import { AiStepSummary, AiStepTrail } from './AiStepTrail';
 
 /**
  * FR-AI-003/004/018 — streaming chat pane. Deltas render through the shared
@@ -266,10 +267,17 @@ export function AiChatPane({ conversationId, slug }: { conversationId: string; s
           }
           if (m.status === 'pending' || m.status === 'streaming') {
             const streamed = useAiStore.getState().activeStreamText(m.id);
+            const steps = useAiStore.getState().activeStreamSteps(m.id);
             return (
               <div key={m.id} className="mb-2 flex flex-col items-start gap-1">
                 <div className="max-w-[75%] whitespace-pre-wrap rounded-2xl rounded-bl-sm bg-white px-3 py-2 text-sm text-slate-800 shadow-sm">
-                  {streamed !== null && streamed !== '' ? streamed : <span className="animate-pulse">กำลังพิมพ์…</span>}
+                  {streamed !== null && streamed !== '' ? (
+                    <AiStepTrail text={streamed} steps={steps} />
+                  ) : steps.length > 0 ? (
+                    <AiStepTrail text="" steps={steps} />
+                  ) : (
+                    <span className="animate-pulse">กำลังพิมพ์…</span>
+                  )}
                   <span className="ml-0.5 inline-block h-4 w-1 animate-pulse bg-amber-400 align-middle" />
                 </div>
                 <button
@@ -288,6 +296,7 @@ export function AiChatPane({ conversationId, slug }: { conversationId: string; s
               {switcher}
               <div className={`max-w-[75%] rounded-2xl rounded-bl-sm bg-white px-3 py-2 text-sm text-slate-800 shadow-sm ${retired ? 'opacity-50' : ''}`}>
                 <Markdown content={m.content ?? ''} />
+                <AiStepSummary steps={useAiStore.getState().activeStreamSteps(m.id)} />
               </div>
               {isLastAnswer && liveStream === null ? (
                 <div className="mt-0.5 flex gap-2 text-[10px] text-slate-400 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">

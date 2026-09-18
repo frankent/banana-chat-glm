@@ -33,13 +33,15 @@ class PurgeDeletedAiConversations implements ShouldQueue
             });
 
         // belt-and-braces: clear stream buffers whose message is no longer live
-        $keys = Redis::keys('ai:gen:*');
-        foreach (array_slice($keys ?? [], 0, 500) as $key) {
-            $messageId = substr($key, strlen('ai:gen:'));
-            $live = \DB::table('ai_messages')->whereKey($messageId)
-                ->whereIn('status', ['pending', 'streaming'])->exists();
-            if (! $live) {
-                Redis::del($key);
+        foreach (['ai:gen:', 'ai:tools:'] as $prefix) {
+            $keys = Redis::keys($prefix.'*');
+            foreach (array_slice($keys ?? [], 0, 500) as $key) {
+                $messageId = substr($key, strlen($prefix));
+                $live = \DB::table('ai_messages')->whereKey($messageId)
+                    ->whereIn('status', ['pending', 'streaming'])->exists();
+                if (! $live) {
+                    Redis::del($key);
+                }
             }
         }
     }

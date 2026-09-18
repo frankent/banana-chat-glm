@@ -686,11 +686,13 @@ class AiController extends Controller
         }
 
         [$partial, $lastIndex] = $this->streamState($message);
+        $steps = $this->toolSteps($message);
 
         return response()->json(['data' => [
-            'message' => AiBroadcast::message($message, $partial, $lastIndex),
+            'message' => AiBroadcast::message($message, $partial, $lastIndex, $steps),
             'partial_content' => $partial,
             'last_index' => $lastIndex,
+            'steps' => $steps,
         ]]);
     }
 
@@ -902,6 +904,42 @@ class AiController extends Controller
         $entries = Redis::lRange("ai:gen:{$message->id}", 0, -1);
 
         return [$entries === [] ? null : implode('', $entries), count($entries) - 1];
+    }
+
+    /**
+     * Agent steps recorded so far, in their own list so partial_content stays
+     * plain text and last_index keeps counting deltas and nothing else.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function toolSteps(AiMessage $message): array
+    {
+        if (! in_array($message->status, ['pending', 'streaming'], true)) {
+            return [];
+        }
+
+        // the buffer holds every frame — running, then completed — but a reader
+        // wants one card per call: the latest status, with the label and emoji
+        // that only the running frame carried.
+        $merged = [];
+        foreach (Redis::lRange("ai:tools:{$message->id}", 0, -1) as $raw) {
+            $step = json_decode((string) $raw, true);
+            if (! is_array($step) || ! isset($step['id'])) {
+                continue;
+            }
+            $id = (string) $step['id'];
+            $merged[$id] = isset($merged[$id])
+                ? [
+                    ...$merged[$id],
+                    ...$step,
+                    'label' => $step['label'] ?? $merged[$id]['label'] ?? null,
+                    'emoji' => $step['emoji'] ?? $merged[$id]['emoji'] ?? null,
+                    'at_char' => $merged[$id]['at_char'] ?? $step['at_char'] ?? 0,
+                ]
+                : $step;
+        }
+
+        return array_values($merged);
     }
 
     private function conversationPayload(AiConversation $conversation): array

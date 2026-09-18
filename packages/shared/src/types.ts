@@ -328,6 +328,7 @@ export interface AiMessage {
   completed_at: string | null;
   partial_content?: string | null;
   last_index?: number | null;
+  steps?: AiToolStep[];
 }
 
 /** API-106 page — array + pagination nested inside data (client unwraps the outer envelope) */
@@ -372,8 +373,24 @@ export interface AiMemory {
 }
 
 /** EVT-050..056 payloads arriving on private-user.{uid} */
+/**
+ * One step an agent backend reports while it works — a shell command, a file
+ * read. `at_char` is how far the answer had been written when it happened, so
+ * the step renders between the words it came between. The completed frame
+ * repeats only the id and status.
+ */
+export interface AiToolStep {
+  id: string;
+  tool: string;
+  label: string | null;
+  emoji: string | null;
+  status: 'running' | 'completed' | string;
+  at_char: number;
+}
+
 export type AiStreamEvent =
   | { event: 'ai.message.started'; conversation_id: string; message_id: string }
+  | { event: 'ai.message.tool'; conversation_id: string; message_id: string; step: AiToolStep }
   | { event: 'ai.message.delta'; conversation_id: string; message_id: string; index: number; delta: string }
   | { event: 'ai.message.completed'; message: AiMessage }
   | { event: 'ai.message.failed'; conversation_id: string; message_id: string; error_code: string }

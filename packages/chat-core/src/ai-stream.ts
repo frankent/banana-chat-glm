@@ -1,4 +1,4 @@
-import type { AiMessage, AiStreamEvent } from '@banana-chat/shared';
+import type { AiMessage, AiStreamEvent, AiToolStep } from '@banana-chat/shared';
 
 /**
  * FR-AI-018 — index-ordered delta assembler for one generating message.
@@ -19,6 +19,8 @@ export interface AiStreamState {
   appliedIndex: number;
   /** a gap was detected — caller must resync from API-117 */
   needsResync: boolean;
+  /** agent steps in arrival order; the running frame is replaced by its completed one */
+  steps: AiToolStep[];
   message: AiMessage | null;
 }
 
@@ -41,7 +43,7 @@ export function createAiStreamStore(): AiStreamStore {
   const ensure = (messageId: string): AiStreamState => {
     let s = streams.get(messageId);
     if (s === undefined) {
-      s = { messageId, status: 'pending', content: '', appliedIndex: -1, needsResync: false, message: null };
+      s = { messageId, status: 'pending', content: '', appliedIndex: -1, needsResync: false, steps: [], message: null };
       streams.set(messageId, s);
     }
     return s;
@@ -66,6 +68,14 @@ export function createAiStreamStore(): AiStreamStore {
           const s = ensure(e.message_id);
           s.status = 'streaming';
           s.appliedIndex = Math.max(s.appliedIndex, -1);
+          break;
+        }
+        case 'ai.message.tool': {
+          const s = ensure(e.message_id);
+          const at = s.steps.findIndex(step => step.id === e.step.id);
+          // the completed frame carries no label or emoji — keep what running said
+          if (at >= 0) s.steps[at] = { ...s.steps[at], ...e.step, label: e.step.label ?? s.steps[at].label, emoji: e.step.emoji ?? s.steps[at].emoji };
+          else s.steps = [...s.steps, e.step];
           break;
         }
         case 'ai.message.delta': {
@@ -114,6 +124,7 @@ export function createAiStreamStore(): AiStreamStore {
           s.content = message.partial_content;
           s.appliedIndex = message.last_index ?? -1;
         }
+        if (message.steps !== undefined) s.steps = message.steps;
       } else {
         s.status = message.status;
         s.content = message.content ?? '';

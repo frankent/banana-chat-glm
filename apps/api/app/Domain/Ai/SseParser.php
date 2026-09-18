@@ -9,7 +9,12 @@ namespace App\Domain\Ai;
  */
 class SseParser
 {
+    /** Key the decoded payload carries its `event:` name under. */
+    public const EVENT_KEY = '__event';
+
     private string $buffer = '';
+
+    private string $eventName = '';
 
     private bool $done = false;
 
@@ -30,6 +35,16 @@ class SseParser
                 continue; // event boundary or comment/ping
             }
 
+            // `event:` names the payload on the next `data:` line. Plain chat
+            // completions never send one; an agent backend uses it to report
+            // what it is doing (hermes.tool.progress), and telling those apart
+            // by guessing at the payload's keys breaks the day it adds another.
+            if (str_starts_with($line, 'event:')) {
+                $this->eventName = trim(substr($line, 6));
+
+                continue;
+            }
+
             if (! str_starts_with($line, 'data:')) {
                 continue;
             }
@@ -44,8 +59,12 @@ class SseParser
 
             $decoded = json_decode($data, true);
             if (is_array($decoded)) {
+                if ($this->eventName !== '') {
+                    $decoded[self::EVENT_KEY] = $this->eventName;
+                }
                 $events[] = $decoded;
             }
+            $this->eventName = '';
         }
 
         return $events;

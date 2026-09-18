@@ -59,6 +59,21 @@ class OpenAiCompatibleProvider
                     yield ['type' => 'delta', 'text' => $deltaText];
                 }
 
+                // An agent backend narrates its work between the words it is
+                // writing: content, "running echo hello", more content. These
+                // arrive as their own named events with no `choices`, so the
+                // loop above simply never saw them.
+                if (($event[SseParser::EVENT_KEY] ?? '') === 'hermes.tool.progress') {
+                    yield [
+                        'type' => 'tool',
+                        'id' => (string) ($event['toolCallId'] ?? ''),
+                        'tool' => (string) ($event['tool'] ?? ''),
+                        'label' => isset($event['label']) ? (string) $event['label'] : null,
+                        'emoji' => isset($event['emoji']) ? (string) $event['emoji'] : null,
+                        'status' => (string) ($event['status'] ?? ''),
+                    ];
+                }
+
                 if (isset($event['usage']) && is_array($event['usage'])) {
                     yield [
                         'type' => 'usage',

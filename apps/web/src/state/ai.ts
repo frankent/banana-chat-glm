@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AiConversationSummary, AiMessage, AiStatus, AiStreamEvent } from '@banana-chat/shared';
+import type { AiConversationSummary, AiMessage, AiStatus, AiStreamEvent, AiToolStep } from '@banana-chat/shared';
 import { createAiStreamStore, type AiCacheAdapter } from '@banana-chat/chat-core';
 import { endpoints } from '../lib/api';
 import { aiCache } from '../lib/cache';
@@ -59,6 +59,7 @@ interface AiState {
   giveConsent: (slug: string) => Promise<void>;
   applyEvent: (event: AiStreamEvent) => Promise<void>;
   activeStreamText: (messageId: string) => string | null;
+  activeStreamSteps: (messageId: string) => AiToolStep[];
 }
 
 /** fire-and-forget resync when a stream flags a gap (API-117) */
@@ -368,6 +369,10 @@ export const useAiStore = create<AiState>((set, get) => ({
       return null;
     }
     return s.content;
+  },
+
+  activeStreamSteps(messageId) {
+    return streamStore.get(messageId)?.steps ?? [];
   },
 }));
 

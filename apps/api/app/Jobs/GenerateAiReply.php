@@ -119,6 +119,7 @@ class GenerateAiReply implements ShouldQueue
         ]);
 
         $bufferKey = "ai:gen:{$message->id}";
+        $toolKey = "ai:tools:{$message->id}";
         $cancelKey = "ai:cancel:{$message->id}";
 
         $content = '';
@@ -142,6 +143,42 @@ class GenerateAiReply implements ShouldQueue
                 $firstTokenAt ??= microtime(true);
                 $pending .= $chunk['text'];
                 $content .= $chunk['text'];
+            } elseif ($chunk['type'] === 'tool') {
+                // push the words written so far before announcing the step, or
+                // the card arrives ahead of the text it came after
+                if ($pending !== '') {
+                    $index++;
+                    Redis::rPush($bufferKey, $pending);
+                    Redis::expire($bufferKey, 3600);
+                    AiBroadcast::toUser($userId, 'ai.message.delta', [
+                        'conversation_id' => $conversation->id,
+                        'message_id' => $message->id,
+                        'index' => $index,
+                        'delta' => $pending,
+                    ]);
+                    $pending = '';
+                    $lastFlush = microtime(true);
+                }
+
+                // A step is one positional event, not a stream of text: it belongs
+                // between the words written before it and the words after, so it
+                // skips the flush timer that batches deltas. at_char is where in
+                // the answer it happened, which is how the client interleaves it.
+                $step = [
+                    'id' => $chunk['id'],
+                    'tool' => $chunk['tool'],
+                    'label' => $chunk['label'],
+                    'emoji' => $chunk['emoji'],
+                    'status' => $chunk['status'],
+                    'at_char' => mb_strlen($content),
+                ];
+                Redis::rPush($toolKey, json_encode($step, JSON_UNESCAPED_UNICODE));
+                Redis::expire($toolKey, 3600);
+                AiBroadcast::toUser($userId, 'ai.message.tool', [
+                    'conversation_id' => $conversation->id,
+                    'message_id' => $message->id,
+                    'step' => $step,
+                ]);
             } elseif ($chunk['type'] === 'usage') {
                 $usage = $chunk['usage'];
             } elseif ($chunk['type'] === 'done') {

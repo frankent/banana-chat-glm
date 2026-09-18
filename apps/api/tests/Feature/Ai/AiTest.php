@@ -551,3 +551,72 @@ test('a Reverb outage mid-stream loses frames, not the answer', function () {
         ->and($assistant->content)->toBe('สวัสดีครับ')
         ->and($assistant->error_code)->toBeNull();
 });
+
+// ---- agent tool progress (hermes.tool.progress) ----
+
+/** the exact frames the hermes agent sends: text, then a step, then more text */
+function agentSse(): string
+{
+    $lines = [];
+    $lines[] = 'data: '.json_encode(['choices' => [['delta' => ['content' => 'กำลังดูให้ค่ะ 🍒 ']]]], JSON_UNESCAPED_UNICODE);
+    $lines[] = "event: hermes.tool.progress\ndata: ".json_encode(['tool' => 'terminal', 'emoji' => '💻', 'label' => 'echo hello', 'toolCallId' => 'call_1', 'status' => 'running'], JSON_UNESCAPED_UNICODE);
+    $lines[] = "event: hermes.tool.progress\ndata: ".json_encode(['tool' => 'terminal', 'toolCallId' => 'call_1', 'status' => 'completed'], JSON_UNESCAPED_UNICODE);
+    $lines[] = 'data: '.json_encode(['choices' => [['delta' => ['content' => 'ได้ hello ค่ะ']]]], JSON_UNESCAPED_UNICODE);
+    $lines[] = 'data: '.json_encode(['choices' => [['delta' => new stdClass, 'finish_reason' => 'stop']]]);
+    $lines[] = 'data: [DONE]';
+
+    return implode("\n\n", $lines)."\n\n";
+}
+
+test('an agent step is broadcast where it happened, not batched behind the text', function () {
+    Event::fake([AiEvent::class]);
+    fakeAiProvider(streamBody: agentSse());
+
+    $conversation = makeConversation($this);
+    $res = $this->postJson("/api/v1/ai/conversations/{$conversation->id}/messages", [
+        'client_message_id' => (string) Str::uuid(), 'content' => 'รัน echo hello',
+    ], wsHeaders($this->tonyToken, 'acme'))->assertStatus(202);
+
+    $tools = collect(Event::dispatched(AiEvent::class))
+        ->map(fn (array $args): AiEvent => $args[0])
+        ->filter(fn (AiEvent $e): bool => $e->name === 'ai.message.tool')
+        ->map(fn (AiEvent $e): array => $e->data['step'])
+        ->values();
+
+    expect($tools)->toHaveCount(2);
+
+    // the running frame lands after the first sentence and before the answer
+    expect($tools[0]['status'])->toBe('running')
+        ->and($tools[0]['tool'])->toBe('terminal')
+        ->and($tools[0]['label'])->toBe('echo hello')
+        ->and($tools[0]['emoji'])->toBe('💻')
+        ->and($tools[0]['at_char'])->toBe(mb_strlen('กำลังดูให้ค่ะ 🍒 ')) // code points, not UTF-16 units
+        ->and($tools[1]['status'])->toBe('completed')
+        ->and($tools[1]['id'])->toBe($tools[0]['id']);
+
+    $assistant = AiMessage::query()->findOrFail($res->json('data.assistant_message.id'));
+    expect($assistant->content)->toBe('กำลังดูให้ค่ะ 🍒 ได้ hello ค่ะ'); // steps never pollute the answer
+});
+
+test('API-117 replays the steps after a reload, without disturbing partial_content', function () {
+    $conversation = makeConversation($this);
+    $message = AiMessage::create([
+        'conversation_id' => $conversation->id, 'user_id' => $this->tony->id,
+        'workspace_id' => $this->ws->id, 'seq' => 2, 'role' => 'assistant', 'status' => 'streaming',
+    ]);
+    Redis::rPush("ai:gen:{$message->id}", 'กำลังดู');
+    // both frames are in the buffer, exactly as the job wrote them
+    Redis::rPush("ai:tools:{$message->id}", json_encode(['id' => 'call_1', 'tool' => 'terminal', 'label' => 'echo hello', 'emoji' => '💻', 'status' => 'running', 'at_char' => 7], JSON_UNESCAPED_UNICODE));
+    Redis::rPush("ai:tools:{$message->id}", json_encode(['id' => 'call_1', 'tool' => 'terminal', 'label' => null, 'emoji' => null, 'status' => 'completed', 'at_char' => 7], JSON_UNESCAPED_UNICODE));
+
+    $this->getJson("/api/v1/ai/messages/{$message->id}", wsHeaders($this->tonyToken, 'acme'))
+        ->assertOk()
+        ->assertJsonPath('data.partial_content', 'กำลังดู')   // still plain text
+        ->assertJsonPath('data.last_index', 0)                 // still counting deltas only
+        ->assertJsonCount(1, 'data.steps')                     // one card, not one per frame
+        ->assertJsonPath('data.steps.0.status', 'completed')   // latest status wins
+        ->assertJsonPath('data.steps.0.label', 'echo hello')   // label survives from the running frame
+        ->assertJsonPath('data.steps.0.at_char', 7);
+
+    Redis::del("ai:gen:{$message->id}", "ai:tools:{$message->id}");
+});
