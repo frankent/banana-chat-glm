@@ -98,6 +98,7 @@ class SettingsService
         'ai.max_concurrent_per_user' => 2,
         'ai.compaction.trigger_ratio' => 0.6,
         'ai.stream.flush_interval_ms' => 100,
+        'ai.room_bot.history_messages' => 20, // FR-AI-021 — 0 sends the mention alone
         'ai.deleted_purge_days' => 30,
         'ai.admin_review_enabled' => false,
         'ai.push_suppress_if_focused_seconds' => 30,

@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Domain\Ai\AiCircuitBreaker;
 use App\Domain\Ai\AiGate;
 use App\Domain\Ai\OpenAiCompatibleProvider;
+use App\Domain\Ai\RoomContextBuilder;
 use App\Domain\Ai\TokenEstimator;
 use App\Domain\Message\MessageSerializer;
 use App\Domain\Message\MessageWriter;
@@ -84,7 +85,7 @@ class GenerateRoomBotReply implements ShouldBeUnique, ShouldQueue
         }
         [$provider, $error] = app(AiGate::class)->resolve($user->id, $room->workspace_id);
         $reply = match ($error) {
-            'AI_CONSENT_REQUIRED' => 'Please open AI Assistant and accept AI consent before mentioning @ai. Only your mention text is sent; the reply will be visible to this room.',
+            'AI_CONSENT_REQUIRED' => 'Please open AI Assistant and accept AI consent before mentioning @ai. Recent messages of this room are sent as context, and the reply is visible to everyone here.',
             null => '',
             default => 'AI is unavailable ('.$error.'). Please ask your workspace administrator.',
         };
@@ -147,6 +148,12 @@ class GenerateRoomBotReply implements ShouldBeUnique, ShouldQueue
         $flushMs = $settings->int('ai.stream.flush_interval_ms');
         $flushChars = 80; // a long burst should land without waiting out the timer
         $prompt = trim((string) preg_replace('/(?:^|\s)@ai(?=\s|[,:!?]|$)/iu', ' ', (string) $source->body));
+        $system = 'You are the AI assistant in a workspace group chat. The recent messages of this room are given as context, each one prefixed with the name of who said it; your own replies appear without a prefix. Attachments are not included, so do not pretend to have seen them. Answer the last message, which addressed you. '.($provider->system_prompt ?? '');
+        $history = app(RoomContextBuilder::class)->build($room, $source, $provider, $this->bot()->id, $system);
+        if ($history === []) {
+            // a mention with nothing but "@ai" in it still deserves an answer
+            $history = [['role' => 'user', 'content' => $prompt !== '' ? $prompt : (string) $source->body]];
+        }
 
         $content = '';
         $truncated = false;
@@ -157,8 +164,8 @@ class GenerateRoomBotReply implements ShouldBeUnique, ShouldQueue
 
         try {
             foreach (OpenAiCompatibleProvider::make($provider)->chatStream([
-                ['role' => 'system', 'content' => 'You are the AI assistant in a workspace group chat. Answer the explicitly addressed message. You have no room history or attachments. Do not pretend to have read them. '.($provider->system_prompt ?? '')],
-                ['role' => 'user', 'content' => $prompt],
+                ['role' => 'system', 'content' => $system],
+                ...$history,
             ]) as $chunk) {
                 if (($chunk['type'] ?? '') !== 'delta') {
                     continue;
@@ -199,7 +206,8 @@ class GenerateRoomBotReply implements ShouldBeUnique, ShouldQueue
         }
         if ($failure === null) {
             $estimator = new TokenEstimator;
-            AiUsageDaily::bump($user->id, $room->workspace_id, tokensIn: $estimator->estimate($prompt), tokensOut: $estimator->estimate($body));
+            $sent = $system.implode("\n", array_column($history, 'content'));
+            AiUsageDaily::bump($user->id, $room->workspace_id, tokensIn: $estimator->estimate($sent), tokensOut: $estimator->estimate($body));
         }
 
         $this->typing($room, false);

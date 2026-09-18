@@ -11,6 +11,7 @@ use App\Models\Message;
 use App\Models\RoomNote;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Services\SettingsService;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
@@ -84,7 +85,11 @@ it('TC-AI-100 invokes group bot only for explicit mentions and produces one attr
     $source = $this->postJson($url, ['body' => '@ai hello', 'client_message_id' => $id], $this->headers)->assertCreated()->json('data.message');
     $this->postJson($url, ['body' => '@ai hello', 'client_message_id' => $id], $this->headers)->assertOk();
     Http::assertSentCount(1);
-    Http::assertSent(fn ($r) => count($r['messages']) === 2 && $r['messages'][1]['content'] === 'hello' && $r['stream'] === true);
+    Http::assertSent(function ($r) {
+        $turns = $r['messages'];
+
+        return $r['stream'] === true && str_ends_with(end($turns)['content'], 'hello');
+    });
     $reply = Message::where('reply_to_message_id', $source['id'])->firstOrFail();
     expect($reply->body)->toBe('**Hello** from AI')->and($reply->sender->display_name)->toBe('AI Assistant');
     app()->call([new GenerateRoomBotReply($source['id']), 'handle']);
@@ -208,4 +213,90 @@ it('a model that says nothing at all still gets a reply, not silence', function 
 
     expect(Message::where('reply_to_message_id', $source['id'])->firstOrFail()->body)
         ->toBe('AI returned an empty answer. Please try again.');
+});
+
+// ---- FR-AI-021 room context ----
+
+it('the bot reads the room back to itself, in order and with names', function () {
+    Http::fake(['*/chat/completions' => Http::response(botSse(['ครับ']), 200, ['Content-Type' => 'text/event-stream'])]);
+    $this->author->forceFill(['ai_consented_at' => now(), 'display_name' => 'Tony'])->save();
+    $this->peer->forceFill(['display_name' => 'Somchai'])->save();
+    botProvider();
+    $url = '/api/v1/rooms/'.$this->roomId.'/messages';
+    $peerHeaders = ['Authorization' => 'Bearer '.$this->peerToken, 'X-Workspace-Id' => 'tools'];
+
+    $this->postJson($url, ['body' => 'งวดนี้ยอดตกเยอะ', 'client_message_id' => (string) Str::uuid()], $this->headers)->assertCreated();
+    $this->postJson($url, ['body' => 'site B ปิดไป 2 วัน', 'client_message_id' => (string) Str::uuid()], $peerHeaders)->assertCreated();
+    $this->postJson($url, ['body' => '@ai สรุปให้หน่อย', 'client_message_id' => (string) Str::uuid()], $this->headers)->assertCreated();
+
+    Http::assertSent(function ($request) {
+        $sent = collect($request['messages'])->where('role', '!=', 'system')->pluck('content')->values()->all();
+
+        return $sent === ['Tony: งวดนี้ยอดตกเยอะ', 'Somchai: site B ปิดไป 2 วัน', 'Tony: สรุปให้หน่อย'];
+    });
+});
+
+it('the bot sees its own earlier answer as its own, not as somebody speaking', function () {
+    Http::fake(['*/chat/completions' => Http::response(botSse(['ส่งเต็มได้ค่ะ']), 200, ['Content-Type' => 'text/event-stream'])]);
+    $this->author->forceFill(['ai_consented_at' => now(), 'display_name' => 'Tony'])->save();
+    botProvider();
+    $url = '/api/v1/rooms/'.$this->roomId.'/messages';
+
+    $this->postJson($url, ['body' => '@ai ขอยอดหน่อย', 'client_message_id' => (string) Str::uuid()], $this->headers)->assertCreated();
+    $this->postJson($url, ['body' => '@ai ขอ data ดิบไม่ต้องย่อ', 'client_message_id' => (string) Str::uuid()], $this->headers)->assertCreated();
+
+    Http::assertSent(function ($request) {
+        $turns = collect($request['messages'])->where('role', '!=', 'system')->values();
+
+        // …user asks, bot answers, user follows up — the follow-up now has something to follow
+        return $turns->count() === 3
+            && $turns[0]['role'] === 'user'
+            && $turns[1]['role'] === 'assistant' && $turns[1]['content'] === 'ส่งเต็มได้ค่ะ'
+            && $turns[2]['content'] === 'Tony: ขอ data ดิบไม่ต้องย่อ';
+    });
+});
+
+it('history stays inside the configured message cap', function () {
+    Http::fake(['*/chat/completions' => Http::response(botSse(['ok']), 200, ['Content-Type' => 'text/event-stream'])]);
+    $this->author->forceFill(['ai_consented_at' => now(), 'display_name' => 'Tony'])->save();
+    botProvider();
+    app(SettingsService::class)->set('ai.room_bot.history_messages', 2);
+    $url = '/api/v1/rooms/'.$this->roomId.'/messages';
+
+    foreach (range(1, 6) as $i) {
+        $this->postJson($url, ['body' => 'บรรทัดที่ '.$i, 'client_message_id' => (string) Str::uuid()], $this->headers)->assertCreated();
+    }
+    $this->postJson($url, ['body' => '@ai เอาอันล่าสุด', 'client_message_id' => (string) Str::uuid()], $this->headers)->assertCreated();
+
+    Http::assertSent(function ($request) {
+        $sent = collect($request['messages'])->where('role', '!=', 'system')->pluck('content')->values()->all();
+
+        return $sent === ['Tony: บรรทัดที่ 5', 'Tony: บรรทัดที่ 6', 'Tony: เอาอันล่าสุด'];
+    });
+});
+
+it('a deleted message is not quietly resurrected into the AI context', function () {
+    Http::fake(['*/chat/completions' => Http::response(botSse(['ok']), 200, ['Content-Type' => 'text/event-stream'])]);
+    $this->author->forceFill(['ai_consented_at' => now(), 'display_name' => 'Tony'])->save();
+    botProvider();
+    $url = '/api/v1/rooms/'.$this->roomId.'/messages';
+
+    // the real delete path redacts the body, so it could never leak anyway;
+    // this row keeps its text and is only tombstoned, which is the state an
+    // admin restore or a refactor of MessageEditor could leave behind
+    $tombstoned = $this->postJson($url, ['body' => 'รหัสผ่านคือ hunter2', 'client_message_id' => (string) Str::uuid()], $this->headers)
+        ->assertCreated()->json('data.message.id');
+    Message::withoutGlobalScopes()->whereKey($tombstoned)->update(['deleted_at' => now()]);
+
+    $redacted = $this->postJson($url, ['body' => 'โอนเข้า 4455', 'client_message_id' => (string) Str::uuid()], $this->headers)
+        ->assertCreated()->json('data.message.id');
+    $this->deleteJson('/api/v1/messages/'.$redacted, [], $this->headers)->assertNoContent();
+
+    $this->postJson($url, ['body' => '@ai ว่าไง', 'client_message_id' => (string) Str::uuid()], $this->headers)->assertCreated();
+
+    Http::assertSent(function ($request) {
+        $sent = json_encode($request['messages'], JSON_UNESCAPED_UNICODE);
+
+        return ! str_contains($sent, 'hunter2') && ! str_contains($sent, '4455');
+    });
 });

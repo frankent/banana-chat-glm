@@ -57,7 +57,7 @@ class Settings extends Page
             'storage.quota_per_workspace_gb' => [0.01, 1000000],
             'ai.memory.max_per_user' => [0, 10000], 'ai.memory.inject_max' => [0, 1000], 'ai.memory.inject_max_tokens' => [0, 32000],
             'ai.daily_message_limit_per_user' => [0, 100000], 'ai.max_message_chars' => [1, 128000], 'ai.max_concurrent_per_user' => [1, 20],
-            'ai.compaction.trigger_ratio' => [0.1, 0.95], 'ai.stream.flush_interval_ms' => [20, 5000], 'ai.deleted_purge_days' => [1, 365],
+            'ai.compaction.trigger_ratio' => [0.1, 0.95], 'ai.stream.flush_interval_ms' => [20, 5000], 'ai.room_bot.history_messages' => [0, 200], 'ai.deleted_purge_days' => [1, 365],
             'ai.push_suppress_if_focused_seconds' => [0, 600],
             // FR-PCHAT-033 — these two MUST exist here for as long as they exist
             // in SettingsService::DEFAULTS. See the guard in form() below: a

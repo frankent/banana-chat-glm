@@ -337,7 +337,7 @@ export function ChatView() {
           </button>
         </div>
       </header>
-      {room?.room.type === 'group' && <div className="bc-bot-presence"><Icon name="sparkle" size={13} /> AI bot is here · mention <strong>@ai</strong> to ask. Only your mention is sent to AI. <a href="/ai">AI setup & consent</a></div>}
+      {room?.room.type === 'group' && <div className="bc-bot-presence"><Icon name="sparkle" size={13} /> AI bot is here · mention <strong>@ai</strong> to ask. Recent messages in this room are sent to AI as context. <a href="/ai">AI setup & consent</a></div>}
       {!!pinsQuery.data?.length && <div className="bc-pins" aria-label="Pinned messages">{pinsQuery.data.map(pin => <div key={pin.id}><button onClick={() => setSearchParams({around_seq:String(pin.seq)})}>⌖ <span>{pin.body ?? pin.attachments[0]?.original_name ?? 'Message'}</span></button><button aria-label="Unpin message" onClick={async () => {try {await endpoints.pin(roomId, slug, pin.id, false);void pinsQuery.refetch();}catch(e){setToolError(e instanceof Error ? e.message : 'Unable to unpin');}}}>✕</button></div>)}</div>}
       {toolError && <p role="alert">{toolError}</p>}
 

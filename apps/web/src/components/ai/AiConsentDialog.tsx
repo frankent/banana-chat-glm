@@ -10,6 +10,7 @@ export function AiConsentDialog({ onAccept }: { onAccept: () => Promise<void> | 
         <ul className="mb-4 list-disc space-y-1 pl-5 text-sm text-slate-600">
           <li>ข้อความของคุณจะถูกส่งไปยังผู้ให้บริการ AI เพื่อสร้างคำตอบ</li>
           <li>AI จะจำข้อมูลเกี่ยวกับคุณเพื่อตอบให้ดีขึ้นข้าม workspace (ดู/ลบได้ใน "ความจำของฉัน")</li>
+          <li>เมื่อพิมพ์ @ai ในห้องแชท ข้อความล่าสุดของห้องนั้นจะถูกส่งไปเป็นบริบทด้วย ไม่ใช่เฉพาะข้อความของคุณ</li>
           <li>ห้ามส่งข้อมูลลับขององค์กรที่ไม่ได้รับอนุญาต</li>
         </ul>
         <div className="flex justify-end gap-2">
