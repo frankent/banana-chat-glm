@@ -126,7 +126,9 @@ export function NotificationPrompt() {
     // feature is how people learn to dismiss without reading.
     <div className="bc-push-prompt" role="region" aria-label="Notification settings">
       <div className="bc-push-prompt-icon" aria-hidden><Icon name="bell" size={20} /></div>
-      <div className="bc-push-prompt-body">
+      {/* Live region: the success and failure lines replace each other in place after
+          a press, which a screen reader would otherwise never announce. */}
+      <div className="bc-push-prompt-body" role="status" aria-live="polite">
         {done ? (
           <p className="bc-push-prompt-title">Notifications are on. You are all set.</p>
         ) : mode === 'install' ? (

@@ -14,6 +14,7 @@
  */
 
 import {
+  generateDeviceId,
   isWebPushConfigured,
   resolveWebDeviceId,
   serviceWorkerUrl,
@@ -230,7 +231,7 @@ async function runEnable(): Promise<EnableWebPushResult> {
 export function webDeviceId(): string {
   return resolveWebDeviceId(
     typeof localStorage !== 'undefined' ? localStorage : null,
-    () => crypto.randomUUID().replace(/-/g, '').slice(0, 26).toUpperCase(),
+    generateDeviceId,
   );
 }
 

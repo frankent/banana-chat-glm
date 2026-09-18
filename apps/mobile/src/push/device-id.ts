@@ -1,3 +1,4 @@
+import { isValidDeviceId } from '@banana-chat/chat-core';
 import { newDeviceId } from '../lib/api';
 
 /**
@@ -30,7 +31,10 @@ export async function getOrCreateDeviceId(): Promise<string> {
   }
   const store = await loadNative();
   const existing = await store.getItemAsync(KEY);
-  if (existing !== null && existing !== '') {
+  // Anything minted by the old base36 generator is unusable — every endpoint that
+  // takes it rejects it before writing — so discard it rather than keep replaying a
+  // registration that cannot succeed.
+  if (existing !== null && existing !== '' && isValidDeviceId(existing)) {
     cached = existing;
     return existing;
   }

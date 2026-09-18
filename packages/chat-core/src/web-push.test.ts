@@ -81,15 +81,20 @@ describe('resolveWebDeviceId', () => {
     };
   };
 
+  // Realistic ids, because the stored value is now checked against the shape the
+  // server accepts -- a placeholder like 'existing' is exactly what gets discarded.
+  const STORED = '04FE874857C34DB2B13E110E44';
+  const MINTED = '0123456789ABCDEFGHJKMNPQRS';
+
   it('reuses a persisted id so one browser is one device row', () => {
-    const s = store({ [WEB_DEVICE_ID_KEY]: 'existing' });
-    expect(resolveWebDeviceId(s, () => 'fresh')).toBe('existing');
+    const s = store({ [WEB_DEVICE_ID_KEY]: STORED });
+    expect(resolveWebDeviceId(s, () => MINTED)).toBe(STORED);
   });
 
   it('mints and persists on first use', () => {
     const s = store();
-    expect(resolveWebDeviceId(s, () => 'fresh')).toBe('fresh');
-    expect(s.map.get(WEB_DEVICE_ID_KEY)).toBe('fresh');
+    expect(resolveWebDeviceId(s, () => MINTED)).toBe(MINTED);
+    expect(s.map.get(WEB_DEVICE_ID_KEY)).toBe(MINTED);
   });
 
   // Safari private mode throws on write; registering push matters more than

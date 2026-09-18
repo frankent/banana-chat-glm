@@ -191,7 +191,11 @@ input:focus,textarea:focus,select:focus { outline-color:#c8b564; }
      it opens is not restyled as a top-bar icon. */
   .bc-mobile-top-actions{margin-left:auto;display:flex;align-items:center}
   .bc-mobile-top [data-testid="notification-bell"]{padding:6px;color:#7d8b68}
-  .bc-mobile-top [data-testid="notification-panel"]{left:auto;right:0;width:min(20rem,calc(100vw - 24px))}
+  /* z-index above .bc-rail (40): the panel's own z-30 put it UNDER the rail, and
+     on anything narrower than 392px the 320px panel reached into the rail, where
+     taps hit navigation instead of the notification they aimed at. The width also
+     stops short of the 56px rail rather than merely being layered over it. */
+  .bc-mobile-top [data-testid="notification-panel"]{left:auto;right:0;z-index:61;width:min(20rem,calc(100vw - 68px))}
   .bc-chat-header{height:70px;padding:0 16px}.bc-chat-identity{gap:9px}.bc-chat-identity h2{font-size:14px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .bc-message-list{padding:15px 12px}.bc-message-bubble{max-width:85%;padding:9px 11px}.bc-message-avatar{display:none}.bc-message-bubble [data-testid="message-actions"]{position:static;display:flex;justify-content:flex-end;margin-top:5px}
   .bc-composer{padding:10px}.bc-compose-box{padding:5px;gap:3px}.bc-compose-box [data-testid="send-button"]{padding:11px}.bc-compose-box [data-testid="send-button"] span{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.bc-compose-hint{font-size:8px}

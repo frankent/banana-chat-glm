@@ -90,7 +90,8 @@ export function AppShell() {
   return (
     <div className="bc-app flex h-full flex-col">
       <ConnectionBanner />
-      {/* Fixed-position card; mounted here so it shows on every authenticated route. */}
+      {/* In-flow banner, like ConnectionBanner above it, mounted here so it shows on
+          every authenticated route and cannot overlap a control on any of them. */}
       <NotificationPrompt />
       <div className="flex min-h-0 flex-1">
         <nav className="bc-rail" aria-label="Main navigation">

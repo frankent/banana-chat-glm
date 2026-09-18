@@ -1,3 +1,5 @@
+import { isValidDeviceId } from './device-id.js';
+
 /**
  * FR-NOTI-003 — Web Push readiness rules.
  *
@@ -97,7 +99,11 @@ export function resolveWebDeviceId(
 ): string {
   try {
     const existing = storage?.getItem(WEB_DEVICE_ID_KEY);
-    if (existing !== null && existing !== undefined && existing !== '') {
+    // A stored id the server will reject is worse than none: it is returned on every
+    // load, so the browser retries a registration that can only 404, forever. Both
+    // endpoints validate before writing anything, so there is no row to orphan by
+    // re-minting.
+    if (existing !== null && existing !== undefined && existing !== '' && isValidDeviceId(existing)) {
       return existing;
     }
   } catch {

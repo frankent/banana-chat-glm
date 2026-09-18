@@ -168,7 +168,10 @@ export function NotificationCenter() {
           {/* Offered whenever this device is not actually receiving push, not only
               while permission is `default`. Permission granted + no FCM token is the
               silent-failure case, and hiding the button there left no way to retry. */}
-          {desktopPermission !== 'denied' && desktopPermission !== 'unsupported' && pushResult?.state !== 'enabled' && (
+          {desktopPermission !== 'denied' && desktopPermission !== 'unsupported' && pushResult?.state !== 'enabled'
+            // Nothing left to offer once the popup permission is granted on a build
+            // with no Firebase config: pressing it again cannot change anything.
+            && !(pushStatus === 'not-configured' && desktopPermission === 'granted') && (
             <button
               onClick={() => void askDesktopPermission()}
               disabled={enabling}

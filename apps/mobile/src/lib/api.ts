@@ -24,9 +24,8 @@ export const endpoints = new Endpoints(api);
 /** client-generated device id (stable per install) for API-070 */
 export const DEVICE_ID_KEY = 'bc.device_id';
 
-export function newDeviceId(): string {
-  // ULID-ish: time-ordered + random — device ids are ULIDs on the server
-  const time = Date.now().toString(36).padStart(10, '0');
-  const rand = Math.random().toString(36).slice(2, 16).padEnd(16, '0');
-  return (time + rand).toUpperCase();
-}
+// The server means ULID literally (whereUlid + the `ulid` rule), and base36 is not
+// Crockford base32 -- it has I, L, O and U. The timestamp prefix alone currently
+// contains U and O, so every id this used to mint was rejected and no mobile device
+// has ever registered for push. Shared with web now, one correct implementation.
+export { generateDeviceId as newDeviceId } from '@banana-chat/chat-core';

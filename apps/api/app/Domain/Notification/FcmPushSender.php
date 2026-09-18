@@ -2,6 +2,7 @@
 
 namespace App\Domain\Notification;
 
+use App\Enums\DevicePlatform;
 use App\Models\Device;
 use Firebase\JWT\JWT;
 use Illuminate\Support\Facades\Cache;
@@ -173,12 +174,14 @@ class FcmPushSender
             ],
         );
 
-        return [
+        // Web is deliberately data-only. A message carrying BOTH `notification` and
+        // `data` is displayed by the browser AND handed to onBackgroundMessage, so the
+        // service worker's showNotification() put a second copy of every push on
+        // screen -- and only one of the two carried the room link, so half the taps
+        // landed on '/'. Native platforms still get the notification block: they have
+        // no service worker to render it.
+        $message = [
             'token' => $device->push_token,
-            'notification' => [
-                'title' => $payload['title'],
-                'body' => $payload['body'],
-            ],
             'data' => $data,
             'android' => [
                 'priority' => $type === 'mention' ? 'high' : 'normal',
@@ -208,6 +211,15 @@ class FcmPushSender
                 'fcm_options' => ['link' => '/'],
             ],
         ];
+
+        if ($device->platform !== DevicePlatform::Web) {
+            $message['notification'] = [
+                'title' => $payload['title'],
+                'body' => $payload['body'],
+            ];
+        }
+
+        return $message;
     }
 
     /**
