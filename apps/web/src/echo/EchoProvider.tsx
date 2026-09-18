@@ -1,12 +1,13 @@
 import { NotificationGate } from '@banana-chat/chat-core';
 import { showDesktopNotification } from '../lib/desktop-notification';
+import { registerPushServiceWorker, reportFocus } from '../lib/web-push';
 import { playNotificationAudio } from '../lib/notification-audio';
 import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import type { EventEnvelope, RoomListItem } from '@banana-chat/shared';
 import { endpoints, tokenManager } from '../lib/api';
 import { evictRoom } from '../lib/room-eviction';
@@ -39,6 +40,7 @@ export function EchoProvider({ children }: { children: ReactNode }) {
   const { status, me, currentWorkspace, logout } = useSession();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const location = useLocation();
   const [connected, setConnected] = useState(false);
   const echoRef = useRef<Echo<'reverb'> | null>(null);
   const [instance, setInstance] = useState<Echo<'reverb'> | null>(null);
@@ -93,6 +95,33 @@ export function EchoProvider({ children }: { children: ReactNode }) {
       echo.disconnect();
     };
   }, [status]);
+
+  // FR-NOTI-003 — register the push service worker once per load. Idempotent, and a
+  // no-op when Firebase is unconfigured, which is the default deployment.
+  //
+  // NOTE: deliberately NO firebase onMessage handler. FCM hands a push to the PAGE
+  // when a window client is visible and to the SERVICE WORKER otherwise. The tab-open
+  // case is already covered by the EVT-063 websocket alert below, so adding onMessage
+  // would render a second popup for the same message -- and the two paths carry
+  // different ids, so the dedupe gate could not catch it. Websocket owns foreground,
+  // the worker owns background.
+  useEffect(() => {
+    void registerPushServiceWorker();
+  }, []);
+
+  // API-074 focus ping. The server silences a push for a room this device is already
+  // reading within the last 30s (FR-NOTI-002); web never reported anything, so a
+  // desktop user got a phone push for the message they were looking at.
+  useEffect(() => {
+    if (me === null) {
+      return;
+    }
+    const roomId = /^\/rooms\/([^/]+)/.exec(location.pathname)?.[1] ?? null;
+    const report = () => reportFocus(document.visibilityState === 'visible' ? roomId : null);
+    report();
+    document.addEventListener('visibilitychange', report);
+    return () => document.removeEventListener('visibilitychange', report);
+  }, [location.pathname, me]);
 
   // user-scoped channel: session.revoked (admin suspend/logout-all), user.updated
   useEffect(() => {

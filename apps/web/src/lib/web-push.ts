@@ -1,0 +1,172 @@
+/**
+ * FR-NOTI-003 — Web Push registration (browser glue).
+ *
+ * Pairs with `public/firebase-messaging-sw.js`. This module owns everything that
+ * needs a browser: feature detection, service-worker registration, fetching an FCM
+ * registration token and handing it to the API as a device row.
+ *
+ * The decision rules live in `@banana-chat/chat-core/web-push` so they can be unit
+ * tested; this file stays thin on purpose.
+ *
+ * Ships DORMANT. With no `VITE_FIREBASE_*` build vars every entry point here
+ * returns a status and does nothing — the app must never throw or prompt because
+ * an operator has not set up Firebase yet.
+ */
+
+import {
+  isWebPushConfigured,
+  resolveWebDeviceId,
+  serviceWorkerUrl,
+  webPushStatus,
+  type FirebaseWebConfig,
+  type WebPushStatus,
+} from '@banana-chat/chat-core';
+import { endpoints } from './api';
+
+/**
+ * Build-time config. Vite inlines these; absent vars become '' and
+ * isWebPushConfigured() then reports the whole feature as not-configured.
+ */
+const config: Partial<FirebaseWebConfig> = {
+  apiKey: import.meta.env['VITE_FIREBASE_API_KEY'] ?? '',
+  projectId: import.meta.env['VITE_FIREBASE_PROJECT_ID'] ?? '',
+  messagingSenderId: import.meta.env['VITE_FIREBASE_MESSAGING_SENDER_ID'] ?? '',
+  appId: import.meta.env['VITE_FIREBASE_APP_ID'] ?? '',
+  vapidKey: import.meta.env['VITE_FIREBASE_VAPID_KEY'] ?? '',
+};
+
+function isIos(): boolean {
+  const ua = navigator.userAgent;
+  // iPadOS 13+ reports as Macintosh; maxTouchPoints separates it from a real Mac.
+  return /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+}
+
+function isStandalone(): boolean {
+  return (
+    window.matchMedia?.('(display-mode: standalone)').matches === true ||
+    (navigator as { standalone?: boolean }).standalone === true
+  );
+}
+
+export function currentWebPushStatus(): WebPushStatus {
+  return webPushStatus({
+    hasNotification: 'Notification' in window,
+    hasServiceWorker: 'serviceWorker' in navigator,
+    hasPushManager: 'PushManager' in window,
+    isIos: isIos(),
+    isStandalone: isStandalone(),
+    configured: isWebPushConfigured(config),
+  });
+}
+
+let registration: ServiceWorkerRegistration | null = null;
+
+/**
+ * Register the push worker. Idempotent — the browser dedupes by scope, and we cache
+ * the registration so repeated calls are free.
+ */
+export async function registerPushServiceWorker(): Promise<ServiceWorkerRegistration | null> {
+  if (!isWebPushConfigured(config) || !('serviceWorker' in navigator)) {
+    return null;
+  }
+  if (registration !== null) {
+    return registration;
+  }
+  try {
+    registration = await navigator.serviceWorker.register(serviceWorkerUrl(config), { scope: '/' });
+    return registration;
+  } catch {
+    // A failed SW registration must never break the app. The most common cause is
+    // the file 404ing and nginx serving index.html as text/html instead -- which is
+    // why the deploy checklist verifies /firebase-messaging-sw.js returns JS.
+    return null;
+  }
+}
+
+/**
+ * Full enable path, driven by an explicit user gesture (TC-WEB-030):
+ * permission → service worker → FCM token → device row on the server.
+ *
+ * Returns the resulting status so the caller can render the right message.
+ */
+export async function enableWebPush(): Promise<WebPushStatus | 'denied' | 'enabled' | 'failed'> {
+  const status = currentWebPushStatus();
+  if (status !== 'ready') {
+    return status;
+  }
+
+  const permission = await Notification.requestPermission();
+  if (permission !== 'granted') {
+    return 'denied';
+  }
+
+  const swRegistration = await registerPushServiceWorker();
+  if (swRegistration === null) {
+    return 'failed';
+  }
+
+  try {
+    // Imported lazily so the Firebase SDK is not in the initial bundle for the
+    // (currently typical) deployment that has push switched off.
+    const [{ initializeApp }, { getMessaging, getToken, isSupported }] = await Promise.all([
+      import('firebase/app'),
+      import('firebase/messaging'),
+    ]);
+
+    if (!(await isSupported())) {
+      return 'unsupported';
+    }
+
+    const app = initializeApp({
+      apiKey: config.apiKey!,
+      projectId: config.projectId!,
+      messagingSenderId: config.messagingSenderId!,
+      appId: config.appId!,
+    });
+
+    const token = await getToken(getMessaging(app), {
+      vapidKey: config.vapidKey!,
+      serviceWorkerRegistration: swRegistration,
+    });
+
+    if (!token) {
+      return 'failed';
+    }
+
+    await endpoints.updateDevice(webDeviceId(), {
+      platform: 'web',
+      push_token: token,
+      push_provider: 'fcm',
+      device_name: navigator.userAgent.slice(0, 100),
+      locale: navigator.language?.slice(0, 5) ?? null,
+    });
+
+    return 'enabled';
+  } catch {
+    return 'failed';
+  }
+}
+
+/**
+ * Stable per-browser device id. The server keys a device row on it, so it must
+ * survive reloads and logins — see resolveWebDeviceId for the storage-failure rule.
+ */
+export function webDeviceId(): string {
+  return resolveWebDeviceId(
+    typeof localStorage !== 'undefined' ? localStorage : null,
+    () => crypto.randomUUID().replace(/-/g, '').slice(0, 26).toUpperCase(),
+  );
+}
+
+/**
+ * API-074 focus reporting. The server silences a push when the user's device is
+ * already looking at that room within the last 30s (FR-NOTI-002), and until now
+ * web never told it anything — so a desktop user got a phone push for a message
+ * they were actively reading. Fire-and-forget: a failed ping must not surface.
+ */
+export function reportFocus(roomId: string | null): void {
+  if (!isWebPushConfigured(config)) {
+    return;
+  }
+  void endpoints.reportFocus(webDeviceId(), roomId).catch(() => {});
+}

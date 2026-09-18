@@ -362,6 +362,18 @@ export class Endpoints {
     });
   }
 
+  /**
+   * API-074 — focus ping so the server can silence a push for the room this device
+   * is already reading (FR-NOTI-002). Workspace-agnostic; room_id null means "not
+   * looking at any room".
+   */
+  reportFocus(deviceId: string, roomId: string | null) {
+    return this.api.request<void>('/api/v1/me/focus', {
+      method: 'POST',
+      body: { device_id: deviceId, room_id: roomId },
+    });
+  }
+
   /** API-071 — per-room notification mode (FR-NOTI-005). */
   roomNotificationSettings(roomId: string, slug: string, input: { mode: 'all' | 'mentions' | 'none'; muted_until?: string | null }) {
     return this.api.request<{ settings: unknown }>(`/api/v1/rooms/${roomId}/notifications`, {

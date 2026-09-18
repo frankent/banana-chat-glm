@@ -95,3 +95,5 @@ export type {
   PublicChatRoomLike,
   PublicChatStatusTone,
 } from './public-chat.js';
+export { isWebPushConfigured, webPushStatus, serviceWorkerUrl, resolveWebDeviceId, WEB_DEVICE_ID_KEY } from './web-push.js';
+export type { FirebaseWebConfig, WebPushEnvironment, WebPushStatus } from './web-push.js';

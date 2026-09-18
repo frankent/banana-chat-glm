@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { desktopNotificationPermission, requestDesktopNotificationPermission } from '../lib/desktop-notification';
+import { currentWebPushStatus, enableWebPush } from '../lib/web-push';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { InAppNotification } from '@banana-chat/shared';
@@ -36,8 +37,25 @@ export function NotificationCenter() {
   const [desktopPermission, setDesktopPermission] = useState<NotificationPermission | 'unsupported'>(
     () => desktopNotificationPermission(),
   );
+  // Web Push status is separate from the popup permission: a desktop tab can show
+  // popups with no push setup at all, while a phone needs the full PWA + push path.
+  const [pushStatus, setPushStatus] = useState(() => currentWebPushStatus());
+  const [enabling, setEnabling] = useState(false);
   const askDesktopPermission = async () => {
-    setDesktopPermission(await requestDesktopNotificationPermission());
+    setEnabling(true);
+    try {
+      // Always ask for the popup permission -- that is what makes the tab-open case
+      // work, and it is a prerequisite for push anyway.
+      setDesktopPermission(await requestDesktopNotificationPermission());
+      // Then, when Firebase is configured, go the rest of the way: service worker,
+      // FCM token, device row. Unconfigured deployments stop at the line above.
+      if (currentWebPushStatus() !== 'not-configured') {
+        const result = await enableWebPush();
+        setPushStatus(result === 'enabled' ? 'ready' : currentWebPushStatus());
+      }
+    } finally {
+      setEnabling(false);
+    }
   };
   const sound = (settings.data?.settings as {notification?: {sound?: boolean}} | undefined)?.notification?.sound ?? true;
   const toggleSound = async () => {
@@ -139,6 +157,7 @@ export function NotificationCenter() {
           {desktopPermission === 'default' && (
             <button
               onClick={() => void askDesktopPermission()}
+              disabled={enabling}
               data-testid="enable-desktop-notifications"
               className="mx-2 mb-2 rounded-lg bg-yellow-100 px-2 py-2 text-left text-sm font-medium text-slate-700 hover:bg-yellow-200"
             >
@@ -148,6 +167,15 @@ export function NotificationCenter() {
           {desktopPermission === 'denied' && (
             <p className="px-2 pb-2 text-xs text-slate-400">
               Desktop notifications are blocked in your browser settings.
+            </p>
+          )}
+          {/* The iOS install gate is a real capability boundary, not a failure:
+              Safari exposes no Notification API in a normal tab, only once the
+              site is on the Home Screen. Saying "unsupported" would be a dead end. */}
+          {pushStatus === 'needs-install' && (
+            <p className="px-2 pb-2 text-xs text-slate-500">
+              To get notifications when the app is closed, add Banana Chat to your
+              Home Screen: tap Share, then “Add to Home Screen”.
             </p>
           )}
           {soundError && <p role="alert" className="px-2 text-sm text-red-600">Could not save sound preference. Try again.</p>}
