@@ -180,6 +180,8 @@ class FcmPushSender
         // screen -- and only one of the two carried the room link, so half the taps
         // landed on '/'. Native platforms still get the notification block: they have
         // no service worker to render it.
+        $isWeb = $device->platform === DevicePlatform::Web;
+
         $message = [
             'token' => $device->push_token,
             'data' => $data,
@@ -212,12 +214,22 @@ class FcmPushSender
             ],
         ];
 
-        if ($device->platform !== DevicePlatform::Web) {
-            $message['notification'] = [
-                'title' => $payload['title'],
-                'body' => $payload['body'],
-            ];
+        if ($isWeb) {
+            // A web token gets the webpush block and nothing else. `android` and
+            // `apns` are per-platform overrides for the other two transports, and
+            // sending them alongside a web token produced a SECOND notification on
+            // screen -- measured twice on a clean browser profile, one from our
+            // service worker (tagged, with the room link) and one from the SDK with
+            // neither. Nothing here is lost: the browser never reads them.
+            unset($message['android'], $message['apns']);
+
+            return $message;
         }
+
+        $message['notification'] = [
+            'title' => $payload['title'],
+            'body' => $payload['body'],
+        ];
 
         return $message;
     }

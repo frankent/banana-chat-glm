@@ -123,9 +123,26 @@ function describe(error: unknown): string {
  * Full enable path, driven by an explicit user gesture (TC-WEB-030):
  * permission -> service worker -> FCM token -> device row on the server.
  */
+let inFlight: Promise<EnableWebPushResult> | null = null;
+
 export async function enableWebPush(): Promise<EnableWebPushResult> {
-  lastResult = await runEnable();
-  return lastResult;
+  // Concurrent callers share one run. The silent registration on load and the
+  // user pressing the button overlap constantly, and two getToken() calls against
+  // the same service worker make Firebase rotate: it mints a second token and
+  // DELETES the first. The server had already stored whichever one landed first,
+  // so the push that followed came back UNREGISTERED and the device was struck
+  // off -- observed end to end on a clean profile.
+  if (inFlight !== null) {
+    return inFlight;
+  }
+
+  inFlight = runEnable();
+  try {
+    lastResult = await inFlight;
+    return lastResult;
+  } finally {
+    inFlight = null;
+  }
 }
 
 /**
