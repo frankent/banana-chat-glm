@@ -15,7 +15,8 @@
   .bc-ai-entry, .bc-search, .bc-reply-quote, .bc-file-preview,
   [data-testid="attachment-file"], [data-testid="search-result-message"],
   [data-testid="search-result-file"], [class~="text-left"],
-  .bc-people > button, .bc-ticket-image-grid > button, button:has(> img)
+  .bc-people > button, .bc-ticket-image-grid > button, button:has(> img),
+  .bc-account-menu button, .bc-account-trigger
 )) {
   box-sizing: border-box;
   display: inline-flex;
@@ -48,7 +49,7 @@
 #root [data-testid="delete-button"]:hover {background: #fff1ee; color: #a13e32;}
 
 #root :is(
-  .bc-rail-links button, .bc-rail-bottom button, .bc-mobile-top button,
+  .bc-rail-links > button, .bc-rail-bottom > button, .bc-mobile-top button,
   [data-testid="notification-bell"], [data-testid="attach-button"],
   [data-testid="room-media-toggle"], [data-testid="message-actions"] button,
   .bc-message-actions-toggle, .bc-notes > header > button,

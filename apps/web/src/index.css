@@ -39,8 +39,8 @@ input:focus,textarea:focus,select:focus { outline-color:#c8b564; }
 .bc-rail { width:72px; flex-shrink:0; background:#29372f; display:flex; flex-direction:column; align-items:center; padding:23px 0 22px; z-index:40; }
 .bc-brand { width:42px; height:42px; border-radius:13px; display:grid; place-items:center; background:#f4d35a; color:#3f472c; flex-shrink:0; }
 .bc-rail-links { display:flex; flex-direction:column; gap:15px; margin-top:40px; }
-.bc-rail-links button,.bc-rail-bottom button { width:43px; height:43px; display:grid; place-items:center; border-radius:11px; color:#a5b39f; position:relative; }
-.bc-rail-links button:hover,.bc-rail-bottom button:hover { background:#3c4a3e; }
+.bc-rail-links > button,.bc-rail-bottom > button { width:43px; height:43px; display:grid; place-items:center; border-radius:11px; color:#a5b39f; position:relative; }
+.bc-rail-links > button:hover,.bc-rail-bottom > button:hover { background:#3c4a3e; }
 .bc-rail-links button.active { background:#4b5845; color:#f4d35a; }
 .bc-rail-links button.active:before { content:''; position:absolute; left:-15px; height:19px; width:3px; background:#f4d35a; border-radius:0 4px 4px 0; }
 .bc-rail-divider { height:1px; background:#465344; margin:9px 6px; }
@@ -49,12 +49,14 @@ input:focus,textarea:focus,select:focus { outline-color:#c8b564; }
    which is only 56-72px wide, so the panel opens to the RIGHT and is pinned to
    the bottom -- anchoring it below the trigger would push it off-screen. */
 .bc-account { position:relative; }
-/* NOTE ON SPECIFICITY: these live inside .bc-rail-bottom, whose button rule
-   (`.bc-rail-links button,.bc-rail-bottom button`) pins every descendant button
-   to a 43px grid cell -- and the mobile media query re-pins it to 37px LATER in
-   the file, at equal specificity. A plain `.bc-account-menu button` therefore
-   lost on phones and the labels collapsed on top of each other. Scoping through
-   .bc-rail-bottom (0,2,1) beats both, in and out of the media query. */
+/* The rail's icon-button geometry (index.css above and the #root touch-target
+   rules in buttons.css) used to match every DESCENDANT button, which included
+   the items inside this dropdown -- they were forced to a 40-44px square with
+   padding:0 and collapsed on top of each other. Those selectors are now scoped
+   to DIRECT children (`.bc-rail-bottom > button`), and the menu items are listed
+   in buttons.css's `:not(:where(...))` opt-out, which is the mechanism that file
+   already provides. Chasing specificity could not have worked: the touch-target
+   rule is #root-scoped (1,2,1) and an ID always beats classes. */
 .bc-rail-bottom .bc-account { position:relative; }
 .bc-rail-bottom .bc-account-trigger { width:auto; height:auto; min-width:0; background:none; padding:0; border-radius:50%; cursor:pointer; display:block; }
 .bc-rail-bottom .bc-account-menu { position:absolute; bottom:0; left:calc(100% + 10px); min-width:216px; background:#fff; border:1px solid var(--bc-line,#e2e8f0); border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.18); padding:6px; z-index:60; }
@@ -181,7 +183,7 @@ input:focus,textarea:focus,select:focus { outline-color:#c8b564; }
 @media(max-width:1000px) { .bc-sidebar{width:270px} .bc-chat-header{padding:0 22px} .bc-message-list{padding:22px} .bc-composer{padding:13px 22px} .bc-compose-hint>span:first-child{display:none} .bc-login-story{padding:35px} }
 @media(max-width:760px) {
   .bc-chat{position:relative}.bc-chat [data-testid="room-media-panel"]{position:absolute;inset:0 0 0 auto;width:min(288px,100%);z-index:20;box-shadow:-8px 0 30px #29372f18}
-  .bc-rail{width:56px;padding:16px 0} .bc-brand{width:36px;height:36px;border-radius:11px} .bc-rail-links button,.bc-rail-bottom button{width:37px;height:37px} .bc-rail-links button.active:before{left:-10px}
+  .bc-rail{width:56px;padding:16px 0} .bc-brand{width:36px;height:36px;border-radius:11px} .bc-rail-links > button,.bc-rail-bottom > button{width:37px;height:37px} .bc-rail-links button.active:before{left:-10px}
   .bc-sidebar{position:absolute;top:0;bottom:0;left:56px;width:min(300px,calc(100vw - 70px));z-index:30;display:none;box-shadow:10px 0 35px #29372f18} .bc-sidebar.is-open{display:flex}
   .bc-sidebar-shade{display:block;position:fixed;inset:0 0 0 56px;background:#29372f33;z-index:25}
   .bc-mobile-top{height:49px;flex-shrink:0;display:flex;align-items:center;gap:12px;padding:0 16px;border-bottom:1px solid var(--bc-line);font-size:12px;font-weight:600} .bc-mobile-top button{padding:6px;color:#7d8b68}
