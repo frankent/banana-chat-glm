@@ -17,7 +17,7 @@ import { Markdown } from './Markdown';
 export function AiChatPane({ conversationId, slug }: { conversationId: string; slug: string }) {
   const {
     messages, hasMoreBefore, loadOlder, send, cancel, retry, status, streamTick, consentOpen, giveConsent,
-    regenerate, editResend, toggleSuperseded, supersededVisible,
+    regenerate, editResend, toggleSuperseded, supersededVisible, sending,
   } = useAiStore();
   const list = messages[conversationId] ?? [];
   const [draft, setDraft] = useState('');
@@ -310,6 +310,18 @@ export function AiChatPane({ conversationId, slug }: { conversationId: string; s
             </div>
           );
         })}
+        {/* The assistant's own bubble cannot appear until the send round-trip
+            returns and the server hands back a pending row, so until then the
+            screen said nothing at all — you pressed Enter and waited. `sending`
+            was already tracked in the store and simply had no reader. */}
+        {sending && !list.some((m) => m.status === 'pending' || m.status === 'streaming') ? (
+          <div className="mb-2 flex flex-col items-start gap-1" data-testid="ai-thinking">
+            <div className="max-w-[75%] rounded-2xl rounded-bl-sm bg-white px-3 py-2 text-sm text-slate-500 shadow-sm">
+              <span className="animate-pulse">กำลังคิด…</span>
+              <span className="ml-0.5 inline-block h-4 w-1 animate-pulse bg-amber-400 align-middle" />
+            </div>
+          </div>
+        ) : null}
         <div ref={bottomRef} />
       </div>
 
