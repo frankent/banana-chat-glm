@@ -293,7 +293,13 @@ h1,h2,h3 { font-family:Manrope,'DM Sans',system-ui,sans-serif; }
    and on desktop it sat over the rail's account menu. A banner takes its own
    space instead, which makes overlapping any control impossible at any width.
    Same precedent as ConnectionBanner directly above it. */
-.bc-push-prompt { flex-shrink:0; display:flex; align-items:center; gap:12px; padding:11px 16px; background:#fffbe9; border-bottom:1px solid #f0e3b0; }
+.bc-push-prompt { position:relative; z-index:50; flex-shrink:0; display:flex; align-items:center; gap:12px; padding:11px 16px; background:#fffbe9; border-bottom:1px solid #f0e3b0; }
+/* z-index 50 clears the mobile drawer (30) and its scrim (25). Both are anchored
+   to the top of the VIEWPORT rather than to the row they belong to, so on a phone
+   they painted straight over this banner and swallowed taps on its buttons --
+   reported from a device, on the one route where the drawer opens by default.
+   The drawer now slides beneath the banner, which is how an app bar should behave
+   anyway. */
 .bc-push-prompt-icon { flex-shrink:0; width:34px; height:34px; border-radius:11px; background:#f9edaa; color:#8d8c51; display:grid; place-items:center; }
 .bc-push-prompt-body { min-width:0; flex:1; display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
 .bc-push-prompt-title { font-size:13px; font-weight:700; color:var(--bc-ink); }
