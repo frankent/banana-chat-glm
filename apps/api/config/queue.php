@@ -71,7 +71,11 @@ return [
             // TASK-INF-014 — must exceed the ai supervisor's 660s timeout,
             // else long generations get retried while still running
             'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 730),
-            'block_for' => null,
+            // Block on Redis instead of polling. With null the worker sleeps three
+            // seconds between empty polls, so anything queued during that nap waits
+            // for it to end -- every broadcast event, which is to say every chat
+            // message and every notification alert, arrived up to 3s late.
+            'block_for' => (int) env('REDIS_QUEUE_BLOCK_FOR', 5),
             'after_commit' => false,
         ],
 
