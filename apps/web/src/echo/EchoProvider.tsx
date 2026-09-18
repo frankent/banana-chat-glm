@@ -1,6 +1,6 @@
 import { NotificationGate } from '@banana-chat/chat-core';
 import { showDesktopNotification } from '../lib/desktop-notification';
-import { ensureWebPushRegistered, registerPushServiceWorker, reportFocus } from '../lib/web-push';
+import { ensureWebPushRegistered, isWebPushReady, registerPushServiceWorker, reportFocus } from '../lib/web-push';
 import { playNotificationAudio } from '../lib/notification-audio';
 import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
@@ -163,7 +163,12 @@ export function EchoProvider({ children }: { children: ReactNode }) {
       // stopListening(event) with no callback unbinds EVERY listener for that
       // event, so a second registration is a cleanup hazard (see the note at the
       // room-channel teardown below).
-      if (!lookingAtRoom) {
+      // Hidden tab: the service worker is already rendering this one from the push,
+      // so a page popup here would be the same message twice with two different
+      // tags. A visible-but-unfocused tab still needs this branch -- FCM hands the
+      // push to the page in that case and the worker never sees it.
+      const workerWillRender = document.visibilityState === 'hidden' && isWebPushReady();
+      if (!lookingAtRoom && !workerWillRender) {
         // ['rooms', slug, filter] -- the slug and filter are not in scope here, and
         // endpoints.rooms() resolves to RoomListItem[] directly, so scan every
         // cached rooms query for the id instead of reconstructing the key.

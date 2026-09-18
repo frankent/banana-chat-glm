@@ -454,11 +454,45 @@ test('a push actually goes out for an offline member with a token', function () 
 
         $m = $request->data()['message'] ?? [];
 
+        // A WEB token gets the web shape: what renders the notification is
+        // webpush.notification, and android/apns are deliberately absent — sending
+        // them put a second notification on screen, and sending neither them nor
+        // webpush.notification put none there at all.
         return $request->hasHeader('Authorization', 'Bearer tok')
             && str_contains($request->url(), '/v1/projects/test-project/messages:send')
             && $m['token'] === 'live-tok'
-            && $m['notification']['title'] === 'Engineering'
+            && ! isset($m['notification'], $m['android'], $m['apns'])
             && $m['data']['room_id'] === $this->room->id
+            && $m['webpush']['notification']['title'] === 'Engineering'
+            && $m['webpush']['notification']['tag'] === $this->room->id
+            && str_starts_with((string) $m['webpush']['fcm_options']['link'], 'http')
+            && str_ends_with((string) $m['webpush']['fcm_options']['link'], '/rooms/'.$this->room->id);
+    });
+});
+
+test('a native token still gets the notification, android and apns blocks', function () {
+    // The web shape is a web-only narrowing; iOS and Android have no service worker
+    // to render for them, so they must keep the platform blocks.
+    Device::query()->create([
+        'user_id' => $this->somchai->id, 'platform' => 'ios', 'push_token' => 'ios-tok', 'push_provider' => 'fcm',
+    ]);
+
+    Http::fake([
+        'oauth2.googleapis.com/*' => Http::response(['access_token' => 'tok', 'expires_in' => 3600]),
+        'fcm.googleapis.com/*' => Http::response(['name' => 'projects/test-project/messages/1'], 200),
+    ]);
+
+    (new NotifyMessage(sendMessageRaw($this, $this->tonyToken, $this->room->id, 'native push')->id))
+        ->handle(app(PushDecisionService::class), app(FcmPushSender::class));
+
+    Http::assertSent(function (HttpRequest $request) {
+        if (! str_contains($request->url(), 'fcm.googleapis.com')) {
+            return false;
+        }
+        $m = $request->data()['message'] ?? [];
+
+        return $m['token'] === 'ios-tok'
+            && $m['notification']['title'] === 'Engineering'
             && $m['android']['notification']['channel_id'] === 'messages'
             && $m['apns']['headers']['apns-collapse-id'] === $this->room->id;
     });

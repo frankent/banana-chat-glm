@@ -75,13 +75,27 @@ export function webPushStatus(env: WebPushEnvironment): WebPushStatus {
  * page when calling getToken(), and there is no reason to put it in a URL the
  * browser persists against the registration.
  */
-export function serviceWorkerUrl(config: FirebaseWebConfig, path = '/firebase-messaging-sw.js'): string {
+export function serviceWorkerUrl(
+  config: FirebaseWebConfig,
+  /**
+   * Build id. A browser treats a different script URL as a different worker, so this
+   * is what gets a corrected worker onto devices that already installed an old one.
+   * Without it the edge cache (Cloudflare was answering with max-age=14400 despite
+   * the origin sending no-cache) can keep serving the previous file for hours, and
+   * an old worker paired with a new payload shape renders duplicates.
+   */
+  version = '',
+  path = '/firebase-messaging-sw.js',
+): string {
   const params = new URLSearchParams({
     apiKey: config.apiKey,
     projectId: config.projectId,
     messagingSenderId: config.messagingSenderId,
     appId: config.appId,
   });
+  if (version !== '') {
+    params.set('v', version);
+  }
   return `${path}?${params.toString()}`;
 }
 

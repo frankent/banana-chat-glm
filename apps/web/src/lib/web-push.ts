@@ -24,6 +24,8 @@ import {
 } from '@banana-chat/chat-core';
 import { endpoints } from './api';
 
+declare const __SW_BUILD_ID__: string;
+
 /**
  * Build-time config. Vite inlines these; absent vars become '' and
  * isWebPushConfigured() then reports the whole feature as not-configured.
@@ -46,6 +48,20 @@ function isStandalone(): boolean {
   return (
     window.matchMedia?.('(display-mode: standalone)').matches === true ||
     (navigator as { standalone?: boolean }).standalone === true
+  );
+}
+
+/**
+ * Whether a push for this device would actually be delivered and rendered by the
+ * service worker. Callers use it to stay out of the worker's way rather than
+ * double-render the same message.
+ */
+export function isWebPushReady(): boolean {
+  return (
+    currentWebPushStatus() === 'ready' &&
+    typeof Notification !== 'undefined' &&
+    Notification.permission === 'granted' &&
+    lastResult?.state === 'enabled'
   );
 }
 
@@ -74,7 +90,7 @@ export async function registerPushServiceWorker(): Promise<ServiceWorkerRegistra
     return registration;
   }
   try {
-    registration = await navigator.serviceWorker.register(serviceWorkerUrl(config), { scope: '/' });
+    registration = await navigator.serviceWorker.register(serviceWorkerUrl(config, __SW_BUILD_ID__), { scope: '/' });
     return registration;
   } catch {
     // A failed SW registration must never break the app. The most common cause is
