@@ -49,13 +49,29 @@ input:focus,textarea:focus,select:focus { outline-color:#c8b564; }
    which is only 56-72px wide, so the panel opens to the RIGHT and is pinned to
    the bottom -- anchoring it below the trigger would push it off-screen. */
 .bc-account { position:relative; }
-.bc-account-trigger { width:auto!important; height:auto!important; background:none!important; padding:0; border-radius:50%; cursor:pointer; }
-.bc-account-menu { position:absolute; bottom:0; left:calc(100% + 10px); min-width:208px; background:var(--bc-surface,#fff); border:1px solid var(--bc-line,#e2e8f0); border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.18); padding:6px; z-index:60; }
-.bc-account-who { padding:10px 12px 8px; display:flex; flex-direction:column; gap:2px; border-bottom:1px solid var(--bc-line,#e2e8f0); margin-bottom:4px; }
-.bc-account-who strong { font-size:14px; }
-.bc-account-who span { font-size:12px; color:#64748b; }
-.bc-account-menu button { display:flex; align-items:center; gap:10px; width:100%; padding:10px 12px; border-radius:8px; font-size:14px; text-align:left; color:inherit; }
-.bc-account-menu button:hover { background:var(--bc-hover,#f1f5f9); }
+/* NOTE ON SPECIFICITY: these live inside .bc-rail-bottom, whose button rule
+   (`.bc-rail-links button,.bc-rail-bottom button`) pins every descendant button
+   to a 43px grid cell -- and the mobile media query re-pins it to 37px LATER in
+   the file, at equal specificity. A plain `.bc-account-menu button` therefore
+   lost on phones and the labels collapsed on top of each other. Scoping through
+   .bc-rail-bottom (0,2,1) beats both, in and out of the media query. */
+.bc-rail-bottom .bc-account { position:relative; }
+.bc-rail-bottom .bc-account-trigger { width:auto; height:auto; min-width:0; background:none; padding:0; border-radius:50%; cursor:pointer; display:block; }
+.bc-rail-bottom .bc-account-menu { position:absolute; bottom:0; left:calc(100% + 10px); min-width:216px; background:#fff; border:1px solid var(--bc-line,#e2e8f0); border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.18); padding:6px; z-index:60; }
+.bc-rail-bottom .bc-account-who { padding:10px 12px 8px; display:flex; flex-direction:column; gap:2px; border-bottom:1px solid var(--bc-line,#e2e8f0); margin-bottom:4px; }
+.bc-rail-bottom .bc-account-who strong { font-size:14px; color:#0f172a; }
+.bc-rail-bottom .bc-account-who span { font-size:12px; color:#64748b; }
+/* width/height/display are all restated because the rail rule sets each of them. */
+.bc-rail-bottom .bc-account-menu button { display:flex; align-items:center; justify-content:flex-start; gap:10px; width:100%; height:auto; min-height:40px; padding:10px 12px; border-radius:8px; font-size:14px; line-height:1.3; text-align:left; color:#0f172a; white-space:nowrap; }
+.bc-rail-bottom .bc-account-menu button:hover { background:#f1f5f9; }
+/* On a narrow phone the rail is only 56px, so a menu opening to its right can
+   still run off the edge. Pin it to the viewport instead of the trigger. */
+@media (max-width:640px) {
+  /* Keep a real minimum: `min-width:0; width:max-content` collapsed the panel to
+     ~36px here, because the containing block is the ~37px .bc-account cell and
+     max-content did not expand past it -- the labels then overflowed the box. */
+  .bc-rail-bottom .bc-account-menu { left:calc(100% + 8px); right:auto; min-width:200px; max-width:calc(100vw - 72px); }
+}
 .bc-avatar { display:inline-flex; align-items:center; justify-content:center; width:37px; height:37px; border-radius:12px; background:var(--avatar-bg); color:var(--avatar-ink); font-size:12px; font-weight:650; flex-shrink:0; }
 .bc-sidebar { width:300px; background:var(--bc-side); border-right:1px solid var(--bc-line); display:flex; flex-direction:column; flex-shrink:0; }
 .bc-workspace { display:flex; align-items:center; gap:10px; padding:25px 18px 20px; }
