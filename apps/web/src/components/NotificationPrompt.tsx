@@ -121,7 +121,10 @@ export function NotificationPrompt() {
   };
 
   return (
-    <div className="bc-push-prompt" role="dialog" aria-label="Turn on notifications">
+    // A region, not a dialog: it takes its own space at the top of the shell rather
+    // than covering anything, and trapping focus over someone's inbox to offer them a
+    // feature is how people learn to dismiss without reading.
+    <div className="bc-push-prompt" role="region" aria-label="Notification settings">
       <div className="bc-push-prompt-icon" aria-hidden><Icon name="bell" size={20} /></div>
       <div className="bc-push-prompt-body">
         {done ? (
