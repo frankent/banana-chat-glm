@@ -215,12 +215,29 @@ class FcmPushSender
         ];
 
         if ($isWeb) {
-            // A web token gets the webpush block and nothing else. `android` and
-            // `apns` are per-platform overrides for the other two transports, and
-            // sending them alongside a web token produced a SECOND notification on
-            // screen -- measured twice on a clean browser profile, one from our
-            // service worker (tagged, with the room link) and one from the SDK with
-            // neither. Nothing here is lost: the browser never reads them.
+            // What actually renders a web push is `webpush.notification`, handled by
+            // the Firebase SDK inside the service worker. Two measurements settled
+            // this, both on clean browser profiles: with android+apns attached the
+            // browser showed TWO notifications, and with them removed and nothing in
+            // their place it showed NONE, even though FCM accepted the send and the
+            // token was healthy. android and apns are overrides for the other two
+            // transports and a browser never reads them.
+            //
+            // fcm_options.link is how the click reaches the right room. FCM requires
+            // an absolute https URL there, hence app.url rather than a bare path.
+            $base = rtrim((string) config('app.url'), '/');
+            $roomId = (string) ($payload['data']['room_id'] ?? '');
+
+            $message['webpush'] = [
+                'headers' => ['Topic' => $collapseKey],
+                'notification' => [
+                    'title' => $payload['title'],
+                    'body' => $payload['body'],
+                    'icon' => $base.'/icon-192.png',
+                    'tag' => $collapseKey,
+                ],
+                'fcm_options' => ['link' => $roomId !== '' ? $base.'/rooms/'.$roomId : $base.'/'],
+            ];
             unset($message['android'], $message['apns']);
 
             return $message;

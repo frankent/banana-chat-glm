@@ -34,58 +34,28 @@ const config = {
 // page logic simple -- it never has to branch on "is the SW there".
 if (config.apiKey && config.projectId && config.messagingSenderId && config.appId) {
   firebase.initializeApp(config);
-  const messaging = firebase.messaging();
 
-  messaging.onBackgroundMessage((payload) => {
-    const data = payload.data || {};
-    // The server sends BOTH `notification` and `data` (§10). When a `notification`
-    // block is present Chrome may render it automatically; showing our own as well
-    // would double up, so we key off data and use a tag so repeats collapse.
-    const title = data.title || 'Banana Chat';
-    const body = data.body || 'ข้อความใหม่';
-    const roomId = data.room_id || '';
-
-    return self.registration.showNotification(title, {
-      body,
-      icon: '/icon-192.png',
-      badge: '/icon-192.png',
-      tag: roomId || 'banana-chat',
-      renotify: false,
-      data: {
-        // Where a click should land. Computed here so the click handler stays dumb.
-        url: roomId ? `/rooms/${roomId}` : '/',
-      },
-    });
-  });
+  // Initialising messaging is what registers the SDK's own push and
+  // notificationclick handlers, and those are deliberately the only ones here.
+  //
+  // This file used to render the notification itself from onBackgroundMessage. Two
+  // end-to-end measurements on clean browser profiles showed why that was wrong:
+  // with the server sending android+apns blocks the browser displayed TWO
+  // notifications (the SDK's and ours, and only ours carried the room link), and
+  // with those blocks removed it displayed NONE -- our handler was not what had
+  // been rendering. The server now sends webpush.notification plus
+  // fcm_options.link, which the SDK renders once and routes on click, focusing an
+  // existing tab rather than opening a second copy of the app.
+  firebase.messaging();
 }
 
-/**
- * Focus an existing tab if one is open rather than spawning a second copy of the
- * app -- a chat app with three tabs of itself is its own bug report.
+/*
+ * No notificationclick listener here on purpose. The SDK registers its own, which
+ * opens fcm_options.link and focuses an existing tab for that URL instead of
+ * spawning a second copy of the app. A listener of ours would fire alongside it
+ * and, seeing none of its own data on an SDK-rendered notification, send every
+ * click to '/' instead of the room.
  */
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-  const target = (event.notification.data && event.notification.data.url) || '/';
 
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
-      for (const client of clientList) {
-        if ('focus' in client) {
-          // navigate() can reject on cross-origin or if the client is unloading;
-          // focusing is the part that matters, so never let it break the handler.
-          if ('navigate' in client) {
-            client.navigate(target).catch(() => {});
-          }
-          return client.focus();
-        }
-      }
-      return self.clients.openWindow(target);
-    }),
-  );
-});
-
-// Take over without waiting for every old tab to close, so a deployed fix to this
-// file applies on the next page load rather than whenever the user happens to
-// close every tab.
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
