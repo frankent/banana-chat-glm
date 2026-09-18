@@ -64,7 +64,7 @@ input:focus,textarea:focus,select:focus { outline-color:#c8b564; }
 .bc-rail-bottom .bc-account-who strong { font-size:14px; color:#0f172a; }
 .bc-rail-bottom .bc-account-who span { font-size:12px; color:#64748b; }
 /* width/height/display are all restated because the rail rule sets each of them. */
-.bc-rail-bottom .bc-account-menu button { display:flex; align-items:center; justify-content:flex-start; gap:10px; width:100%; height:auto; min-height:40px; padding:10px 12px; border-radius:8px; font-size:14px; line-height:1.3; text-align:left; color:#0f172a; white-space:nowrap; }
+.bc-rail-bottom .bc-account-menu button { display:flex; align-items:center; justify-content:flex-start; gap:10px; width:100%; height:auto; min-height:40px; padding:10px 12px; border-radius:8px; font-size:14px; font-weight:500; line-height:1.3; text-align:left; color:#0f172a; white-space:nowrap; }
 .bc-rail-bottom .bc-account-menu button:hover { background:#f1f5f9; }
 /* On a narrow phone the rail is only 56px, so a menu opening to its right can
    still run off the edge. Pin it to the viewport instead of the trigger. */
