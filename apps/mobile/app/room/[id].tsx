@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, AppState, Image, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import { useLocalSearchParams } from 'expo-router';
 import { MessageStore, Outbox, RoomSync, ReadReceiptReporter, applyRoomEvent, type OutboxEntry } from '@banana-chat/chat-core';
@@ -13,6 +13,9 @@ import { getLocale, tr } from '../../src/lib/i18n';
 import { formatTime, theme } from '../../src/lib/theme';
 import { watchRoom } from '../../src/realtime/echo';
 import { setCurrentRoom } from '../../src/push/current-room';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+import type { OutboxAttachmentDraft } from '@banana-chat/chat-core';
 
 /**
  * TASK-MOB-003/005 — chat screen: inverted FlashList over MessageStore,
@@ -39,6 +42,16 @@ export default function RoomScreen() {
   const receiptRef = useRef<ReadReceiptReporter | null>(null);
   const [draft, setDraft] = useState('');
   const [online, setOnline] = useState(true);
+  // TASK-MOB-009 — message actions. `actionsFor` drives the long-press sheet;
+  // `replyTo` and `editing` are mutually exclusive composer modes.
+  const [actionsFor, setActionsFor] = useState<Message | null>(null);
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [editing, setEditing] = useState<Message | null>(null);
+  const [busy, setBusy] = useState(false);
+  // TASK-MOB-006 — staged attachments. The upload pipeline (createUpload ->
+  // PUT -> completeUpload) already existed in outbox-flusher; only the picker
+  // was missing, so a mobile user could never attach anything.
+  const [pending, setPending] = useState<OutboxAttachmentDraft[]>([]);
   const t = tr();
 
   const rebuild = useCallback(() => {
@@ -155,12 +168,92 @@ export default function RoomScreen() {
 
   const send = async () => {
     const body = draft.trim();
-    if (body === '' || outboxRef.current === null || workspace === null) {
+    // An attachment-only message is legitimate (§10 renders a media badge for it),
+    // so an empty body is only a reason to bail when nothing is staged either.
+    if ((body === '' && pending.length === 0) || outboxRef.current === null || workspace === null) {
       return;
     }
+    const slug = workspace.workspace.slug;
+
+    // An edit is a direct PATCH, never an outbox entry: the outbox exists to make
+    // a NEW message survive being offline, and replaying an edit against a message
+    // whose body has since moved on would silently clobber someone else's change.
+    if (editing !== null) {
+      const target = editing;
+      setBusy(true);
+      try {
+        const { message: updated } = await endpoints.editMessage(target.id, slug, body);
+        storeRef.current?.add(updated);
+        setEditing(null);
+        setDraft('');
+      } catch {
+        // leave the draft in place so the text is not lost
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
     setDraft('');
-    await outboxRef.current.enqueue({ roomId, workspaceId: workspace.workspace.slug, body });
+    const parent = replyTo;
+    const files = pending;
+    setReplyTo(null);
+    setPending([]);
+    await outboxRef.current.enqueue({
+      roomId,
+      workspaceId: slug,
+      body,
+      ...(parent !== null ? { replyToMessageId: parent.id } : {}),
+      ...(files.length > 0 ? { attachments: files } : {}),
+    });
     rebuild(); // pending row shows immediately (TC-MOB-009)
+  };
+
+  const pickImage = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) return;
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images', 'videos'], quality: 0.8 });
+    if (result.canceled || result.assets.length === 0) return;
+    setPending((prev) => [
+      ...prev,
+      ...result.assets.map((a) => ({
+        local_path: a.uri,
+        kind: (a.type === 'video' ? 'video' : 'image') as OutboxAttachmentDraft['kind'],
+        mime_type: a.mimeType ?? (a.type === 'video' ? 'video/mp4' : 'image/jpeg'),
+        original_name: a.fileName ?? `upload-${Date.now()}`,
+        size_bytes: a.fileSize ?? 0,
+      })),
+    ]);
+  };
+
+  const pickDocument = async () => {
+    const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
+    if (result.canceled || result.assets.length === 0) return;
+    setPending((prev) => [
+      ...prev,
+      ...result.assets.map((a) => ({
+        local_path: a.uri,
+        kind: 'file' as OutboxAttachmentDraft['kind'],
+        mime_type: a.mimeType ?? 'application/octet-stream',
+        original_name: a.name,
+        size_bytes: a.size ?? 0,
+      })),
+    ]);
+  };
+
+  const removeMessage = async (message: Message) => {
+    if (workspace === null) return;
+    setBusy(true);
+    try {
+      await endpoints.deleteMessage(message.id, workspace.workspace.slug);
+      // The server returns a tombstone via realtime; patch locally too so the row
+      // updates even if the socket is down.
+      storeRef.current?.add({ ...message, deleted_at: new Date().toISOString(), body: null });
+    } catch {
+      // ignore -- the row stays as-is and the user can retry
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -205,16 +298,72 @@ export default function RoomScreen() {
           }
           const m = item.message!;
           const mine = m.sender_id === me?.id;
+          const gone = m.deleted_at !== null;
           return (
-            <View style={[styles.bubble, mine ? styles.mine : styles.theirs]}>
+            <Pressable
+              onLongPress={() => { if (!gone) setActionsFor(m); }}
+              delayLongPress={300}
+              style={[styles.bubble, mine ? styles.mine : styles.theirs]}
+            >
               {!mine && <Text style={styles.sender}>{m.sender?.display_name ?? m.sender_id}</Text>}
-              <Text style={styles.bubbleText}>{m.deleted_at ? 'ข้อความถูกลบ' : m.body ?? ''}</Text>
-              <Text style={styles.time}>{formatTime(m.created_at, getLocale())}</Text>
-            </View>
+              {m.reply_to !== null && (
+                <View style={styles.replyQuote}>
+                  <Text style={styles.replyQuoteText} numberOfLines={1}>
+                    {m.reply_to.deleted ? t('message.deleted') : m.reply_to.snippet ?? ''}
+                  </Text>
+                </View>
+              )}
+              {m.attachments.length > 0 && !gone && (
+                <View style={styles.attachments}>
+                  {m.attachments.map((a) => (
+                    // thumb_md first: the original can be many MB and this list is
+                    // inverted and virtualised, so full-size decodes would jank scroll.
+                    a.kind === 'image' && (a.urls.thumb_md ?? a.urls.original) !== null
+                      ? <Image key={a.id} source={{ uri: (a.urls.thumb_md ?? a.urls.original)! }} style={styles.attachmentImage} resizeMode="cover" />
+                      : <Text key={a.id} style={styles.attachmentFile}>📎 {a.original_name}</Text>
+                  ))}
+                </View>
+              )}
+              {(m.body !== null && m.body !== '') || gone ? (
+                <Text style={[styles.bubbleText, gone && styles.deletedText]}>
+                  {gone ? t('message.deleted') : m.body}
+                </Text>
+              ) : null}
+              <View style={styles.metaRow}>
+                {m.edited_at !== null && !gone && <Text style={styles.meta}>{t('message.edited')}</Text>}
+                <Text style={styles.time}>{formatTime(m.created_at, getLocale())}</Text>
+              </View>
+            </Pressable>
           );
         }}
       />
+      {(replyTo !== null || editing !== null) && (
+        <View style={styles.composerChip}>
+          <Text style={styles.composerChipText} numberOfLines={1}>
+            {editing !== null
+              ? t('message.editing')
+              : `${t('message.replyingTo')}: ${replyTo?.body ?? ''}`}
+          </Text>
+          <Pressable onPress={() => { setReplyTo(null); setEditing(null); setDraft(''); }}>
+            <Text style={styles.composerChipCancel}>{t('common.cancel')}</Text>
+          </Pressable>
+        </View>
+      )}
+      {pending.length > 0 && (
+        <View style={styles.pendingStrip}>
+          {pending.map((a, i) => (
+            <Pressable key={`${a.local_path}-${i}`} onPress={() => setPending((p) => p.filter((_, j) => j !== i))}>
+              <Text style={styles.pendingChip} numberOfLines={1}>
+                {a.kind === 'image' ? '🖼' : a.kind === 'video' ? '🎬' : '📎'} {a.original_name}  ✕
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
       <View style={styles.composer}>
+        <Pressable style={styles.attachButton} onLongPress={() => void pickDocument()} onPress={() => void pickImage()}>
+          <Text style={styles.attachText}>＋</Text>
+        </Pressable>
         <TextInput
           style={styles.input}
           placeholder={t('composer.placeholder')}
@@ -223,10 +372,36 @@ export default function RoomScreen() {
           onChangeText={setDraft}
           multiline
         />
-        <Pressable style={styles.sendButton} onPress={() => void send()}>
-          <Text style={styles.sendText}>{t('composer.send')}</Text>
+        <Pressable style={styles.sendButton} disabled={busy} onPress={() => void send()}>
+          {busy ? <ActivityIndicator color="#0b1220" /> : <Text style={styles.sendText}>{t('composer.send')}</Text>}
         </Pressable>
       </View>
+
+      {/* Long-press action sheet. Edit and Delete are offered only for your own
+          messages -- the server enforces it too, but showing an action that is
+          guaranteed to 403 is worse than not showing it. */}
+      <Modal visible={actionsFor !== null} transparent animationType="fade" onRequestClose={() => setActionsFor(null)}>
+        <Pressable style={styles.sheetBackdrop} onPress={() => setActionsFor(null)}>
+          <View style={styles.sheet}>
+            <Pressable style={styles.sheetItem} onPress={() => { setReplyTo(actionsFor); setEditing(null); setActionsFor(null); }}>
+              <Text style={styles.sheetText}>{t('message.reply')}</Text>
+            </Pressable>
+            {actionsFor?.sender_id === me?.id && (
+              <>
+                <Pressable style={styles.sheetItem} onPress={() => { setEditing(actionsFor); setReplyTo(null); setDraft(actionsFor?.body ?? ''); setActionsFor(null); }}>
+                  <Text style={styles.sheetText}>{t('message.edit')}</Text>
+                </Pressable>
+                <Pressable style={styles.sheetItem} onPress={() => { const m = actionsFor; setActionsFor(null); if (m) void removeMessage(m); }}>
+                  <Text style={[styles.sheetText, styles.sheetDanger]}>{t('message.delete')}</Text>
+                </Pressable>
+              </>
+            )}
+            <Pressable style={styles.sheetItem} onPress={() => setActionsFor(null)}>
+              <Text style={styles.sheetMuted}>{t('common.cancel')}</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -245,6 +420,27 @@ const styles = StyleSheet.create({
   failedActions: { flexDirection: 'row', gap: 12, marginTop: 4 },
   failedAction: { color: theme.colors.primary, fontSize: 13, fontWeight: '600' },
   errorText: { color: theme.colors.danger, fontSize: 12, flexShrink: 1 },
+  replyQuote: { borderLeftWidth: 3, borderLeftColor: theme.colors.primary, paddingLeft: 8, marginBottom: 4, opacity: 0.85 },
+  replyQuoteText: { color: theme.colors.textMuted, fontSize: 13 },
+  attachments: { gap: 6, marginBottom: 6 },
+  attachmentImage: { width: 200, height: 150, borderRadius: 8, backgroundColor: theme.colors.surfaceAlt },
+  attachmentFile: { color: theme.colors.text, fontSize: 14 },
+  deletedText: { fontStyle: 'italic', color: theme.colors.textMuted },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-end', marginTop: 2 },
+  meta: { color: theme.colors.textMuted, fontSize: 11, fontStyle: 'italic' },
+  composerChip: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius, paddingHorizontal: 12, paddingVertical: 8, marginTop: 8 },
+  composerChipText: { color: theme.colors.textMuted, fontSize: 13, flex: 1 },
+  composerChipCancel: { color: theme.colors.primary, fontSize: 13, fontWeight: '600' },
+  sheetBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  sheet: { backgroundColor: theme.colors.surface, borderTopLeftRadius: 16, borderTopRightRadius: 16, paddingVertical: 8 },
+  sheetItem: { paddingVertical: 16, paddingHorizontal: 20 },
+  sheetText: { color: theme.colors.text, fontSize: 16 },
+  sheetDanger: { color: theme.colors.danger },
+  sheetMuted: { color: theme.colors.textMuted, fontSize: 16 },
+  pendingStrip: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingTop: 8 },
+  pendingChip: { color: theme.colors.text, backgroundColor: theme.colors.surfaceAlt, borderRadius: theme.radius, paddingHorizontal: 10, paddingVertical: 6, fontSize: 13, maxWidth: 200 },
+  attachButton: { backgroundColor: theme.colors.surface, borderRadius: theme.radius, paddingHorizontal: 14, paddingVertical: 10 },
+  attachText: { color: theme.colors.primary, fontSize: 20, fontWeight: '700' },
   composer: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingTop: 8 },
   input: { flex: 1, backgroundColor: theme.colors.surface, color: theme.colors.text, borderRadius: theme.radius, paddingHorizontal: 14, paddingVertical: 10, fontSize: 16, maxHeight: 120 },
   sendButton: { backgroundColor: theme.colors.primary, borderRadius: theme.radius, paddingHorizontal: 16, paddingVertical: 12 },

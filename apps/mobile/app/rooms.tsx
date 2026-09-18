@@ -53,11 +53,19 @@ export default function RoomsScreen() {
           <Text style={styles.wsButton}>{workspace?.workspace.name ?? ''} ▾</Text>
         </Pressable>
         <View style={{ flexDirection: 'row', gap: 16 }}>
+          {/* Mobile had no entry point for STARTING a conversation -- rooms.tsx
+              could only open a room that already existed. */}
+          <Pressable accessibilityRole="button" accessibilityLabel="New message" onPress={() => router.push('/members')}>
+            <Text style={styles.navButton}>✎</Text>
+          </Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel="Search" onPress={() => router.push('/search')}>
             <Text style={styles.navButton}>🔍</Text>
           </Pressable>
           <Pressable onPress={() => router.push('/ai')}>
             <Text style={styles.navButton}>AI</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="Notifications" onPress={() => router.push('/notifications')}>
+            <Text style={styles.navButton}>🔔</Text>
           </Pressable>
           <Pressable onPress={() => router.push('/settings')}>
             <Text style={styles.navButton}>⚙</Text>
