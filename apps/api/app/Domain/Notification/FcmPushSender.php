@@ -48,7 +48,7 @@ class FcmPushSender
     }
 
     /**
-     * @param  array{title: string, body: string, data: array<string, mixed>, collapse_key: string, badge: int}  $payload
+     * @param  array{title: string, body: string, data: array<string, mixed>, collapse_key?: string, badge?: int}  $payload
      */
     public function send(Device $device, array $payload): void
     {
@@ -81,20 +81,55 @@ class FcmPushSender
         }
 
         // v1 reports a dead token as a real error status. UNREGISTERED means the app
-        // was uninstalled / the browser subscription was revoked; INVALID_ARGUMENT on
-        // a send we built ourselves means the token itself is malformed. Neither is
-        // retryable, and both should stop us pushing to this row. (TC-NOTI-016)
+        // was uninstalled / the browser subscription was revoked. (TC-NOTI-016)
         $errorCode = (string) ($response->json('error.status') ?? '');
         $details = collect($response->json('error.details') ?? [])->pluck('errorCode')->filter()->all();
+
+        // INVALID_ARGUMENT alone is NOT proof of a dead token: FCM returns it both for
+        // a malformed registration token and for a message WE built wrong. Treating
+        // the two alike meant one bad payload silently unregistered every device it
+        // touched -- observed for real, a valid token wiped by a send that was missing
+        // collapse_key. So require FCM to attribute the violation to the token field.
+        $rejectedFields = collect($response->json('error.details') ?? [])
+            ->flatMap(fn (array $detail): array => $detail['fieldViolations'] ?? [])
+            ->pluck('field')
+            ->filter()
+            ->all();
+        $tokenRejected = collect($rejectedFields)->contains(
+            static fn (string $field): bool => str_contains($field, 'token'),
+        );
+        $invalidArgument = in_array('INVALID_ARGUMENT', $details, true);
+
         $dead = in_array('UNREGISTERED', $details, true)
-            || in_array('INVALID_ARGUMENT', $details, true)
             || $errorCode === 'NOT_FOUND'
-            || str_contains((string) $response->body(), 'UNREGISTERED');
+            || str_contains((string) $response->body(), 'UNREGISTERED')
+            || ($invalidArgument && $tokenRejected);
+
+        // Every failure is logged: the sender used to fail in total silence, which is
+        // why a wiped token looked like a device that had simply never registered.
+        Log::warning('push.failed', [
+            'device_id' => $device->id,
+            'status' => $response->status(),
+            'error' => $errorCode,
+            'codes' => $details,
+            'rejected_fields' => $rejectedFields,
+            'dead' => $dead,
+        ]);
 
         if ($dead) {
             $device->forceFill(['push_token' => null, 'push_provider' => null])->save();
 
             return;
+        }
+
+        if ($invalidArgument) {
+            // Our message, not their token. Keep the device registered and make the
+            // bug loud -- this is a deploy-blocking defect, not a per-device event.
+            Log::error('push.malformed_message — FCM rejected a message we built', [
+                'device_id' => $device->id,
+                'rejected_fields' => $rejectedFields,
+                'body' => mb_substr((string) $response->body(), 0, 500),
+            ]);
         }
 
         $count = $device->push_failed_count + 1;
@@ -110,12 +145,17 @@ class FcmPushSender
      * §10 payload. `data` values must all be strings in v1 — an int anywhere in the
      * map is rejected with INVALID_ARGUMENT for the whole send.
      *
-     * @param  array{title: string, body: string, data: array<string, mixed>, collapse_key: string, badge: int}  $payload
+     * @param  array{title: string, body: string, data: array<string, mixed>, collapse_key?: string, badge?: int}  $payload
      * @return array<string, mixed>
      */
     private function message(Device $device, array $payload): array
     {
         $type = (string) ($payload['data']['type'] ?? 'message');
+        // Defaulted rather than assumed: an absent collapse_key used to reach FCM as a
+        // null Topic header and come back INVALID_ARGUMENT, which the caller above then
+        // read as a dead token and deleted.
+        $collapseKey = (string) ($payload['collapse_key'] ?? 'message');
+        $badge = (int) ($payload['badge'] ?? 0);
         $channel = match ($type) {
             'mention' => 'mentions',
             'ai_completed' => 'ai',
@@ -129,7 +169,7 @@ class FcmPushSender
                 'type' => $type,
                 'title' => $payload['title'],
                 'body' => $payload['body'],
-                'badge' => $payload['badge'],
+                'badge' => $badge,
             ],
         );
 
@@ -142,29 +182,29 @@ class FcmPushSender
             'data' => $data,
             'android' => [
                 'priority' => $type === 'mention' ? 'high' : 'normal',
-                'collapse_key' => $payload['collapse_key'],
+                'collapse_key' => $collapseKey,
                 'notification' => [
                     'channel_id' => $channel,
-                    'tag' => $payload['collapse_key'],
+                    'tag' => $collapseKey,
                 ],
             ],
             'apns' => [
                 'headers' => [
-                    'apns-collapse-id' => $payload['collapse_key'],
+                    'apns-collapse-id' => $collapseKey,
                     'apns-priority' => '10',
                 ],
                 'payload' => [
                     'aps' => [
                         'alert' => ['title' => $payload['title'], 'body' => $payload['body']],
-                        'badge' => $payload['badge'],
+                        'badge' => $badge,
                         'sound' => 'default',
-                        'thread-id' => $payload['collapse_key'],
+                        'thread-id' => $collapseKey,
                         'mutable-content' => 1,
                     ],
                 ],
             ],
             'webpush' => [
-                'headers' => ['Topic' => $payload['collapse_key']],
+                'headers' => ['Topic' => $collapseKey],
                 'fcm_options' => ['link' => '/'],
             ],
         ];

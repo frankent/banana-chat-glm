@@ -329,6 +329,55 @@ test('TC-NOTI-016 FCM UNREGISTERED deletes the token', function () {
     expect($device->refresh()->push_token)->toBeNull();
 });
 
+test('INVALID_ARGUMENT attributed to the token deletes it', function () {
+    $device = Device::query()->create([
+        'user_id' => $this->somchai->id, 'platform' => 'web', 'push_token' => 'malformed', 'push_provider' => 'fcm',
+    ]);
+
+    Http::fake([
+        'oauth2.googleapis.com/*' => Http::response(['access_token' => 'tok', 'expires_in' => 3600]),
+        'fcm.googleapis.com/*' => Http::response([
+            'error' => ['status' => 'INVALID_ARGUMENT', 'details' => [
+                ['errorCode' => 'INVALID_ARGUMENT'],
+                ['fieldViolations' => [['field' => 'message.token', 'description' => 'not a valid FCM registration token']]],
+            ]],
+        ], 400),
+    ]);
+
+    (new NotifyMessage(sendMessageRaw($this, $this->tonyToken, $this->room->id, 'ping')->id))
+        ->handle(app(PushDecisionService::class), app(FcmPushSender::class));
+
+    expect($device->refresh()->push_token)->toBeNull();
+});
+
+test('INVALID_ARGUMENT blamed on our own message keeps the token', function () {
+    // The regression this guards: FCM returns INVALID_ARGUMENT both for a bad token
+    // and for a message we built wrong, and treating them alike let a single payload
+    // bug silently unregister every device it touched. Observed for real.
+    $device = Device::query()->create([
+        'user_id' => $this->somchai->id, 'platform' => 'web', 'push_token' => 'perfectly-good', 'push_provider' => 'fcm',
+    ]);
+
+    Http::fake([
+        'oauth2.googleapis.com/*' => Http::response(['access_token' => 'tok', 'expires_in' => 3600]),
+        'fcm.googleapis.com/*' => Http::response([
+            'error' => ['status' => 'INVALID_ARGUMENT', 'details' => [
+                ['errorCode' => 'INVALID_ARGUMENT'],
+                ['fieldViolations' => [['field' => 'message.webpush.headers', 'description' => 'invalid Topic']]],
+            ]],
+        ], 400),
+    ]);
+
+    try {
+        (new NotifyMessage(sendMessageRaw($this, $this->tonyToken, $this->room->id, 'ping')->id))
+            ->handle(app(PushDecisionService::class), app(FcmPushSender::class));
+    } catch (RuntimeException) {
+        // expected — our bug, so it must surface rather than be swallowed
+    }
+
+    expect($device->refresh()->push_token)->toBe('perfectly-good');
+});
+
 test('TC-NOTI-017 FCM 5xx bumps push_failed_count; 5 strikes disables', function () {
     $device = Device::query()->create([
         'user_id' => $this->somchai->id, 'platform' => 'web', 'push_token' => 'flaky', 'push_provider' => 'fcm',
