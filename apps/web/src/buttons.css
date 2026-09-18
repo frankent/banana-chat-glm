@@ -49,7 +49,7 @@
 #root [data-testid="delete-button"]:hover {background: #fff1ee; color: #a13e32;}
 
 #root :is(
-  .bc-rail-links > button, .bc-rail-bottom > button, .bc-mobile-top button,
+  .bc-rail-links > button, .bc-rail-bottom > button, .bc-mobile-top > button,
   [data-testid="notification-bell"], [data-testid="attach-button"],
   [data-testid="room-media-toggle"], [data-testid="message-actions"] button,
   .bc-message-actions-toggle, .bc-notes > header > button,

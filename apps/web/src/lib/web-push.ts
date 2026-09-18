@@ -84,55 +84,121 @@ export async function registerPushServiceWorker(): Promise<ServiceWorkerRegistra
 }
 
 /**
- * Full enable path, driven by an explicit user gesture (TC-WEB-030):
- * permission → service worker → FCM token → device row on the server.
+ * Outcome of an enable attempt.
  *
- * Returns the resulting status so the caller can render the right message.
+ * A bare status was not enough. `failed` covers a VAPID mismatch, a blocked push
+ * service and an iOS home-screen app without the entitlement, and the panel could
+ * say nothing about any of them -- so a user whose registration failed saw exactly
+ * what a user with working notifications sees, and had nothing to report back.
  */
-export async function enableWebPush(): Promise<WebPushStatus | 'denied' | 'enabled' | 'failed'> {
+export type EnableWebPushResult =
+  | { state: 'enabled' }
+  | { state: 'denied' }
+  | { state: 'blocked'; status: WebPushStatus }
+  | { state: 'failed'; reason: string };
+
+let lastResult: EnableWebPushResult | null = null;
+
+/**
+ * The most recent attempt in this page's lifetime, including the silent one
+ * ensureWebPushRegistered() makes on load, so the panel can surface a failure the
+ * user was never present for.
+ */
+export function lastWebPushResult(): EnableWebPushResult | null {
+  return lastResult;
+}
+
+function describe(error: unknown): string {
+  if (error instanceof Error) {
+    // Firebase attaches a machine-readable code (messaging/token-subscribe-failed
+    // and friends); it is the part worth quoting in a bug report.
+    const code = (error as { code?: string }).code;
+    return code !== undefined && code !== '' ? `${code} (${error.message})` : error.message;
+  }
+  return String(error);
+}
+
+/**
+ * Full enable path, driven by an explicit user gesture (TC-WEB-030):
+ * permission -> service worker -> FCM token -> device row on the server.
+ */
+export async function enableWebPush(): Promise<EnableWebPushResult> {
+  lastResult = await runEnable();
+  return lastResult;
+}
+
+/**
+ * Finish a registration the browser has already consented to.
+ *
+ * Until this existed a user who granted permission but whose token never reached
+ * the server was stuck: the enable button only rendered while permission was still
+ * `default`, so the device stayed tokenless for good and no push could ever be
+ * addressed to it. This is also the only path that picks up a rotated FCM token.
+ *
+ * It never prompts -- requestPermission() resolves immediately when permission is
+ * already granted -- so TC-WEB-030 (no prompt without a gesture) still holds.
+ */
+export async function ensureWebPushRegistered(): Promise<EnableWebPushResult | null> {
+  if (currentWebPushStatus() !== 'ready' || Notification.permission !== 'granted') {
+    return null;
+  }
+  return enableWebPush();
+}
+
+async function runEnable(): Promise<EnableWebPushResult> {
   const status = currentWebPushStatus();
   if (status !== 'ready') {
-    return status;
+    return { state: 'blocked', status };
   }
 
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') {
-    return 'denied';
+    return { state: 'denied' };
   }
 
   const swRegistration = await registerPushServiceWorker();
   if (swRegistration === null) {
-    return 'failed';
+    return { state: 'failed', reason: 'service worker did not register' };
   }
 
+  let token: string;
   try {
-    // Imported lazily so the Firebase SDK is not in the initial bundle for the
-    // (currently typical) deployment that has push switched off.
-    const [{ initializeApp }, { getMessaging, getToken, isSupported }] = await Promise.all([
+    // Imported lazily so the Firebase SDK is not in the initial bundle for a
+    // deployment that has push switched off.
+    const [{ initializeApp, getApps, getApp }, { getMessaging, getToken, isSupported }] = await Promise.all([
       import('firebase/app'),
       import('firebase/messaging'),
     ]);
 
     if (!(await isSupported())) {
-      return 'unsupported';
+      return { state: 'blocked', status: 'unsupported' };
     }
 
-    const app = initializeApp({
-      apiKey: config.apiKey!,
-      projectId: config.projectId!,
-      messagingSenderId: config.messagingSenderId!,
-      appId: config.appId!,
-    });
+    // Reuse the app across retries: initializeApp() is only idempotent for an
+    // identical config, and a second call is now reachable (auto-register on load,
+    // then the user pressing the button).
+    const app = getApps().length > 0
+      ? getApp()
+      : initializeApp({
+          apiKey: config.apiKey!,
+          projectId: config.projectId!,
+          messagingSenderId: config.messagingSenderId!,
+          appId: config.appId!,
+        });
 
-    const token = await getToken(getMessaging(app), {
+    token = await getToken(getMessaging(app), {
       vapidKey: config.vapidKey!,
       serviceWorkerRegistration: swRegistration,
     });
+  } catch (error) {
+    return { state: 'failed', reason: describe(error) };
+  }
 
-    if (!token) {
-      return 'failed';
-    }
+  if (!token) {
+    return { state: 'failed', reason: 'Firebase returned an empty token' };
+  }
 
+  try {
     await endpoints.updateDevice(webDeviceId(), {
       platform: 'web',
       push_token: token,
@@ -140,11 +206,13 @@ export async function enableWebPush(): Promise<WebPushStatus | 'denied' | 'enabl
       device_name: navigator.userAgent.slice(0, 100),
       locale: navigator.language?.slice(0, 5) ?? null,
     });
-
-    return 'enabled';
-  } catch {
-    return 'failed';
+  } catch (error) {
+    // Kept distinct from a token failure: the browser side worked and the next load
+    // will retry, which is a different thing to tell the user.
+    return { state: 'failed', reason: `could not save this device (${describe(error)})` };
   }
+
+  return { state: 'enabled' };
 }
 
 /**

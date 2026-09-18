@@ -9,11 +9,34 @@ import { PublicChatBadge } from './PublicChatBadge';
 import { useEcho } from '../echo/EchoProvider';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 
+/**
+ * Where the notification bell is mounted, matching index.css's 760px breakpoint.
+ *
+ * The bell has to live in the mobile top bar: inside the sidebar it sits behind the
+ * hamburger, so on a phone it was three taps from anywhere and effectively invisible
+ * -- which is why no phone had ever completed the push opt-in. It is moved rather
+ * than duplicated so `data-testid="notification-bell"` stays unique for e2e.
+ */
+function useIsMobileLayout(): boolean {
+  const [isMobile, setIsMobile] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 760px)').matches,
+  );
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 760px)');
+    const sync = () => setIsMobile(query.matches);
+    sync();
+    query.addEventListener('change', sync);
+    return () => query.removeEventListener('change', sync);
+  }, []);
+  return isMobile;
+}
+
 export function AppShell() {
   const { status, me, currentWorkspace, logout } = useSession();
   const location = useLocation();
   const navigate = useNavigate();
   const [accountOpen, setAccountOpen] = useState(false);
+  const isMobileLayout = useIsMobileLayout();
   const accountRef = useRef<HTMLDivElement>(null);
   // Close on outside click and Escape -- a menu you cannot dismiss is worse than
   // no menu, especially on touch where there is no Escape key.
@@ -111,7 +134,7 @@ export function AppShell() {
         </nav>
         {sidebarOpen && <button className="bc-sidebar-shade" aria-label="Close conversations" onClick={() => setSidebarOpen(false)} />}
         <aside className={`bc-sidebar ${sidebarOpen ? 'is-open' : ''}`} onClick={(event) => { if ((event.target as HTMLElement).closest('a[href]')) setSidebarOpen(false); }}>
-          <div className="bc-workspace"><span className="bc-workspace-symbol">{currentWorkspace.workspace.name[0]}</span><div><span className="bc-eyebrow">YOUR WORKSPACE</span><WorkspaceSwitcher /></div><NotificationCenter /></div>
+          <div className="bc-workspace"><span className="bc-workspace-symbol">{currentWorkspace.workspace.name[0]}</span><div><span className="bc-eyebrow">YOUR WORKSPACE</span><WorkspaceSwitcher /></div>{!isMobileLayout && <NotificationCenter />}</div>
           <div className="bc-sidebar-heading"><h1>Messages<span>.</span></h1><span className="bc-caption">Your people, closer</span></div>
           <button className="bc-search" onClick={() => navigate('/search')}><Icon name="search" size={16} /><span>Search conversations</span><kbd>⌘ K</kbd></button>
           <SidebarAiButton />
@@ -119,7 +142,7 @@ export function AppShell() {
           <div className="bc-sidebar-footer"><span className={connected ? 'bc-status-dot connected' : 'bc-status-dot'} />{connected ? 'Connected to your workspace' : 'Reconnecting…'}<span>✳</span></div>
         </aside>
         <main className="bc-main min-w-0 flex-1">
-          <div className="bc-mobile-top"><button aria-label="Show conversations" aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(!sidebarOpen)}><Icon name="menu" /></button><span>Banana Chat</span></div>
+          <div className="bc-mobile-top"><button aria-label="Show conversations" aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(!sidebarOpen)}><Icon name="menu" /></button><span>Banana Chat</span>{isMobileLayout && <div className="bc-mobile-top-actions"><NotificationCenter /></div>}</div>
           <div className="bc-outlet"><Outlet /></div>
         </main>
       </div>

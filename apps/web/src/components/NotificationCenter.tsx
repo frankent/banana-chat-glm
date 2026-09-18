@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { desktopNotificationPermission, requestDesktopNotificationPermission } from '../lib/desktop-notification';
-import { currentWebPushStatus, enableWebPush } from '../lib/web-push';
+import { currentWebPushStatus, enableWebPush, lastWebPushResult, type EnableWebPushResult } from '../lib/web-push';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { InAppNotification } from '@banana-chat/shared';
@@ -40,7 +40,18 @@ export function NotificationCenter() {
   // Web Push status is separate from the popup permission: a desktop tab can show
   // popups with no push setup at all, while a phone needs the full PWA + push path.
   const [pushStatus, setPushStatus] = useState(() => currentWebPushStatus());
+  const [pushResult, setPushResult] = useState<EnableWebPushResult | null>(() => lastWebPushResult());
   const [enabling, setEnabling] = useState(false);
+  // EchoProvider's silent re-registration can land after this component mounted,
+  // and permission can change in another tab, so re-read both when the panel opens
+  // rather than trusting whatever was true at mount.
+  useEffect(() => {
+    if (open) {
+      setPushResult(lastWebPushResult());
+      setDesktopPermission(desktopNotificationPermission());
+      setPushStatus(currentWebPushStatus());
+    }
+  }, [open]);
   const askDesktopPermission = async () => {
     setEnabling(true);
     try {
@@ -50,9 +61,9 @@ export function NotificationCenter() {
       // Then, when Firebase is configured, go the rest of the way: service worker,
       // FCM token, device row. Unconfigured deployments stop at the line above.
       if (currentWebPushStatus() !== 'not-configured') {
-        const result = await enableWebPush();
-        setPushStatus(result === 'enabled' ? 'ready' : currentWebPushStatus());
+        setPushResult(await enableWebPush());
       }
+      setPushStatus(currentWebPushStatus());
     } finally {
       setEnabling(false);
     }
@@ -154,19 +165,39 @@ export function NotificationCenter() {
           </div>
 
           <label className="flex items-center gap-2 px-2 py-2 text-sm"><input type="checkbox" checked={sound} disabled={savingSound || !settings.data} onChange={() => void toggleSound()} />Notification sound</label>
-          {desktopPermission === 'default' && (
+          {/* Offered whenever this device is not actually receiving push, not only
+              while permission is `default`. Permission granted + no FCM token is the
+              silent-failure case, and hiding the button there left no way to retry. */}
+          {desktopPermission !== 'denied' && desktopPermission !== 'unsupported' && pushResult?.state !== 'enabled' && (
             <button
               onClick={() => void askDesktopPermission()}
               disabled={enabling}
               data-testid="enable-desktop-notifications"
               className="mx-2 mb-2 rounded-lg bg-yellow-100 px-2 py-2 text-left text-sm font-medium text-slate-700 hover:bg-yellow-200"
             >
-              Enable desktop notifications
+              {enabling
+                ? 'Enabling…'
+                : desktopPermission === 'granted'
+                  ? 'Finish setting up notifications'
+                  : 'Enable notifications'}
             </button>
           )}
-          {desktopPermission === 'denied' && (
-            <p className="px-2 pb-2 text-xs text-slate-400">
-              Desktop notifications are blocked in your browser settings.
+          {/* Delivery state, deliberately separate from permission state: a granted
+              permission with no registration token drops every push silently, and
+              that used to be indistinguishable from notifications working. */}
+          {pushResult?.state === 'failed' ? (
+            <p className="px-2 pb-2 text-xs text-red-600" data-testid="push-status">
+              Push could not be enabled: {pushResult.reason}
+            </p>
+          ) : (
+            <p className="px-2 pb-2 text-xs text-slate-500" data-testid="push-status">
+              {pushResult?.state === 'enabled'
+                ? 'Push notifications are on for this device.'
+                : desktopPermission === 'denied'
+                  ? 'Notifications are blocked in your browser settings.'
+                  : pushStatus === 'not-configured'
+                    ? 'Push notifications are not set up on this server.'
+                    : 'Push notifications are off for this device.'}
             </p>
           )}
           {/* The iOS install gate is a real capability boundary, not a failure:

@@ -1,6 +1,6 @@
 import { NotificationGate } from '@banana-chat/chat-core';
 import { showDesktopNotification } from '../lib/desktop-notification';
-import { registerPushServiceWorker, reportFocus } from '../lib/web-push';
+import { ensureWebPushRegistered, registerPushServiceWorker, reportFocus } from '../lib/web-push';
 import { playNotificationAudio } from '../lib/notification-audio';
 import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
@@ -108,6 +108,19 @@ export function EchoProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void registerPushServiceWorker();
   }, []);
+
+  // Finish a registration the browser already consented to. A user who pressed
+  // Allow once but whose token never reached the server (offline at the time, a
+  // rotated token, a device row created before push existed) had no way back --
+  // the enable button hides itself as soon as permission leaves `default`.
+  // Silent by construction: ensureWebPushRegistered() returns null unless
+  // permission is already granted, so no prompt can fire from page load.
+  useEffect(() => {
+    if (me === null) {
+      return;
+    }
+    void ensureWebPushRegistered();
+  }, [me]);
 
   // API-074 focus ping. The server silences a push for a room this device is already
   // reading within the last 30s (FR-NOTI-002); web never reported anything, so a
