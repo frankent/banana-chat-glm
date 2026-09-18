@@ -6,7 +6,11 @@ use App\Domain\Ai\AiCircuitBreaker;
 use App\Domain\Ai\AiGate;
 use App\Domain\Ai\OpenAiCompatibleProvider;
 use App\Domain\Ai\TokenEstimator;
+use App\Domain\Message\MessageSerializer;
 use App\Domain\Message\MessageWriter;
+use App\Events\MessageStreamed;
+use App\Events\RoomToolEvent;
+use App\Models\AiProvider;
 use App\Models\AiUsageDaily;
 use App\Models\Message;
 use App\Models\Room;
@@ -23,8 +27,10 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Ramsey\Uuid\Uuid;
+use Throwable;
 
 /** FR-AI-021: explicit @ai only, no room history, attachments, or private memory. */
 class GenerateRoomBotReply implements ShouldBeUnique, ShouldQueue
@@ -36,6 +42,11 @@ class GenerateRoomBotReply implements ShouldBeUnique, ShouldQueue
     public int $timeout = 660;
 
     public int $uniqueFor = 900;
+
+    /** The bot's own message, once the first words of the answer have been posted. */
+    private ?Message $posted = null;
+
+    private float $typingSentAt = 0.0;
 
     public function __construct(public readonly string $messageId) {}
 
@@ -96,19 +107,12 @@ class GenerateRoomBotReply implements ShouldBeUnique, ShouldQueue
                 } elseif (AiCircuitBreaker::make()->isOpen()) {
                     $reply = 'AI is temporarily unavailable. Please try again later.';
                 } else {
-                    $prompt = preg_replace('/(?:^|\s)@ai(?=\s|[,:!?]|$)/iu', ' ', $source->body);
-                    $reply = OpenAiCompatibleProvider::make($provider)->chat([
-                        ['role' => 'system', 'content' => 'You are the AI assistant in a workspace group chat. Answer the explicitly addressed message. You have no room history or attachments. Do not pretend to have read them. '.($provider->system_prompt ?? '')],
-                        ['role' => 'user', 'content' => trim($prompt)],
-                    ]);
-                    AiCircuitBreaker::make()->recordSuccess();
-                    $estimator = new TokenEstimator;
-                    AiUsageDaily::bump($user->id, $room->workspace_id, tokensIn: $estimator->estimate($prompt), tokensOut: $estimator->estimate($reply));
-                    if (trim($reply) === '') {
-                        $reply = 'AI returned an empty answer. Please try again.';
-                    }
+                    // stream() writes the answer itself, growing it as the model speaks
+                    $this->stream($writer, $settings, $source, $room, $user, $provider, $replyKey);
+
+                    return;
                 }
-            } catch (\Throwable $e) {
+            } catch (Throwable $e) {
                 AiCircuitBreaker::make()->recordFailure('AI_PROVIDER_ERROR');
                 AiUsageDaily::bump($user->id, $room->workspace_id, failed: 1);
                 $reply = 'AI could not complete this request. Please try again later.';
@@ -119,11 +123,140 @@ class GenerateRoomBotReply implements ShouldBeUnique, ShouldQueue
         if (! $this->active($source->refresh(), $room->refresh())) {
             return;
         }
-        $bot = User::firstOrCreate(['username' => '__banana_ai_bot__'], ['display_name' => 'AI Assistant', 'password_hash' => Hash::make(Str::random(64)), 'status' => 'deactivated', 'must_change_password' => false]);
+        $this->publish($writer, $room, $reply, $replyKey, $source, final: true, max: $settings->int('message.max_length'));
+    }
+
+    /**
+     * The room bot used to wait for a whole answer over one non-streaming call,
+     * which the HTTP client gives 60 seconds — so a model that thinks for longer
+     * produced "AI could not complete this request", never an answer. Streaming
+     * gets 600 seconds and, as a bonus, lets the room watch the reply being
+     * written instead of staring at nothing for a minute.
+     */
+    private function stream(
+        MessageWriter $writer,
+        SettingsService $settings,
+        Message $source,
+        Room $room,
+        User $user,
+        AiProvider $provider,
+        string $replyKey,
+    ): void {
         $max = $settings->int('message.max_length');
-        if (mb_strlen($reply) > $max) {
-            $reply = mb_substr($reply, 0, $max - 40)."\n\n[Answer truncated to message limit]";
+        $budget = $max - 40; // room for the truncation note
+        $flushMs = $settings->int('ai.stream.flush_interval_ms');
+        $flushChars = 80; // a long burst should land without waiting out the timer
+        $prompt = trim((string) preg_replace('/(?:^|\s)@ai(?=\s|[,:!?]|$)/iu', ' ', (string) $source->body));
+
+        $content = '';
+        $truncated = false;
+        $failure = null;
+        $lastFlush = microtime(true);
+        $flushedLen = 0;
+        $this->typing($room, true);
+
+        try {
+            foreach (OpenAiCompatibleProvider::make($provider)->chatStream([
+                ['role' => 'system', 'content' => 'You are the AI assistant in a workspace group chat. Answer the explicitly addressed message. You have no room history or attachments. Do not pretend to have read them. '.($provider->system_prompt ?? '')],
+                ['role' => 'user', 'content' => $prompt],
+            ]) as $chunk) {
+                if (($chunk['type'] ?? '') !== 'delta') {
+                    continue;
+                }
+                $content .= $chunk['text'];
+                if (mb_strlen($content) > $budget) {
+                    $content = mb_substr($content, 0, $budget);
+                    $truncated = true;
+                }
+
+                $due = (microtime(true) - $lastFlush) * 1000 >= $flushMs
+                    || mb_strlen($content) - $flushedLen >= $flushChars;
+                if ($due && trim($content) !== '') {
+                    $this->typing($room, true);
+                    $this->publish($writer, $room, $content, $replyKey, $source, final: false, max: $max);
+                    $lastFlush = microtime(true);
+                    $flushedLen = mb_strlen($content);
+                }
+                if ($truncated) {
+                    break;
+                }
+            }
+            AiCircuitBreaker::make()->recordSuccess();
+        } catch (Throwable $e) {
+            AiCircuitBreaker::make()->recordFailure('AI_PROVIDER_ERROR');
+            AiUsageDaily::bump($user->id, $room->workspace_id, failed: 1);
+            $failure = 'AI could not complete this request. Please try again later.';
         }
-        $writer->write($room, $bot, $reply, $replyKey, $source->id);
+
+        $body = trim($content);
+        if ($truncated) {
+            $body .= "\n\n[Answer truncated to message limit]";
+        }
+        if ($body === '') {
+            $body = $failure ?? 'AI returned an empty answer. Please try again.';
+        } elseif ($failure !== null) {
+            $body .= "\n\n[".$failure.']'; // keep what the model did say
+        }
+        if ($failure === null) {
+            $estimator = new TokenEstimator;
+            AiUsageDaily::bump($user->id, $room->workspace_id, tokensIn: $estimator->estimate($prompt), tokensOut: $estimator->estimate($body));
+        }
+
+        $this->typing($room, false);
+        if (! $this->active($source->refresh(), $room->refresh())) {
+            return; // room or mention went away mid-answer; leave whatever was posted
+        }
+        $this->publish($writer, $room, $body, $replyKey, $source, final: true, max: $max);
+    }
+
+    /**
+     * First call posts the message; later calls grow it in place. Push is held
+     * back until the body is final so nobody gets a notification for half a
+     * sentence.
+     */
+    private function publish(MessageWriter $writer, Room $room, string $body, string $replyKey, Message $source, bool $final, int $max): void
+    {
+        if (mb_strlen($body) > $max) {
+            $body = mb_substr($body, 0, $max - 40)."\n\n[Answer truncated to message limit]";
+        }
+
+        if ($this->posted === null) {
+            [$this->posted] = $writer->write($room, $this->bot(), $body, $replyKey, $source->id, notify: false);
+        } else {
+            $this->posted->forceFill(['body' => $body])->save();
+            try {
+                broadcast(new MessageStreamed($room, MessageSerializer::forEvent($this->posted)));
+            } catch (Throwable $e) {
+                Log::warning('room-bot.broadcast.failed', ['message_id' => $this->posted->id, 'error' => $e->getMessage()]);
+            }
+        }
+
+        if ($final) {
+            $writer->refreshActivity($this->posted);
+            NotifyMessage::dispatch($this->posted->id);
+        }
+    }
+
+    /** Reuses the ephemeral indicator people already see for each other. */
+    private function typing(Room $room, bool $typing): void
+    {
+        if ($typing && (microtime(true) - $this->typingSentAt) < 4) {
+            return; // clients hold it for 6s
+        }
+        $this->typingSentAt = $typing ? microtime(true) : 0.0;
+        try {
+            $bot = $this->bot();
+            broadcast(new RoomToolEvent($room, 'room.typing', ['user_id' => $bot->id, 'display_name' => $bot->display_name, 'typing' => $typing]));
+        } catch (Throwable $e) {
+            Log::warning('room-bot.typing.failed', ['room_id' => $room->id, 'error' => $e->getMessage()]);
+        }
+    }
+
+    private function bot(): User
+    {
+        return User::firstOrCreate(
+            ['username' => '__banana_ai_bot__'],
+            ['display_name' => 'AI Assistant', 'password_hash' => Hash::make(Str::random(64)), 'status' => 'deactivated', 'must_change_password' => false],
+        );
     }
 }

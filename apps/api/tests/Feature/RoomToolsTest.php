@@ -1,6 +1,10 @@
 <?php
 
+use App\Events\MessageStreamed;
+use App\Events\MessageUpdated;
+use App\Events\RoomActivity;
 use App\Jobs\GenerateRoomBotReply;
+use App\Jobs\NotifyMessage;
 use App\Models\AiProvider;
 use App\Models\Attachment;
 use App\Models\Message;
@@ -8,6 +12,7 @@ use App\Models\RoomNote;
 use App\Models\User;
 use App\Models\Workspace;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
@@ -55,8 +60,21 @@ it('TC-RT-020 accepts authenticated typing and rejects nonmembers', function () 
     $this->postJson($url, ['typing' => true], [...$this->headers, 'Authorization' => 'Bearer '.$this->outsiderToken])->assertForbidden();
 });
 
+/** the room bot streams, so its provider fake has to speak SSE */
+function botSse(array $deltas): string
+{
+    $lines = [];
+    foreach ($deltas as $delta) {
+        $lines[] = 'data: '.json_encode(['choices' => [['delta' => ['content' => $delta]]]], JSON_UNESCAPED_UNICODE);
+    }
+    $lines[] = 'data: '.json_encode(['choices' => [['delta' => new stdClass, 'finish_reason' => 'stop']]]);
+    $lines[] = 'data: [DONE]';
+
+    return implode("\n\n", $lines)."\n\n";
+}
+
 it('TC-AI-100 invokes group bot only for explicit mentions and produces one attributed reply', function () {
-    Http::fake(['*/chat/completions' => Http::response(['choices' => [['message' => ['content' => '**Hello** from AI']]]])]);
+    Http::fake(['*/chat/completions' => Http::response(botSse(['**Hello** ', 'from AI']), 200, ['Content-Type' => 'text/event-stream'])]);
     $this->author->forceFill(['ai_consented_at' => now()])->save();
     AiProvider::create(['name' => 'Test', 'provider_type' => 'openai_compatible', 'base_url' => 'https://ai.test/v1', 'api_key_encrypted' => Crypt::encryptString('test-key'), 'model' => 'test', 'window_size' => 10000, 'max_output_tokens' => 1000, 'is_enabled' => true, 'is_default' => true]);
     $url = '/api/v1/rooms/'.$this->roomId.'/messages';
@@ -66,7 +84,7 @@ it('TC-AI-100 invokes group bot only for explicit mentions and produces one attr
     $source = $this->postJson($url, ['body' => '@ai hello', 'client_message_id' => $id], $this->headers)->assertCreated()->json('data.message');
     $this->postJson($url, ['body' => '@ai hello', 'client_message_id' => $id], $this->headers)->assertOk();
     Http::assertSentCount(1);
-    Http::assertSent(fn ($r) => count($r['messages']) === 2 && $r['messages'][1]['content'] === 'hello');
+    Http::assertSent(fn ($r) => count($r['messages']) === 2 && $r['messages'][1]['content'] === 'hello' && $r['stream'] === true);
     $reply = Message::where('reply_to_message_id', $source['id'])->firstOrFail();
     expect($reply->body)->toBe('**Hello** from AI')->and($reply->sender->display_name)->toBe('AI Assistant');
     app()->call([new GenerateRoomBotReply($source['id']), 'handle']);
@@ -128,4 +146,66 @@ it('TC-AI-102 ignores DM mentions and partial mention tokens', function () {
     $this->postJson('/api/v1/rooms/'.$dm.'/messages', ['body' => '@ai hello', 'client_message_id' => (string) Str::uuid()], $this->headers)->assertCreated();
     $this->postJson('/api/v1/rooms/'.$this->roomId.'/messages', ['body' => 'mail@ai.com @aiden', 'client_message_id' => (string) Str::uuid()], $this->headers)->assertCreated();
     Queue::assertNotPushed(GenerateRoomBotReply::class);
+});
+
+// ---- FR-AI-021 room bot streaming ----
+
+function botProvider(): AiProvider
+{
+    return AiProvider::create(['name' => 'Test', 'provider_type' => 'openai_compatible', 'base_url' => 'https://ai.test/v1', 'api_key_encrypted' => Crypt::encryptString('test-key'), 'model' => 'test', 'window_size' => 10000, 'max_output_tokens' => 1000, 'is_enabled' => true, 'is_default' => true]);
+}
+
+it('the room bot grows its answer in place and only pushes when it is finished', function () {
+    Event::fake([MessageStreamed::class, MessageUpdated::class, RoomActivity::class]);
+    Queue::fake([NotifyMessage::class]);
+    // deltas longer than the 80-char flush threshold, so frames land mid-answer
+    $part = str_repeat('ก', 100);
+    Http::fake(['*/chat/completions' => Http::response(botSse([$part, $part]), 200, ['Content-Type' => 'text/event-stream'])]);
+    $this->author->forceFill(['ai_consented_at' => now()])->save();
+    botProvider();
+
+    $source = $this->postJson('/api/v1/rooms/'.$this->roomId.'/messages', ['body' => '@ai นับหนึ่งถึงสาม', 'client_message_id' => (string) Str::uuid()], $this->headers)
+        ->assertCreated()->json('data.message');
+
+    $reply = Message::where('reply_to_message_id', $source['id'])->firstOrFail();
+
+    // the room saw the answer before it was finished...
+    Event::assertDispatched(MessageStreamed::class);
+
+    // ...and it ends up whole, attributed to the bot, with no "edited" marker
+    expect($reply->body)->toBe($part.$part)
+        ->and($reply->sender->display_name)->toBe('AI Assistant')
+        ->and($reply->edited_at)->toBeNull();
+
+    // the room list's preview catches up with the finished answer, not the first frame
+    Event::assertDispatched(RoomActivity::class, fn (RoomActivity $e) => $e->lastMessagePreview === $part.$part);
+
+    // push waits for the final body — one notification, never one per frame
+    // (the other push is for the human's own @ai message)
+    expect(collect(Queue::pushed(NotifyMessage::class))->filter(fn ($job) => $job->messageId === $reply->id))
+        ->toHaveCount(1);
+});
+
+it('a provider that dies mid-answer keeps the words it already said', function () {
+    Http::fake(['*/chat/completions' => Http::response('data: '.json_encode(['choices' => [['delta' => ['content' => 'เริ่มตอบแล้ว']]]])."\n\n", 200, ['Content-Type' => 'text/event-stream'])]);
+    $this->author->forceFill(['ai_consented_at' => now()])->save();
+    botProvider();
+
+    $source = $this->postJson('/api/v1/rooms/'.$this->roomId.'/messages', ['body' => '@ai ทดสอบ', 'client_message_id' => (string) Str::uuid()], $this->headers)
+        ->assertCreated()->json('data.message');
+
+    $reply = Message::where('reply_to_message_id', $source['id'])->firstOrFail();
+    expect($reply->body)->toContain('เริ่มตอบแล้ว');
+});
+
+it('a model that says nothing at all still gets a reply, not silence', function () {
+    Http::fake(['*/chat/completions' => Http::response(botSse([]), 200, ['Content-Type' => 'text/event-stream'])]);
+    $this->author->forceFill(['ai_consented_at' => now()])->save();
+    botProvider();
+
+    $source = $this->postJson('/api/v1/rooms/'.$this->roomId.'/messages', ['body' => '@ai ว่าง', 'client_message_id' => (string) Str::uuid()], $this->headers)
+        ->assertCreated()->json('data.message');
+
+    expect(Message::where('reply_to_message_id', $source['id'])->firstOrFail()->body)
+        ->toBe('AI returned an empty answer. Please try again.');
 });

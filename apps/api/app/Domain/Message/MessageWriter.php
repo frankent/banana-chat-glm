@@ -36,9 +36,13 @@ class MessageWriter
 
     /**
      * @param  list<string>  $attachmentIds
+     * @param  bool  $notify  false defers push to the caller — the room bot posts a
+     *                        placeholder and streams into it, and a push that fired on
+     *                        the placeholder would read "AI Assistant: …". The caller
+     *                        dispatches NotifyMessage once the body is final.
      * @return array{0: Message, 1: bool} [message, created]
      */
-    public function write(Room $room, User $sender, ?string $body, ?string $clientMessageId, ?string $replyToMessageId = null, array $attachmentIds = []): array
+    public function write(Room $room, User $sender, ?string $body, ?string $clientMessageId, ?string $replyToMessageId = null, array $attachmentIds = [], bool $notify = true): array
     {
         $body = $body !== null ? trim($body) : null;
         $body = $body === '' ? null : $body; // whitespace-only counts as empty (FR-MSG-001 edge)
@@ -138,7 +142,7 @@ class MessageWriter
             $this->fanOut($message);
 
             // FR-NOTI-002 — push fan-out (system messages never dispatch, TC-NOTI-011)
-            if ($message->type !== MessageType::System) {
+            if ($notify && $message->type !== MessageType::System) {
                 NotifyMessage::dispatch($message->id);
             }
         }
@@ -243,6 +247,32 @@ class MessageWriter
             MessageType::Video => '🎬 วิดีโอ',
             default => '📎 '.($first?->original_name ?? 'ไฟล์'),
         };
+    }
+
+    /**
+     * Re-announce the room's last message after its body changed in place.
+     *
+     * Unread counts come from seq, which growing a body never moves, so this is
+     * purely the room list's preview catching up: the AI bot posts its first
+     * words and keeps writing, and without this the sidebar would sit on that
+     * first fragment until somebody said something else.
+     */
+    public function refreshActivity(Message $message): void
+    {
+        $room = $message->room()->firstOrFail();
+        if ($room->last_message_id !== $message->id) {
+            return; // someone has spoken since; their preview is the current one
+        }
+
+        $preview = $this->previewText($message);
+        $members = RoomMember::query()
+            ->where('room_id', $room->id)
+            ->whereNull('left_at')
+            ->get(['user_id', 'last_read_seq']);
+
+        foreach ($members as $member) {
+            broadcast(new RoomActivity($room, $member->user_id, $preview, max(0, $room->last_user_seq - $member->last_read_seq)));
+        }
     }
 
     /**

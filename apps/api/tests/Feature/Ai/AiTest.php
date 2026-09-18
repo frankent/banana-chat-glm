@@ -16,6 +16,7 @@ use App\Models\AiUserMemory;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Services\SettingsService;
+use Illuminate\Contracts\Broadcasting\Factory;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
@@ -535,7 +536,7 @@ test('a Reverb outage mid-stream loses frames, not the answer', function () {
     // thread. Without the guard in AiBroadcast::toUser this exception unwinds
     // into GenerateAiReply's catch (Throwable) and the reply dies as
     // AI_PROVIDER_ERROR even though the provider answered fine.
-    $this->mock(Illuminate\Contracts\Broadcasting\Factory::class)
+    $this->mock(Factory::class)
         ->shouldReceive('event')->andThrow(new RuntimeException('reverb down'));
 
     $conversation = makeConversation($this);
