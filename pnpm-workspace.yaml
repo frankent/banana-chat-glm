@@ -5,5 +5,10 @@ allowBuilds:
   esbuild: true
   better-sqlite3: true
   '@parcel/watcher': true
+  # Neither postinstall is needed for a bundled web build, and pnpm 10 turns an
+  # undecided entry into a hard ERR_PNPM_IGNORED_BUILDS failure inside Docker
+  # (it only warns locally), so these must be answered explicitly.
+  '@firebase/util': false
+  protobufjs: false
 minimumReleaseAgeExclude:
   - expo-audio@57.0.5
