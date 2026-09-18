@@ -45,6 +45,17 @@ input:focus,textarea:focus,select:focus { outline-color:#c8b564; }
 .bc-rail-links button.active:before { content:''; position:absolute; left:-15px; height:19px; width:3px; background:#f4d35a; border-radius:0 4px 4px 0; }
 .bc-rail-divider { height:1px; background:#465344; margin:9px 6px; }
 .bc-rail-bottom { margin-top:auto; display:flex; flex-direction:column; align-items:center; gap:18px; }
+/* Account menu (opened from your own avatar). Positioned relative to the rail,
+   which is only 56-72px wide, so the panel opens to the RIGHT and is pinned to
+   the bottom -- anchoring it below the trigger would push it off-screen. */
+.bc-account { position:relative; }
+.bc-account-trigger { width:auto!important; height:auto!important; background:none!important; padding:0; border-radius:50%; cursor:pointer; }
+.bc-account-menu { position:absolute; bottom:0; left:calc(100% + 10px); min-width:208px; background:var(--bc-surface,#fff); border:1px solid var(--bc-line,#e2e8f0); border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.18); padding:6px; z-index:60; }
+.bc-account-who { padding:10px 12px 8px; display:flex; flex-direction:column; gap:2px; border-bottom:1px solid var(--bc-line,#e2e8f0); margin-bottom:4px; }
+.bc-account-who strong { font-size:14px; }
+.bc-account-who span { font-size:12px; color:#64748b; }
+.bc-account-menu button { display:flex; align-items:center; gap:10px; width:100%; padding:10px 12px; border-radius:8px; font-size:14px; text-align:left; color:inherit; }
+.bc-account-menu button:hover { background:var(--bc-hover,#f1f5f9); }
 .bc-avatar { display:inline-flex; align-items:center; justify-content:center; width:37px; height:37px; border-radius:12px; background:var(--avatar-bg); color:var(--avatar-ink); font-size:12px; font-weight:650; flex-shrink:0; }
 .bc-sidebar { width:300px; background:var(--bc-side); border-right:1px solid var(--bc-line); display:flex; flex-direction:column; flex-shrink:0; }
 .bc-workspace { display:flex; align-items:center; gap:10px; padding:25px 18px 20px; }

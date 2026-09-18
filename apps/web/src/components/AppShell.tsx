@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useSession } from '../state/session';
 import { ConnectionBanner } from './ConnectionBanner';
@@ -13,6 +13,20 @@ export function AppShell() {
   const { status, me, currentWorkspace, logout } = useSession();
   const location = useLocation();
   const navigate = useNavigate();
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountRef = useRef<HTMLDivElement>(null);
+  // Close on outside click and Escape -- a menu you cannot dismiss is worse than
+  // no menu, especially on touch where there is no Escape key.
+  useEffect(() => {
+    if (!accountOpen) return;
+    const onDown = (event: MouseEvent) => {
+      if (accountRef.current !== null && !accountRef.current.contains(event.target as Node)) setAccountOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setAccountOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [accountOpen]);
   const [sidebarOpen, setSidebarOpen] = useState(location.pathname === '/');
   const { connected } = useEcho();
   useEffect(() => { setSidebarOpen(location.pathname === '/'); }, [location.pathname]);
@@ -61,10 +75,39 @@ export function AppShell() {
             <div className="bc-rail-divider" />
             <button className={location.pathname.startsWith('/ai') ? 'active' : ''} aria-label="AI Assistant" title="AI Assistant" onClick={() => navigate('/ai')}><Icon name="sparkle" size={23} /></button>
           </div>
-          {/* Until now /change-password was reachable ONLY through the forced flow
-              (AppShell's must_change_password redirect and LoginPage), so a user
-              could never change their own password voluntarily. */}
-          <div className="bc-rail-bottom"><button onClick={() => navigate('/change-password')} aria-label="Change password" title="Change password"><Icon name="lock" /></button><button onClick={() => void logout()} aria-label="Sign out" title="Sign out"><Icon name="logout" /></button><Avatar name={me?.display_name ?? ''} /></div>
+          {/* Account menu. An unlabeled lock icon in the rail was technically an
+              entry point but nobody found it -- customers still reported they
+              could not change their password. Clicking your own avatar is the
+              convention people already look for, and it gives the actions real
+              text labels instead of a tooltip that never appears on touch. */}
+          <div className="bc-rail-bottom">
+            <button onClick={() => void logout()} aria-label="Sign out" title="Sign out"><Icon name="logout" /></button>
+            <div className="bc-account" ref={accountRef}>
+              <button
+                className="bc-account-trigger"
+                aria-haspopup="menu"
+                aria-expanded={accountOpen}
+                aria-label="Account menu"
+                onClick={() => setAccountOpen((open) => !open)}
+              >
+                <Avatar name={me?.display_name ?? ''} />
+              </button>
+              {accountOpen && (
+                <div className="bc-account-menu" role="menu">
+                  <div className="bc-account-who">
+                    <strong>{me?.display_name}</strong>
+                    <span>@{me?.username}</span>
+                  </div>
+                  <button role="menuitem" onClick={() => { setAccountOpen(false); navigate('/change-password'); }}>
+                    <Icon name="lock" size={16} /> Change password
+                  </button>
+                  <button role="menuitem" onClick={() => { setAccountOpen(false); void logout(); }}>
+                    <Icon name="logout" size={16} /> Sign out
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </nav>
         {sidebarOpen && <button className="bc-sidebar-shade" aria-label="Close conversations" onClick={() => setSidebarOpen(false)} />}
         <aside className={`bc-sidebar ${sidebarOpen ? 'is-open' : ''}`} onClick={(event) => { if ((event.target as HTMLElement).closest('a[href]')) setSidebarOpen(false); }}>
