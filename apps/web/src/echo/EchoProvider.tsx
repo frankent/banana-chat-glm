@@ -143,7 +143,7 @@ export function EchoProvider({ children }: { children: ReactNode }) {
     }
     const channel = instance.private(`user.${me.id}`);
     const notifications = new NotificationGate();
-    channel.listen('.notification.alert', (envelope: EventEnvelope<{id: string; room_id: string | null; kind: string}>) => {
+    channel.listen('.notification.alert', (envelope: EventEnvelope<{id: string; room_id: string | null; kind: string; sound?: boolean}>) => {
       void queryClient.invalidateQueries({queryKey: ['notifications']});
       const data = envelope.data;
       if (!data?.id) return;
@@ -154,7 +154,9 @@ export function EchoProvider({ children }: { children: ReactNode }) {
       const lookingAtRoom = data.room_id !== null && data.room_id === openRoomId()
         && document.visibilityState === 'visible' && document.hasFocus();
       const focused = data.kind === 'message' && lookingAtRoom;
-      if (notifications.accept(data.id, true, focused, Date.now())) playNotificationAudio();
+      // `sound` defaults true so an older server that does not send it behaves as
+      // before; the popup below deliberately does not consult it.
+      if (notifications.accept(data.id, true, focused, Date.now()) && (data.sound ?? true)) playNotificationAudio();
 
       // FR-NOTI-003 foreground branch. Rendered here rather than in a second
       // channel.listen('.notification.alert', ...) on purpose: laravel-echo's

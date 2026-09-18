@@ -103,12 +103,14 @@ class NotifyMessage implements ShouldQueue
                 continue;
             }
 
-            // FR-NOTI-007: browser sound uses the same mute/mention/DND decision.
-            if ($recipient->notificationSetting?->sound ?? true) {
-                broadcast(new NotificationAlert(
-                    $recipient->id, $message->id, $room->id, $room->workspace_id, 'message',
-                ));
-            }
+            // FR-NOTI-007: the chime follows the same mute/mention/DND decision, but
+            // the preference travels in the payload rather than suppressing the
+            // broadcast -- this event is also what renders the OS popup, so gating it
+            // here made "notification sound: off" mean "no notifications at all".
+            broadcast(new NotificationAlert(
+                $recipient->id, $message->id, $room->id, $room->workspace_id, 'message',
+                $recipient->notificationSetting?->sound ?? true,
+            ));
 
             /** @var list<Device> $devices */
             $devices = Device::query()
