@@ -151,7 +151,15 @@ async function runEnable(): Promise<EnableWebPushResult> {
     return { state: 'blocked', status };
   }
 
-  const permission = await Notification.requestPermission();
+  // Never ask twice. WebKit resolves requestPermission() as `denied` whenever it is
+  // called outside a user gesture -- including when permission has ALREADY been
+  // granted -- and by the time enableNotifications() has awaited its own call the
+  // gesture is spent. Asking again turned a successful Allow on iOS into
+  // "push is not available on this browser (denied)", and it silently broke the
+  // auto-registration path too, which never runs from a gesture at all.
+  const permission = Notification.permission === 'granted'
+    ? 'granted'
+    : await Notification.requestPermission();
   if (permission !== 'granted') {
     return { state: 'denied' };
   }
