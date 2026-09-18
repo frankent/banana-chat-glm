@@ -26,6 +26,14 @@ ARG VITE_REVERB_HOST=localhost
 ARG VITE_REVERB_PORT=80
 ARG VITE_REVERB_SCHEME=http
 ARG VITE_REVERB_APP_KEY=banana-chat-key
+# FR-NOTI-003 / DEC-077 — Web Push. Unset (the default) leaves push dormant:
+# isWebPushConfigured() sees empty strings and every entry point no-ops, so an
+# operator without Firebase gets a working app rather than a broken one.
+ARG VITE_FIREBASE_API_KEY=
+ARG VITE_FIREBASE_PROJECT_ID=
+ARG VITE_FIREBASE_MESSAGING_SENDER_ID=
+ARG VITE_FIREBASE_APP_ID=
+ARG VITE_FIREBASE_VAPID_KEY=
 # `pnpm run` re-verifies deps and would auto-install the FULL workspace
 # (pulling mobile's native better-sqlite3 — no gyp toolchain here).
 # node --run executes the script directly, node_modules/.bin on PATH.
