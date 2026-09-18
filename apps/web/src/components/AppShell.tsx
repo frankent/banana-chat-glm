@@ -3,6 +3,7 @@ import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useSession } from '../state/session';
 import { ConnectionBanner } from './ConnectionBanner';
 import { NotificationCenter } from './NotificationCenter';
+import { NotificationPrompt } from './NotificationPrompt';
 import { RoomList } from './RoomList';
 import { Avatar, Banana, Icon } from './Visual';
 import { PublicChatBadge } from './PublicChatBadge';
@@ -89,6 +90,8 @@ export function AppShell() {
   return (
     <div className="bc-app flex h-full flex-col">
       <ConnectionBanner />
+      {/* Fixed-position card; mounted here so it shows on every authenticated route. */}
+      <NotificationPrompt />
       <div className="flex min-h-0 flex-1">
         <nav className="bc-rail" aria-label="Main navigation">
           <button className="bc-brand" aria-label="Banana Chat home" onClick={() => navigate('/')}><Banana /></button>

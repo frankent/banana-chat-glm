@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { desktopNotificationPermission, requestDesktopNotificationPermission } from '../lib/desktop-notification';
-import { currentWebPushStatus, enableWebPush, lastWebPushResult, type EnableWebPushResult } from '../lib/web-push';
+import { desktopNotificationPermission } from '../lib/desktop-notification';
+import { enableNotifications } from '../lib/enable-notifications';
+import { currentWebPushStatus, lastWebPushResult, type EnableWebPushResult } from '../lib/web-push';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { InAppNotification } from '@banana-chat/shared';
@@ -55,13 +56,12 @@ export function NotificationCenter() {
   const askDesktopPermission = async () => {
     setEnabling(true);
     try {
-      // Always ask for the popup permission -- that is what makes the tab-open case
-      // work, and it is a prerequisite for push anyway.
-      setDesktopPermission(await requestDesktopNotificationPermission());
-      // Then, when Firebase is configured, go the rest of the way: service worker,
-      // FCM token, device row. Unconfigured deployments stop at the line above.
-      if (currentWebPushStatus() !== 'not-configured') {
-        setPushResult(await enableWebPush());
+      // Same sequence the soft-ask prompt runs -- permission, then service worker,
+      // FCM token and device row -- kept in one place so the two cannot drift.
+      const outcome = await enableNotifications();
+      setDesktopPermission(outcome.permission);
+      if (outcome.push !== null) {
+        setPushResult(outcome.push);
       }
       setPushStatus(currentWebPushStatus());
     } finally {
