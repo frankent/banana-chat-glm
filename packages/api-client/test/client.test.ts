@@ -107,6 +107,45 @@ describe('TC-CORE-013 refresh single-flight', () => {
   });
 });
 
+describe('R8 error observer', () => {
+  it('fires onError with the ApiError for every thrown error, including a 426', async () => {
+    const tokens = new TokenManager('/api/v1/auth/refresh', memoryStore());
+    tokens.setTokens('access-1', 'refresh-1');
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse(426, { error: { code: 'APP_UPDATE_REQUIRED', message: 'update', request_id: null } }),
+    );
+    const onError = vi.fn();
+    const api = new ApiClient('http://x', tokens, fetchImpl as unknown as typeof fetch, () => ({}), onError);
+
+    const err = await api.request('/api/v1/me').catch((e) => e as ApiError);
+
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).status).toBe(426);
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith(err);
+  });
+
+  it('does not fire for a successful post-refresh retry', async () => {
+    const store = memoryStore();
+    const fetchImpl = vi.fn(async (url: string, init?: RequestInit): Promise<Response> => {
+      if (url.endsWith('/auth/refresh')) {
+        return jsonResponse(200, { access_token: 'fresh-access', refresh_token: 'refresh-2' });
+      }
+      const auth = (init?.headers as Record<string, string>).Authorization;
+      return auth === 'Bearer stale-access'
+        ? jsonResponse(401, { error: { code: 'AUTH_TOKEN_EXPIRED', message: 'expired', request_id: null } })
+        : jsonResponse(200, { data: { ok: true } });
+    });
+    const tokens = new TokenManager('http://x/api/v1/auth/refresh', store, fetchImpl as unknown as typeof fetch);
+    tokens.setTokens('stale-access', 'refresh-1');
+    const onError = vi.fn();
+    const api = new ApiClient('http://x', tokens, fetchImpl as unknown as typeof fetch, () => ({}), onError);
+
+    await expect(api.request('/api/v1/me')).resolves.toEqual({ ok: true });
+    expect(onError).not.toHaveBeenCalled();
+  });
+});
+
 it('TC-AUTH-013 ignores an in-flight response after logout/account change', async () => {
   const tokens = new TokenManager('/refresh', memoryStore());
   tokens.setTokens('old', 'old-refresh');

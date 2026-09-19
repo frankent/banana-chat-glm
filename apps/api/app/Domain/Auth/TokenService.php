@@ -92,22 +92,48 @@ class TokenService
     }
 
     /**
-     * Rotate: revoke old refresh lineage, issue a new one, roll expires_at.
+     * Atomically consume $currentHash and rotate in a new refresh token,
+     * rolling expires_at. Returns null when the caller lost the race — i.e.
+     * another request already rotated this exact token (R5: two requests
+     * both reading the same current hash before either updates can no longer
+     * both "win"; the conditional UPDATE's WHERE clause is the compare, and
+     * Postgres row locking under READ COMMITTED serializes the two attempts
+     * — the loser's UPDATE blocks until the winner commits, then re-evaluates
+     * against the now-changed row and affects zero).
      *
-     * @return array{token: string, expires_at: CarbonInterface}
+     * The consumed hash is recorded in refresh_token_lineage in the SAME
+     * transaction as the rotation, so a caller that lost the race sees the
+     * winner's lineage row as soon as its own UPDATE unblocks (R6).
+     *
+     * @return array{token: string, expires_at: CarbonInterface}|null
      */
-    public function rotateRefreshToken(ChatSession $session): array
+    public function rotateRefreshToken(ChatSession $session, string $currentHash): ?array
     {
         $next = $this->newRefreshTokenValue();
 
-        $session->fill([
-            'prev_refresh_token_hash' => $session->refresh_token_hash,
-            'refresh_token_hash' => $next['hash'],
-            'expires_at' => $next['expires_at'], // rolling 30d
-            'last_used_at' => now(),
-        ])->save();
+        return DB::transaction(function () use ($session, $currentHash, $next) {
+            $rotated = ChatSession::query()
+                ->whereKey($session->id)
+                ->where('refresh_token_hash', $currentHash)
+                ->whereNull('revoked_at')
+                ->update([
+                    'refresh_token_hash' => $next['hash'],
+                    'expires_at' => $next['expires_at'], // rolling 30d
+                    'last_used_at' => now(),
+                ]);
 
-        return ['token' => $next['token'], 'expires_at' => $next['expires_at']];
+            if ($rotated === 0) {
+                return null;
+            }
+
+            DB::table('refresh_token_lineage')->insert([
+                'token_hash' => $currentHash,
+                'session_id' => $session->id,
+                'rotated_at' => now(),
+            ]);
+
+            return ['token' => $next['token'], 'expires_at' => $next['expires_at']];
+        });
     }
 
     public function revokeSession(ChatSession $session, string $reason, bool $broadcast = true): void

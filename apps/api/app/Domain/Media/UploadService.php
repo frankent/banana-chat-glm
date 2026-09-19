@@ -11,6 +11,7 @@ use App\Models\PublicChatRoom;
 use App\Models\User;
 use App\Services\SettingsService;
 use Illuminate\Filesystem\FilesystemAdapter;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -181,7 +182,12 @@ class UploadService
             'expires_at' => now()->addHour(),
         ]);
 
-        $storageKey = sprintf('ws/%s/att/%s/original', $workspaceId, $attachment->id);
+        // R2 — the presigned PUT (or multipart session) targets a STAGING key,
+        // never the final `/original` the app will ever sniff or serve from.
+        // finish() copies staging → final under its own control before it
+        // validates anything, so a client replaying the still-valid PUT/part
+        // URL after complete() can no longer touch the bytes that get served.
+        $storageKey = sprintf('ws/%s/att/%s/upload', $workspaceId, $attachment->id);
         $attachment->forceFill(['storage_key' => $storageKey])->save();
 
         /** @var FilesystemAdapter $disk */
@@ -292,35 +298,64 @@ class UploadService
             (new S3Multipart)->complete($disk, $attachment->storage_key, $attachment->multipart_upload_id, $parts);
         }
 
-        if (! $disk->exists($attachment->storage_key)) {
+        $stagingKey = $attachment->storage_key;
+
+        if (! $disk->exists($stagingKey)) {
             throw ApiException::mediaUploadMissing();
         }
 
-        $actualSize = $disk->size($attachment->storage_key);
+        $actualSize = $disk->size($stagingKey);
         if ($actualSize !== $attachment->size_bytes) {
-            $disk->delete($attachment->storage_key);
+            $disk->delete($stagingKey);
             throw ApiException::mediaSizeMismatch($attachment->size_bytes);
         }
 
-        $sniffed = $this->sniffMime($disk, $attachment->storage_key);
-        // DEC-072 — the surface is read off the ROW, never off which entry point
-        // called us. An agent's public-chat ticket carries the agent as
-        // uploader_id, so that agent can legitimately reach the INTERNAL
-        // complete() endpoint with it and satisfy its ownership check; the
-        // public_chat_room_id column is the only thing that still tells the
-        // truth about where those bytes will be shown.
-        $this->assertMimeMatchesKind(
-            $sniffed,
-            $attachment->mime_type,
-            $attachment->kind,
-            $attachment->public_chat_room_id !== null,
-        );
+        // R2 — copy BEFORE validating anything. Everything from here on reads
+        // the FINAL, server-owned key: the staging key's presigned PUT/part
+        // URLs are still technically valid for the rest of their 15-minute
+        // window, but nothing ever sniffs, scans or serves from staging again,
+        // so a replay against it cannot change what gets recorded or served.
+        $finalKey = Str::beforeLast($stagingKey, '/').'/original';
+        $disk->copy($stagingKey, $finalKey);
+
+        try {
+            $sniffed = $this->sniffMime($disk, $finalKey);
+            // DEC-072 — the surface is read off the ROW, never off which entry point
+            // called us. An agent's public-chat ticket carries the agent as
+            // uploader_id, so that agent can legitimately reach the INTERNAL
+            // complete() endpoint with it and satisfy its ownership check; the
+            // public_chat_room_id column is the only thing that still tells the
+            // truth about where those bytes will be shown.
+            $this->assertMimeMatchesKind(
+                $sniffed,
+                $attachment->mime_type,
+                $attachment->kind,
+                $attachment->public_chat_room_id !== null,
+            );
+        } catch (\Throwable $e) {
+            // R2 — a final object that failed validation (mime mismatch, or a
+            // sniff-time \RuntimeException from a corrupt stream) must not
+            // survive: nothing else will ever clean it up (the row stays
+            // Pending for PurgeExpiredUploads, but that sweep only ever looks
+            // at the staging key).
+            $disk->delete($finalKey);
+            $disk->delete($stagingKey);
+
+            throw $e;
+        }
 
         $attachment->forceFill([
             'status' => AttachmentStatus::Uploaded,
             'mime_type' => $sniffed, // sniffed wins (FR-MEDIA-001)
+            'storage_key' => $finalKey,
             'expires_at' => null,
         ])->save();
+
+        try {
+            $disk->delete($stagingKey);
+        } catch (\Throwable $e) {
+            Log::warning('media.staging_cleanup_failed', ['attachment_id' => $attachment->id, 'error' => $e->getMessage()]);
+        }
 
         ProcessAttachment::dispatch($attachment);
 

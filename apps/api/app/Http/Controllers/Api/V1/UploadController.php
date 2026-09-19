@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Media\AttachmentAccess;
 use App\Domain\Media\AttachmentSerializer;
 use App\Domain\Media\InlineSafety;
 use App\Domain\Media\SecretAttachmentExpiry;
@@ -29,6 +30,7 @@ class UploadController extends Controller
         private readonly UploadService $uploads,
         private readonly AttachmentSerializer $serializer,
         private readonly WorkspaceContext $context,
+        private readonly AttachmentAccess $access,
     ) {}
 
     /**
@@ -92,6 +94,9 @@ class UploadController extends Controller
         if (SecretAttachmentExpiry::boundToExpiredRoom($attachment)) {
             throw ApiException::roomExpired();
         }
+
+        // R1 — workspace scope alone is not room/uploader access (API-062).
+        $this->access->assertCanRead($attachment, $request->user());
 
         return response()->json([
             'data' => ['attachment' => $this->serializer->toArray($attachment)],

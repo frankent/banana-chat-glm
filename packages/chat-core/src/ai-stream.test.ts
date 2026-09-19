@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createAiStreamStore } from './ai-stream';
+import { createAiStreamStore } from './ai-stream.js';
 import type { AiMessage, AiToolStep } from '@banana-chat/shared';
 
 const step = (over: Partial<AiToolStep> = {}): AiToolStep => ({

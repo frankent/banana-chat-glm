@@ -4,6 +4,7 @@ use App\Jobs\ExpireSecretRooms;
 use App\Jobs\NotifyDueTickets;
 use App\Jobs\PurgeDeletedAiConversations;
 use App\Jobs\PurgeExpiredUploads;
+use App\Jobs\PurgeRotatedRefreshTokens;
 use App\Jobs\ReconcileCalls;
 use App\Jobs\ReconcileMeetings;
 use App\Jobs\RollupAiUsage;
@@ -29,6 +30,10 @@ Schedule::job(new RollupAiUsage)->dailyAt('00:10')->onOneServer();
 // a separate schedule entry would be one more thing to forget to register. The
 // grace period, not the tick rate, is what bounds how long an orphan lives.
 Schedule::job(new PurgeExpiredUploads)->hourly()->onOneServer();
+
+// R6 (REVIEW.md 2026-09-19) — bounded cleanup for the refresh-token reuse
+// lineage; a row only needs to outlive replays within the token's own TTL.
+Schedule::job(new PurgeRotatedRefreshTokens)->dailyAt('03:20')->onOneServer();
 
 // NFR-OPS-011 — provider error-rate / first-token p95 alert rules (TASK-INF-014)
 Schedule::command('ai:check-alerts')->everyFiveMinutes()->onOneServer();

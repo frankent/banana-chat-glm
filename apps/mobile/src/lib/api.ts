@@ -15,9 +15,15 @@ export function appVersion(): string {
 
 export const tokenManager = new TokenManager(`${API_BASE_URL}/api/v1/auth/refresh`, secureTokenStore);
 
-export const api = new ApiClient(API_BASE_URL, tokenManager, fetch.bind(globalThis), () => ({
-  'X-App-Version': appVersion(),
-}));
+export const api = new ApiClient(
+  API_BASE_URL,
+  tokenManager,
+  fetch.bind(globalThis),
+  () => ({ 'X-App-Version': appVersion() }),
+  // R8 — the only automatic route to /force-update lives in _layout.tsx's
+  // __onApiError handler; nothing previously called it.
+  (e) => (globalThis as { __onApiError?: (e: unknown) => void }).__onApiError?.(e),
+);
 
 export const endpoints = new Endpoints(api);
 

@@ -182,6 +182,12 @@ class ApiException extends RuntimeException
         ]);
     }
 
+    /** R1 / API-062 — workspace member without room/uploader/avatar/kanban/public-chat access. */
+    public static function mediaForbidden(): self
+    {
+        return new self('MEDIA_FORBIDDEN', 'คุณไม่มีสิทธิ์เข้าถึงไฟล์นี้', 403);
+    }
+
     // ---- Public Chat: partner HMAC surface (FR-PCHAT-031, §7.1) ----
     //
     // These are thrown by VerifyPublicChatSignature. They exist as ApiExceptions

@@ -92,7 +92,13 @@ export default function RoomScreen() {
     const reporter = new ReadReceiptReporter(seq => endpoints.markRead(roomId, slug, seq), () => active && atLatest.current && AppState.currentState === 'active' && aroundSeq === undefined);
     receiptRef.current = reporter;
     storeRef.current = store;
-    const outbox = scopedOutbox() ?? new Outbox({ loadOutbox: async () => null, saveOutbox: async () => undefined });
+    const scoped = scopedOutbox();
+    if (scoped === null) {
+      // R3 — surface the failure instead of silently degrading: a pending
+      // message sent from this fallback disappears on unmount/restart.
+      console.error('[room] local db unavailable — offline messages in this room will not persist');
+    }
+    const outbox = scoped ?? new Outbox({ loadOutbox: async () => null, saveOutbox: async () => undefined });
     outboxRef.current = outbox;
     const unsub = outbox.subscribe(() => rebuild());
     outbox.setSender(createOutboxSender({ endpoints, uploadFile, uploadPart, fileExists }));

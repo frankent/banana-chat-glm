@@ -59,6 +59,11 @@ jobs:
       DB_PASSWORD: orgchat
       REDIS_HOST: 127.0.0.1
       REDIS_PORT: 6379
+      # no MinIO service in this job — .env.example defaults to s3 and the
+      # health storage probe would 503. NOTE this value (and every other
+      # DB_*/REDIS_* one above) is NOT sufficient on its own for `artisan
+      # serve` below — see the Prepare step.
+      FILESYSTEM_DISK: local
     defaults:
       run:
         working-directory: apps/api
@@ -75,9 +80,41 @@ jobs:
         run: |
           cp .env.example .env
           php artisan key:generate --force
+          # `artisan serve` (below) spawns its actual HTTP-handling child
+          # process through Laravel's ServeCommand, which — whenever a .env
+          # file exists — passes that child ONLY a small allowlist of real
+          # process env vars (ServeCommand::$passthroughVariables: APP_ENV,
+          # PATH, XDEBUG_*, ...) and explicitly UNSETS everything else for
+          # it. None of this job's `env:` block (DB_*, REDIS_*,
+          # FILESYSTEM_DISK) is on that list, so the served child falls all
+          # the way back to .env.example's own values — a DIFFERENT
+          # database name (`orgchat`, not this job's `orgchat_test`), a
+          # DIFFERENT db/redis port (the local-dev-remapped 5433/6380, not
+          # this job's service ports) and `s3`. `php artisan migrate` above
+          # is unaffected (a plain CLI process inherits the real
+          # environment), which is exactly why the mismatch went unnoticed:
+          # migrate targets the right database while the served process
+          # that ZAP scans does not. Verified locally: with only the
+          # job-level `env:` block set (no sed below), `artisan serve` +
+          # `/health` connects using whatever .env says rather than the
+          # real environment, even when the two deliberately disagree.
+          # Baking the real values into .env is the only fix that reaches
+          # the served child; ci.yml never hits this because it never runs
+          # `artisan serve` (Pest is a plain CLI process too).
+          for k in DB_HOST DB_PORT DB_DATABASE DB_USERNAME DB_PASSWORD REDIS_HOST REDIS_PORT FILESYSTEM_DISK; do
+            v=$(printenv "$k") && sed -i "s|^$k=.*|$k=$v|" .env
+          done
+      - name: Migrate
+        run: php artisan migrate --force
+      # phpunit.xml pins BROADCAST_CONNECTION=reverb, and the same is true
+      # outside tests: without a live Reverb, any broadcast during the scan
+      # throws. Mirrors ci.yml's proven recipe exactly.
+      - name: Start Reverb
+        run: |
+          nohup php artisan reverb:start --port=8088 > /tmp/reverb.log 2>&1 &
+          php -r 'for ($i = 0; $i < 30; $i++) { if (@fsockopen("127.0.0.1", 8088, $e, $s, 1)) { exit(0); } sleep(1); } file_put_contents("php://stderr", file_get_contents("/tmp/reverb.log")); exit(1);'
       - name: Start API
         run: |
-          php artisan migrate --force &
           php artisan serve --host=127.0.0.1 --port=8080 >/tmp/serve.log 2>&1 &
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:8080/api/v1/health >/dev/null && break || sleep 2; done
           curl -sf http://127.0.0.1:8080/api/v1/health
@@ -89,6 +126,8 @@ jobs:
           fail_action: true
           allow_issue_writing: false
           artifact_name: zap-baseline
-      - name: Serve log on failure
+      - name: Serve/Reverb log on failure
         if: failure()
-        run: cat /tmp/serve.log || true
+        run: |
+          cat /tmp/reverb.log || true
+          cat /tmp/serve.log || true

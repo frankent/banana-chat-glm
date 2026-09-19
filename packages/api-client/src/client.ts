@@ -20,9 +20,30 @@ export class ApiClient {
     private readonly fetchImpl: typeof fetch = fetch.bind(globalThis),
     /** extra headers on every request — e.g. mobile X-App-Version (BE-025) */
     private readonly extraHeaders: () => Record<string, string> = () => ({}),
+    /**
+     * R8 — fired for every error this method throws, including one that
+     * escapes the 401-retry branch below. A caller wires this to its own
+     * navigation/state (e.g. the 426 APP_UPDATE_REQUIRED gate) instead of
+     * requiring every call site to check for it individually.
+     *
+     * KNOWN GAP: TokenManager.doRefresh() hits the refresh endpoint over a
+     * raw fetch, not through this method — a 426 on /auth/refresh itself
+     * (rather than on the request that triggered the refresh) never reaches
+     * this observer. See REVIEW.md R8.
+     */
+    private readonly onError: (e: unknown) => void = () => {},
   ) {}
 
   async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+    try {
+      return await this.requestInner<T>(path, options);
+    } catch (e) {
+      this.onError(e);
+      throw e;
+    }
+  }
+
+  private async requestInner<T>(path: string, options: RequestOptions = {}): Promise<T> {
     const epoch = this.tokens.sessionEpoch;
     const current = () => { if (epoch !== this.tokens.sessionEpoch) throw new Error('Session changed'); };
     try {

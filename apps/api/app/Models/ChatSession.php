@@ -20,7 +20,6 @@ class ChatSession extends Model
     protected $fillable = [
         'user_id',
         'refresh_token_hash',
-        'prev_refresh_token_hash',
         'device_id',
         'ip',
         'user_agent',
@@ -30,7 +29,7 @@ class ChatSession extends Model
         'revoked_reason',
     ];
 
-    protected $hidden = ['refresh_token_hash', 'prev_refresh_token_hash'];
+    protected $hidden = ['refresh_token_hash'];
 
     protected function casts(): array
     {

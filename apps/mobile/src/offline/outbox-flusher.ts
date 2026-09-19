@@ -52,7 +52,7 @@ export function createOutboxSender(deps: OutboxSenderDeps): OutboxSendFn {
         entry.workspace_id,
         entry.body,
         entry.client_message_id,
-        undefined,
+        entry.reply_to_message_id,
         attachmentIds,
       );
       return { ok: true, message: res.message };

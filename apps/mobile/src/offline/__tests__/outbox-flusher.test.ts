@@ -12,8 +12,8 @@ import { createOutboxSender, ATTACHMENT_MISSING_ERROR } from '../outbox-flusher'
 function fakeEndpoints(overrides: Partial<Record<'sendMessage' | 'createUpload' | 'completeUpload', unknown>> = {}) {
   const calls: Record<string, unknown[]> = { sendMessage: [], createUpload: [], completeUpload: [] };
   const impl: Record<string, unknown> = {
-    async sendMessage(roomId: string, slug: string, body: string | null, cmid: string, _reply?: unknown, attachmentIds: string[] = []) {
-      calls.sendMessage.push({ roomId, slug, body, cmid, attachmentIds });
+    async sendMessage(roomId: string, slug: string, body: string | null, cmid: string, reply?: string, attachmentIds: string[] = []) {
+      calls.sendMessage.push({ roomId, slug, body, cmid, reply, attachmentIds });
       return { message: { id: 'server-1', client_message_id: cmid } as unknown as Message };
     },
     async createUpload(slug: string, input: Record<string, unknown>) {
@@ -83,6 +83,36 @@ describe('outbox flusher', () => {
 
     expect(calls.sendMessage.map((c) => (c as { cmid: string }).cmid)).toEqual(['cmid-1', 'cmid-2']);
     expect(outbox.all()).toHaveLength(0);
+  });
+
+  it('R7 forwards reply_to_message_id to sendMessage', async () => {
+    const { calls, impl } = fakeEndpoints();
+    const { outbox } = makeOutbox(impl);
+
+    await outbox.enqueue({ roomId: 'room-1', workspaceId: 'ws-1', body: 'a reply', clientMessageId: 'cmid-reply', replyToMessageId: 'parent-1' });
+    outbox.setOnline(true);
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect((calls.sendMessage[0] as { reply?: string }).reply).toBe('parent-1');
+  });
+
+  it('R7 a reply queued offline still carries its parent after the app restarts', async () => {
+    const { calls, impl } = fakeEndpoints();
+    const cache = new MemoryCacheAdapter({ scope: { userId: 'u1', workspaceId: 'ws-1' } });
+    const first = new Outbox(cache);
+    await first.enqueue({ roomId: 'room-1', workspaceId: 'ws-1', body: 'a reply', clientMessageId: 'cmid-restored-reply', replyToMessageId: 'parent-2' });
+
+    const sender = createOutboxSender({
+      endpoints: impl,
+      uploadFile: async () => 1024,
+      fileExists: async () => true,
+    });
+    const revived = new Outbox(cache, { sender });
+    await revived.restore();
+    revived.setOnline(true);
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect((calls.sendMessage[0] as { reply?: string }).reply).toBe('parent-2');
   });
 
   it('TC-MOB-013 uploads an offline attachment from its local path before sending', async () => {

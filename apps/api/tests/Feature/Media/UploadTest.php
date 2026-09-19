@@ -28,10 +28,13 @@ beforeEach(function () {
 
     $this->tony = User::factory()->create(['username' => 'tony']);
     $this->somchai = User::factory()->create(['username' => 'somchai']);
+    $this->anna = User::factory()->create(['username' => 'anna']);
 
     $this->ws = Workspace::factory()->create(['slug' => 'acme']);
     $this->ws->members()->attach($this->tony->id, ['role' => 'owner']);
     $this->ws->members()->attach($this->somchai->id, ['role' => 'member']);
+    // R1 — a workspace member who is NOT in $this->room (never added below)
+    $this->ws->members()->attach($this->anna->id, ['role' => 'member']);
 
     $this->otherWs = Workspace::factory()->create(['slug' => 'globex']);
     $this->otherWs->members()->attach($this->tony->id, ['role' => 'member']);
@@ -159,7 +162,10 @@ test('TC-MEDIA-004 size mismatch vs declared → 422 MEDIA_SIZE_MISMATCH, object
         ->assertStatus(422)
         ->assertJsonPath('error.code', 'MEDIA_SIZE_MISMATCH');
 
-    expect(Storage::disk('local')->exists('ws/'.$this->ws->id.'/att/'.$created['attachment_id'].'/original'))->toBeFalse();
+    // R2 — the PUT target is the staging key; a size mismatch is caught
+    // before anything is ever copied to the served `/original` key.
+    expect(Storage::disk('local')->exists('ws/'.$this->ws->id.'/att/'.$created['attachment_id'].'/upload'))->toBeFalse()
+        ->and(Storage::disk('local')->exists('ws/'.$this->ws->id.'/att/'.$created['attachment_id'].'/original'))->toBeFalse();
 });
 
 test('TC-MEDIA-007 sniffed mime ≠ declared kind → 422 MEDIA_MIME_MISMATCH (png declared as video)', function () {
@@ -372,6 +378,40 @@ test('pending attachment in send → 422 MSG_ATTACHMENT_INVALID', function () {
         ->assertJsonPath('error.code', 'MSG_ATTACHMENT_INVALID');
 });
 
+/**
+ * R2 — Storage::fake cannot model a presigned PUT (it has no independent
+ * concept of "the URL is a bearer credential separate from server auth"), so
+ * this stands in for a replay by writing directly to the staging key after
+ * complete() — same effect a client gets by re-PUTting to the still-valid
+ * (≤15min) presigned URL on S3. The real S3/MinIO presigned-URL replay is
+ * unverified here; see REVIEW.md R2's Validation note for the live-storage
+ * gap this local fake cannot close.
+ */
+test('TC-MEDIA-018 a replayed PUT after complete cannot alter the served object', function () {
+    [$user, $token] = loginAs($this->tony);
+
+    [$id, $attachment] = uploadFile($this, $token, [
+        'kind' => 'file', 'filename' => 'race.txt', 'mime_type' => 'text/plain', 'size_bytes' => 5,
+    ], 'hello');
+
+    $stagingKey = 'ws/'.$this->ws->id.'/att/'.$id.'/upload';
+    $finalKey = 'ws/'.$this->ws->id.'/att/'.$id.'/original';
+
+    expect(Storage::disk('local')->exists($stagingKey))->toBeFalse()
+        ->and(Attachment::withoutGlobalScopes()->find($id)->storage_key)->toBe($finalKey);
+
+    // the attacker's replay: same "PUT url" (staging key), different bytes
+    Storage::disk('local')->put($stagingKey, 'EVIL PAYLOAD', 'private');
+
+    $fresh = $this->getJson("/api/v1/attachments/{$id}", wsHeaders($token, 'acme'))
+        ->assertOk()->json('data.attachment');
+
+    $served = $this->get($fresh['urls']['original']);
+    $served->assertOk();
+    expect($served->streamedContent())->toBe('hello')
+        ->and(Storage::disk('local')->get($stagingKey))->toBe('EVIL PAYLOAD');
+});
+
 test('API-062 GET /attachments/{id} returns fresh signed urls', function () {
     [$user, $token] = loginAs($this->tony);
 
@@ -386,6 +426,87 @@ test('API-062 GET /attachments/{id} returns fresh signed urls', function () {
     expect($fresh['status'])->toBe('ready')
         ->and($fresh['urls']['original'])->toStartWith('http')
         ->and($fresh['urls_expire_at'])->not->toBeNull();
+});
+
+// ---- R1 / API-062 authorization ----
+
+test('TC-MEDIA-013 unrelated workspace member denied → 403 MEDIA_FORBIDDEN', function () {
+    [$user, $token] = loginAs($this->tony);
+    [, $annaToken] = loginAs($this->anna);
+
+    [$id] = uploadFile($this, $token, [
+        'kind' => 'file', 'filename' => 'secret.txt', 'mime_type' => 'text/plain', 'size_bytes' => 5,
+    ], 'hello');
+
+    $this->getJson("/api/v1/attachments/{$id}", wsHeaders($annaToken, 'acme'))
+        ->assertStatus(403)
+        ->assertJsonPath('error.code', 'MEDIA_FORBIDDEN');
+});
+
+test('TC-MEDIA-014 removed room member denied → 403 MEDIA_FORBIDDEN', function () {
+    [$user, $token] = loginAs($this->tony);
+    [$somchai, $somchaiToken] = loginAs($this->somchai);
+
+    [$id] = uploadFile($this, $token, [
+        'kind' => 'file', 'filename' => 'room.txt', 'mime_type' => 'text/plain', 'size_bytes' => 5,
+    ], 'hello');
+
+    $this->postJson("/api/v1/rooms/{$this->room->id}/messages", [
+        'client_message_id' => (string) Str::uuid(), 'attachment_ids' => [$id],
+    ], wsHeaders($token, 'acme'))->assertStatus(201);
+
+    // somchai is still a member — reads fine
+    $this->getJson("/api/v1/attachments/{$id}", wsHeaders($somchaiToken, 'acme'))->assertOk();
+
+    RoomMember::query()->where('room_id', $this->room->id)->where('user_id', $this->somchai->id)->update(['left_at' => now()]);
+
+    $this->getJson("/api/v1/attachments/{$id}", wsHeaders($somchaiToken, 'acme'))
+        ->assertStatus(403)
+        ->assertJsonPath('error.code', 'MEDIA_FORBIDDEN');
+});
+
+test('TC-MEDIA-015 current room member reads a message attachment they did not upload', function () {
+    [$user, $token] = loginAs($this->tony);
+    [, $somchaiToken] = loginAs($this->somchai);
+
+    [$id] = uploadFile($this, $token, [
+        'kind' => 'file', 'filename' => 'shared.txt', 'mime_type' => 'text/plain', 'size_bytes' => 5,
+    ], 'hello');
+
+    $this->postJson("/api/v1/rooms/{$this->room->id}/messages", [
+        'client_message_id' => (string) Str::uuid(), 'attachment_ids' => [$id],
+    ], wsHeaders($token, 'acme'))->assertStatus(201);
+
+    $this->getJson("/api/v1/attachments/{$id}", wsHeaders($somchaiToken, 'acme'))->assertOk();
+});
+
+test('TC-MEDIA-016 any workspace member reads an avatar attachment', function () {
+    [$user, $token] = loginAs($this->tony);
+    [, $annaToken] = loginAs($this->anna);
+
+    [$id] = uploadFile($this, $token, [
+        'kind' => 'avatar', 'filename' => 'me.png', 'mime_type' => 'image/png', 'size_bytes' => strlen($this->png),
+    ], $this->png);
+
+    $this->getJson("/api/v1/attachments/{$id}", wsHeaders($annaToken, 'acme'))->assertOk();
+});
+
+test('TC-MEDIA-017 any workspace member reads a Kanban ticket image (DEC-055 workspace-wide)', function () {
+    [$user, $token] = loginAs($this->tony);
+    [, $annaToken] = loginAs($this->anna);
+
+    [$id] = uploadFile($this, $token, [
+        'kind' => 'image', 'filename' => 'ticket.png', 'mime_type' => 'image/png', 'size_bytes' => strlen($this->png),
+    ], $this->png);
+
+    $lane = $this->postJson('/api/v1/board/lanes', ['name' => 'Todo'], wsHeaders($token, 'acme'))
+        ->assertStatus(201)->json('data');
+
+    $this->postJson('/api/v1/board/tickets', [
+        'title' => 'Fix the thing', 'lane_id' => $lane['id'], 'attachment_ids' => [$id],
+    ], wsHeaders($token, 'acme'))->assertStatus(201);
+
+    $this->getJson("/api/v1/attachments/{$id}", wsHeaders($annaToken, 'acme'))->assertOk();
 });
 
 test('SVG original is served as attachment, never inline (FR-MEDIA-004 XSS rule)', function () {
