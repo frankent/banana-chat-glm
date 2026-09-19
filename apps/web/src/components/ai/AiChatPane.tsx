@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAiStore } from '../../state/ai';
+import { useChatText } from '../../lib/use-chat-text';
 import { AiConsentDialog } from './AiConsentDialog';
 import { AiShareDialog } from './AiShareDialog';
 import { Markdown } from './Markdown';
+import { Icon } from '../Visual';
 import { AiStepSummary, AiStepTrail } from './AiStepTrail';
 
 /**
@@ -13,9 +15,16 @@ import { AiStepSummary, AiStepTrail } from './AiStepTrail';
  * FR-AI-009 (WEB-024) — ↻ regenerate + ✎ edit-resend on the latest pair,
  * superseded answers kept behind a "1/2" version switcher;
  * FR-AI-015 — 📤 share an answer into a room.
+ *
+ * DEC-078 — reuses the chat shell's bubble/composer classes (bc-message,
+ * bc-message-bubble, bc-composer…) rather than MessageItem, whose edit/
+ * delete/reply/pin action model doesn't fit AI's edit-resend/regenerate/
+ * version-switch/share model. Composer controls use distinct testids
+ * (ai-composer-input/ai-send-button) from the room composer.
  */
 
 export function AiChatPane({ conversationId, slug }: { conversationId: string; slug: string }) {
+  const { text } = useChatText();
   const {
     messages, hasMoreBefore, loadOlder, send, cancel, retry, status, streamTick, consentOpen, giveConsent,
     regenerate, editResend, toggleSuperseded, supersededVisible, sending,
@@ -75,7 +84,7 @@ export function AiChatPane({ conversationId, slug }: { conversationId: string; s
     try {
       await send(conversationId, slug, content);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'ส่งข้อความไม่สำเร็จ');
+      setError(e instanceof Error ? e.message : text('ai.sendFailed'));
       setDraft(content);
     }
   };
@@ -85,7 +94,7 @@ export function AiChatPane({ conversationId, slug }: { conversationId: string; s
     try {
       await regenerate(conversationId, messageId, slug);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'สร้างใหม่ไม่สำเร็จ');
+      setError(e instanceof Error ? e.message : text('ai.regenerateFailed'));
     }
   };
 
@@ -103,21 +112,21 @@ export function AiChatPane({ conversationId, slug }: { conversationId: string; s
     try {
       await editResend(conversationId, id, slug, content);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'แก้ไขไม่สำเร็จ');
+      setError(e instanceof Error ? e.message : text('ai.editFailed'));
       setEditingId(id);
       setEditDraft(content);
     }
   };
 
-  const flashNote = (text: string): void => {
-    setNote(text);
+  const flashNote = (message: string): void => {
+    setNote(message);
     window.setTimeout(() => setNote(null), 4000);
   };
 
   const showSuperseded = supersededVisible[conversationId] ?? false;
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-slate-100">
+    <div className="flex min-h-0 flex-1 flex-col">
       {consentOpen ? <AiConsentDialog onAccept={() => void giveConsent(slug)} /> : null}
       {shareId !== null ? (
         <AiShareDialog
@@ -126,219 +135,226 @@ export function AiChatPane({ conversationId, slug }: { conversationId: string; s
           onClose={() => setShareId(null)}
           onShared={(roomName) => {
             setShareId(null);
-            flashNote(`ส่งคำตอบไป "${roomName}" แล้ว`);
+            flashNote(text('ai.sharedNote').replace('{room}', roomName));
           }}
         />
       ) : null}
 
       {hasVersions || showSuperseded ? (
-        <div className="flex items-center justify-end border-b border-slate-200 bg-white px-3 py-1">
+        <div className="bc-chat-pins" style={{ padding: '0 24px' }}>
           <button
             onClick={() => void toggleSuperseded(conversationId, slug)}
-            className="text-[11px] text-slate-500 underline-offset-2 hover:text-slate-700 hover:underline"
+            style={{ minHeight: 36, fontSize: 12, color: 'var(--chat-muted)', background: 'transparent', border: 0, textDecoration: 'underline', textUnderlineOffset: 2 }}
           >
-            {showSuperseded ? 'ซ่อนคำตอบเวอร์ชันเก่า' : 'แสดงคำตอบเวอร์ชันเก่า (1/2)'}
+            {showSuperseded ? text('ai.hideOldVersions') : text('ai.showOldVersions')}
           </button>
         </div>
       ) : null}
 
-      <div className="flex-1 overflow-y-auto px-4 py-3">
-        {hasMoreBefore[conversationId] ? (
-          <button
-            onClick={() => void loadOlder(conversationId, slug)}
-            className="mx-auto mb-2 block rounded border border-slate-200 bg-white px-3 py-1 text-xs text-slate-500 hover:bg-slate-50"
-          >
-            โหลดข้อความก่อนหน้า
-          </button>
-        ) : null}
+      <div className="bc-timeline-frame">
+        <div className="bc-message-list" data-testid="ai-message-list">
+          <div className="bc-timeline-content">
+            {hasMoreBefore[conversationId] ? (
+              <div className="bc-history-loader">
+                <button onClick={() => void loadOlder(conversationId, slug)}>{text('chat.older')}</button>
+              </div>
+            ) : null}
 
-        {list.map((m) => {
-          if (m.role === 'user') {
-            const editable = m.id === lastLiveUser?.id && liveStream === null;
-            if (m.id === editingId) {
-              return (
-                <div key={m.id} className="mb-2 flex flex-col items-end gap-1">
-                  <textarea
-                    value={editDraft}
-                    onChange={(e) => setEditDraft(e.target.value.slice(0, maxChars))}
-                    rows={3}
-                    className="w-[75%] resize-y rounded-lg border border-amber-300 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
-                  />
-                  <div className="flex gap-2">
-                    <button onClick={() => setEditingId(null)} className="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50">
-                      ยกเลิก
-                    </button>
+            {list.map((m) => {
+              if (m.role === 'user') {
+                const editable = m.id === lastLiveUser?.id && liveStream === null;
+                if (m.id === editingId) {
+                  return (
+                    <div key={m.id} className="bc-message flex justify-end" data-mine="true">
+                      <div className="bc-message-bubble" style={{ width: '75%', maxWidth: 'none' }}>
+                        <textarea
+                          value={editDraft}
+                          onChange={(e) => setEditDraft(e.target.value.slice(0, maxChars))}
+                          rows={3}
+                          className="w-full resize-y rounded-lg border border-amber-300 px-2 py-1 text-sm focus:border-amber-400 focus:outline-none"
+                        />
+                        <div className="mt-1 flex justify-end gap-2 text-xs">
+                          <button onClick={() => setEditingId(null)} className="rounded border border-slate-200 bg-white px-2 py-1 text-slate-600 hover:bg-slate-50">
+                            {text('chat.cancel')}
+                          </button>
+                          <button
+                            onClick={() => void onEditSave()}
+                            disabled={editDraft.trim() === ''}
+                            className="rounded bg-amber-400 px-2 py-1 font-semibold text-slate-900 hover:bg-amber-300 disabled:opacity-40"
+                          >
+                            {text('ai.editResend')}
+                          </button>
+                        </div>
+                        <p className="mt-1 text-[10px] text-slate-400">{editDraft.length}/{maxChars} · {text('ai.editHintSuffix')}</p>
+                      </div>
+                    </div>
+                  );
+                }
+                return (
+                  <div key={m.id} className="bc-message group flex justify-end" data-mine="true">
+                    <div className="bc-message-bubble">
+                      <div className="bc-markdown"><p className="whitespace-pre-wrap">{m.content}</p></div>
+                      {editable ? (
+                        <button
+                          onClick={() => {
+                            setEditingId(m.id);
+                            setEditDraft(m.content ?? '');
+                          }}
+                          className="mt-1 text-[10px] text-slate-400 opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
+                        >
+                          ✎ {text('ai.editResend')}
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              }
+
+              // ---- assistant answers (version groups, FR-AI-009 "1/2") ----
+              const versions = versionsOf(m.id);
+              if (!versions.some((v) => v.id === m.id)) {
+                return null;
+              }
+              const groupKey = m.parent_message_id ?? m.id;
+              const pick = versionPick.current[groupKey];
+              const selectedIdx = pick ?? selectedVersionIndex(versions);
+              if (m.id !== versions[selectedIdx]?.id) {
+                return null; // only the selected version renders
+              }
+              const switcher =
+                versions.length > 1 ? (
+                  <div className="mb-1 flex items-center gap-1 text-[10px] text-slate-400">
                     <button
-                      onClick={() => void onEditSave()}
-                      disabled={editDraft.trim() === ''}
-                      className="rounded bg-amber-400 px-2 py-1 text-xs font-semibold text-slate-900 hover:bg-amber-300 disabled:opacity-40"
+                      onClick={() => {
+                        versionPick.current[groupKey] = Math.max(0, selectedIdx - 1);
+                        useAiStore.setState((st) => ({ streamTick: st.streamTick + 1 }));
+                      }}
+                      disabled={selectedIdx === 0}
+                      className="rounded border border-slate-200 bg-white px-1 disabled:opacity-30"
+                      aria-label={text('ai.versionPrev')}
                     >
-                      บันทึกและส่งใหม่
+                      ◀
+                    </button>
+                    <span>
+                      {selectedIdx + 1}/{versions.length}
+                    </span>
+                    <button
+                      onClick={() => {
+                        versionPick.current[groupKey] = Math.min(versions.length - 1, selectedIdx + 1);
+                        useAiStore.setState((st) => ({ streamTick: st.streamTick + 1 }));
+                      }}
+                      disabled={selectedIdx === versions.length - 1}
+                      className="rounded border border-slate-200 bg-white px-1 disabled:opacity-30"
+                      aria-label={text('ai.versionNext')}
+                    >
+                      ▶
                     </button>
                   </div>
-                  <p className="text-[10px] text-slate-400">{editDraft.length}/{maxChars} · ข้อความหลังจากนี้จะถูกแทนที่</p>
+                ) : null;
+
+              if (m.status === 'failed') {
+                return (
+                  <div key={m.id} className="bc-message flex flex-col items-start gap-1" data-mine="false">
+                    {switcher}
+                    <div className="bc-message-bubble" style={{ borderColor: '#f3c6c1', background: '#fdf1ef', color: '#a13e32' }}>
+                      {text('ai.answerFailed').replace('{code}', m.error_code ?? 'ERROR')}
+                    </div>
+                    {m.id === list[list.length - 1]?.id ? (
+                      <button
+                        onClick={() => {
+                          const lastUser = [...list].reverse().find((u) => u.role === 'user');
+                          if (lastUser?.content !== null && lastUser?.content !== undefined) {
+                            void retry(conversationId, slug, lastUser.content);
+                          }
+                        }}
+                        className="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                      >
+                        ↻ {text('ai.retry')}
+                      </button>
+                    ) : null}
+                  </div>
+                );
+              }
+              if (m.status === 'pending' || m.status === 'streaming') {
+                const streamed = useAiStore.getState().activeStreamText(m.id);
+                const steps = useAiStore.getState().activeStreamSteps(m.id);
+                return (
+                  <div key={m.id} className="bc-message flex flex-col items-start gap-1" data-mine="false">
+                    <div className="bc-message-bubble">
+                      <div className="bc-markdown">
+                        {streamed !== null && streamed !== '' ? (
+                          <AiStepTrail text={streamed} steps={steps} />
+                        ) : steps.length > 0 ? (
+                          <AiStepTrail text="" steps={steps} />
+                        ) : (
+                          <span className="animate-pulse">{text('ai.typing')}</span>
+                        )}
+                        <span className="ml-0.5 inline-block h-4 w-1 animate-pulse bg-amber-400 align-middle" />
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => void cancel(m.id, slug)}
+                      className="rounded border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-500 hover:bg-slate-50"
+                    >
+                      ■ {text('ai.stop')}
+                    </button>
+                  </div>
+                );
+              }
+              const retired = m.superseded_at != null;
+              const isLastAnswer = m.id === lastLiveAnswer?.id;
+              return (
+                <div key={m.id} className="bc-message group flex flex-col items-start" data-mine="false">
+                  {switcher}
+                  <div className="bc-message-bubble" style={retired ? { opacity: 0.5 } : undefined}>
+                    <div className="bc-markdown">
+                      <Markdown content={m.content ?? ''} />
+                    </div>
+                    <AiStepSummary steps={useAiStore.getState().activeStreamSteps(m.id)} />
+                  </div>
+                  {isLastAnswer && liveStream === null ? (
+                    <div className="mt-0.5 flex gap-2 text-[10px] text-slate-400 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                      <button
+                        onClick={() => void onRegenerate(m.id)}
+                        className="rounded border border-slate-200 bg-white px-2 py-0.5 hover:text-slate-700"
+                        aria-label={text('ai.regenerateAria')}
+                      >
+                        ↻ {text('ai.regenerate')}
+                      </button>
+                      <button
+                        onClick={() => setShareId(m.id)}
+                        className="rounded border border-slate-200 bg-white px-2 py-0.5 hover:text-slate-700"
+                        aria-label={text('ai.shareAria')}
+                      >
+                        📤 {text('ai.share')}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
               );
-            }
-            return (
-              <div key={m.id} className="group mb-2 flex flex-col items-end">
-                <div className="max-w-[75%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-amber-400 px-3 py-2 text-sm text-slate-900">
-                  {m.content}
-                </div>
-                {editable ? (
-                  <button
-                    onClick={() => {
-                      setEditingId(m.id);
-                      setEditDraft(m.content ?? '');
-                    }}
-                    className="mt-0.5 text-[10px] text-slate-400 opacity-0 transition-opacity group-hover:opacity-100 focus:opacity-100"
-                  >
-                    ✎ แก้ไขและส่งใหม่
-                  </button>
-                ) : null}
-              </div>
-            );
-          }
-
-          // ---- assistant answers (version groups, FR-AI-009 "1/2") ----
-          const versions = versionsOf(m.id);
-          if (!versions.some((v) => v.id === m.id)) {
-            return null;
-          }
-          const groupKey = m.parent_message_id ?? m.id;
-          const pick = versionPick.current[groupKey];
-          const selectedIdx = pick ?? selectedVersionIndex(versions);
-          if (m.id !== versions[selectedIdx]?.id) {
-            return null; // only the selected version renders
-          }
-          const switcher =
-            versions.length > 1 ? (
-              <div className="mb-1 flex items-center gap-1 text-[10px] text-slate-400">
-                <button
-                  onClick={() => {
-                    versionPick.current[groupKey] = Math.max(0, selectedIdx - 1);
-                    useAiStore.setState((st) => ({ streamTick: st.streamTick + 1 }));
-                  }}
-                  disabled={selectedIdx === 0}
-                  className="rounded border border-slate-200 bg-white px-1 disabled:opacity-30"
-                  aria-label="ดูเวอร์ชันก่อนหน้า"
-                >
-                  ◀
-                </button>
-                <span>
-                  {selectedIdx + 1}/{versions.length}
-                </span>
-                <button
-                  onClick={() => {
-                    versionPick.current[groupKey] = Math.min(versions.length - 1, selectedIdx + 1);
-                    useAiStore.setState((st) => ({ streamTick: st.streamTick + 1 }));
-                  }}
-                  disabled={selectedIdx === versions.length - 1}
-                  className="rounded border border-slate-200 bg-white px-1 disabled:opacity-30"
-                  aria-label="ดูเวอร์ชันถัดไป"
-                >
-                  ▶
-                </button>
-              </div>
-            ) : null;
-
-          if (m.status === 'failed') {
-            return (
-              <div key={m.id} className="mb-2 flex flex-col items-start gap-1">
-                {switcher}
-                <div className="max-w-[75%] rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">
-                  ไม่สำเร็จ ({m.error_code ?? 'ERROR'}) — ลองใหม่ได้
-                </div>
-                {m.id === list[list.length - 1]?.id ? (
-                  <button
-                    onClick={() => {
-                      const lastUser = [...list].reverse().find((u) => u.role === 'user');
-                      if (lastUser?.content !== null && lastUser?.content !== undefined) {
-                        void retry(conversationId, slug, lastUser.content);
-                      }
-                    }}
-                    className="rounded border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-50"
-                  >
-                    ↻ ลองอีกครั้ง
-                  </button>
-                ) : null}
-              </div>
-            );
-          }
-          if (m.status === 'pending' || m.status === 'streaming') {
-            const streamed = useAiStore.getState().activeStreamText(m.id);
-            const steps = useAiStore.getState().activeStreamSteps(m.id);
-            return (
-              <div key={m.id} className="mb-2 flex flex-col items-start gap-1">
-                <div className="max-w-[75%] whitespace-pre-wrap rounded-2xl rounded-bl-sm bg-white px-3 py-2 text-sm text-slate-800 shadow-sm">
-                  {streamed !== null && streamed !== '' ? (
-                    <AiStepTrail text={streamed} steps={steps} />
-                  ) : steps.length > 0 ? (
-                    <AiStepTrail text="" steps={steps} />
-                  ) : (
-                    <span className="animate-pulse">กำลังพิมพ์…</span>
-                  )}
+            })}
+            {/* The assistant's own bubble cannot appear until the send round-trip
+                returns and the server hands back a pending row, so until then the
+                screen said nothing at all — you pressed Enter and waited. `sending`
+                was already tracked in the store and simply had no reader. */}
+            {sending && !list.some((m) => m.status === 'pending' || m.status === 'streaming') ? (
+              <div className="bc-message flex flex-col items-start gap-1" data-mine="false" data-testid="ai-thinking">
+                <div className="bc-message-bubble" style={{ color: 'var(--chat-muted)' }}>
+                  <span className="animate-pulse">{text('ai.thinking')}</span>
                   <span className="ml-0.5 inline-block h-4 w-1 animate-pulse bg-amber-400 align-middle" />
                 </div>
-                <button
-                  onClick={() => void cancel(m.id, slug)}
-                  className="rounded border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-500 hover:bg-slate-50"
-                >
-                  ■ หยุด
-                </button>
               </div>
-            );
-          }
-          const retired = m.superseded_at != null;
-          const isLastAnswer = m.id === lastLiveAnswer?.id;
-          return (
-            <div key={m.id} className="group mb-2 flex flex-col items-start">
-              {switcher}
-              <div className={`max-w-[75%] rounded-2xl rounded-bl-sm bg-white px-3 py-2 text-sm text-slate-800 shadow-sm ${retired ? 'opacity-50' : ''}`}>
-                <Markdown content={m.content ?? ''} />
-                <AiStepSummary steps={useAiStore.getState().activeStreamSteps(m.id)} />
-              </div>
-              {isLastAnswer && liveStream === null ? (
-                <div className="mt-0.5 flex gap-2 text-[10px] text-slate-400 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
-                  <button
-                    onClick={() => void onRegenerate(m.id)}
-                    className="rounded border border-slate-200 bg-white px-2 py-0.5 hover:text-slate-700"
-                    aria-label="สร้างคำตอบใหม่"
-                  >
-                    ↻ สร้างใหม่
-                  </button>
-                  <button
-                    onClick={() => setShareId(m.id)}
-                    className="rounded border border-slate-200 bg-white px-2 py-0.5 hover:text-slate-700"
-                    aria-label="ส่งคำตอบนี้ไปห้อง"
-                  >
-                    📤 ส่งไปห้อง…
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          );
-        })}
-        {/* The assistant's own bubble cannot appear until the send round-trip
-            returns and the server hands back a pending row, so until then the
-            screen said nothing at all — you pressed Enter and waited. `sending`
-            was already tracked in the store and simply had no reader. */}
-        {sending && !list.some((m) => m.status === 'pending' || m.status === 'streaming') ? (
-          <div className="mb-2 flex flex-col items-start gap-1" data-testid="ai-thinking">
-            <div className="max-w-[75%] rounded-2xl rounded-bl-sm bg-white px-3 py-2 text-sm text-slate-500 shadow-sm">
-              <span className="animate-pulse">กำลังคิด…</span>
-              <span className="ml-0.5 inline-block h-4 w-1 animate-pulse bg-amber-400 align-middle" />
-            </div>
+            ) : null}
+            <div ref={bottomRef} />
           </div>
-        ) : null}
-        <div ref={bottomRef} />
+        </div>
       </div>
 
-      {error !== null ? <p className="px-4 pb-1 text-xs text-red-500">{error}</p> : null}
-      {note !== null ? <p className="px-4 pb-1 text-xs text-emerald-600">{note}</p> : null}
+      {error !== null ? <p role="alert" className="bc-message-error px-6 pb-1">{error}</p> : null}
+      {note !== null ? <p className="px-6 pb-1 text-xs text-emerald-600">{note}</p> : null}
 
-      <div className="border-t border-slate-200 bg-white p-3">
-        <div className="flex items-end gap-2">
+      <div className="bc-composer">
+        <div className="bc-compose-box flex items-end gap-2">
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value.slice(0, maxChars))}
@@ -350,29 +366,24 @@ export function AiChatPane({ conversationId, slug }: { conversationId: string; s
             }}
             rows={2}
             disabled={status !== null && !status.consented}
-            placeholder={status !== null && !status.consented ? 'ต้องให้ความยินยอมก่อนใช้ AI' : 'ถามอะไรก็ได้… (Enter ส่ง, Shift+Enter บรรทัดใหม่)'}
-            className="min-h-[44px] flex-1 resize-y rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none disabled:bg-slate-50"
+            placeholder={status !== null && !status.consented ? text('ai.consentRequired') : text('ai.placeholder')}
+            data-testid="ai-composer-input"
           />
           {liveStream === null ? (
-            <button
-              onClick={() => void onSubmit()}
-              disabled={!canSend}
-              className="rounded-lg bg-amber-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-amber-300 disabled:opacity-40"
-            >
-              ส่ง
+            <button onClick={() => void onSubmit()} disabled={!canSend} className="bc-compose-send" data-testid="ai-send-button" aria-label={text('chat.send')}>
+              <Icon name="send" size={18} />
             </button>
           ) : (
-            <button
-              onClick={() => liveStream !== null && void cancel(liveStream.id, slug)}
-              className="rounded-lg border border-red-200 px-4 py-2 text-sm text-red-500 hover:bg-red-50"
-            >
-              หยุด
+            <button onClick={() => liveStream !== null && void cancel(liveStream.id, slug)} className="bc-compose-send" aria-label={text('ai.stop')}>
+              <Icon name="close" size={18} />
             </button>
           )}
         </div>
-        <p className="mt-1 text-right text-[10px] text-slate-400">
-          {draft.length}/{maxChars}
-          {status !== null ? ` · วันนี้ใช้ ${status.usage_today.messages}/${status.limits.daily_messages} ข้อความ` : ''}
+        <p className="bc-ai-compose-meta">
+          <span>
+            {draft.length}/{maxChars}
+            {status !== null ? text('ai.usageToday').replace('{used}', String(status.usage_today.messages)).replace('{limit}', String(status.limits.daily_messages)) : ''}
+          </span>
         </p>
       </div>
     </div>

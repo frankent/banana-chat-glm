@@ -16,7 +16,7 @@
   [data-testid="attachment-file"], [data-testid="search-result-message"],
   [data-testid="search-result-file"], [class~="text-left"],
   .bc-people > button, .bc-ticket-image-grid > button, button:has(> img),
-  .bc-account-menu button, .bc-account-trigger
+  .bc-account-menu button, .bc-account-trigger, .bc-conversations .bc-room-row
 )) {
   box-sizing: border-box;
   display: inline-flex;
@@ -105,9 +105,6 @@
 @media (max-width: 1050px) {
   #root .bc-chat-header .bc-call-label {display: none;}
   #root .bc-chat-header button {width: var(--bc-button-size); padding: 0;}
-  #root .bc-ai-view {flex-direction: column;}
-  #root .bc-ai-sidebar {width: 100%; max-height: 45%; border-right: 0; border-bottom: 1px solid var(--bc-line);}
-  #root .bc-ai-content {min-height: 0; overflow: auto;}
 }
 @media (hover: none), (pointer: coarse), (max-width: 760px) {
   :root {--bc-button-size: 44px; --bc-button-compact: 40px;}

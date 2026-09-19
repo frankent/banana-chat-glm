@@ -31,7 +31,7 @@ export function AiMemoriesPanel({ memories, slug }: { memories: AiMemory[]; slug
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-slate-100 p-6">
+    <div className="min-h-0 flex-1 overflow-y-auto bg-slate-100 p-6">
       <div className="mx-auto max-w-2xl space-y-4">
         <div>
           <h2 className="text-base font-bold text-slate-800">🧠 ความจำของฉัน</h2>
@@ -52,7 +52,7 @@ export function AiMemoriesPanel({ memories, slug }: { memories: AiMemory[]; slug
                 }
               }}
               placeholder="เช่น ชอบคำตอบสั้น กระชับ"
-              className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
+              className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-amber-400 focus:outline-none"
             />
             <select
               value={category}

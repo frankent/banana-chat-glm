@@ -4,6 +4,11 @@ import { test, expect } from './fixtures';
  * Web frontend regression — real Vite :5173 → api :8000 → reverb :8088.
  * Realtime AC (FR-MSG-005): a second browser context receives the message
  * over the WebSocket without reload.
+ *
+ * The "AI assistant" test needs local-only setup not covered by seed/migrate:
+ * an `ai_providers` row pointing at `http://mock-ai:8787/v1` (model `mock-glm`),
+ * and `AI_ALLOW_PRIVATE_HOSTS=true` in apps/api/.env — otherwise DEC-075's SSRF
+ * guard blocks the docker-internal mock-ai host and this suite reports 5/6.
  */
 
 const stamp = Date.now().toString(36);
@@ -76,8 +81,9 @@ test('AI assistant — conversation streams a mock answer (FR-AI-002/003)', asyn
   await page.goto('/ai');
   await shot(page, '01-ai-view');
 
-  // no conversation yet — start one (AI view shows an empty-state until then)
-  await page.getByRole('button', { name: '+ แชทใหม่' }).click();
+  // no conversation yet — start one (DEC-078: AI conversation list lives in
+  // AppShell's sidebar now, "new chat" is its compose control)
+  await page.locator('.bc-new-chat').click();
 
   // consent modal (FR-AI-007) — accept if required (isVisible() doesn't wait,
   // so poll properly for the dialog the 403 triggers)
@@ -88,7 +94,7 @@ test('AI assistant — conversation streams a mock answer (FR-AI-002/003)', asyn
     await consent.click();
   }
 
-  const input = page.getByPlaceholder(/ถามอะไรก็ได้/);
+  const input = page.getByTestId('ai-composer-input');
   await input.waitFor({ state: 'visible', timeout: 15_000 });
   const prompt = `pw-ai ${stamp}`;
   await input.fill(prompt);

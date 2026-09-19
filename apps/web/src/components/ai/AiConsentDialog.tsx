@@ -1,10 +1,17 @@
+import { createPortal } from 'react-dom';
+
 /**
  * FR-AI-007 — explicit consent modal. The composer stays blocked until the
  * user accepts (AI_CONSENT_REQUIRED otherwise).
+ *
+ * DEC-078 — portaled to document.body (fixed, not absolute): its trigger
+ * (tapping "new chat" from the AI conversation list) can fire while the
+ * pane it used to render inside is display:none on the mobile list/detail
+ * layout, which made the dialog invisible even though it existed in the DOM.
  */
 export function AiConsentDialog({ onAccept }: { onAccept: () => Promise<void> | void }) {
-  return (
-    <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-900/40 p-4">
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
       <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
         <h2 className="mb-2 text-base font-bold text-slate-800">ใช้ AI Assistant ต้องให้ความยินยอม</h2>
         <ul className="mb-4 list-disc space-y-1 pl-5 text-sm text-slate-600">
@@ -22,6 +29,7 @@ export function AiConsentDialog({ onAccept }: { onAccept: () => Promise<void> | 
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

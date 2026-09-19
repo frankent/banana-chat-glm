@@ -5,6 +5,7 @@ import { ConnectionBanner } from './ConnectionBanner';
 import { NotificationCenter } from './NotificationCenter';
 import { NotificationPrompt } from './NotificationPrompt';
 import { RoomList } from './RoomList';
+import { AiConversationList } from './ai/AiConversationList';
 import { Avatar, Banana, Icon } from './Visual';
 import { PublicChatBadge } from './PublicChatBadge';
 import { useEcho } from '../echo/EchoProvider';
@@ -56,12 +57,18 @@ export function AppShell() {
   // unique. On a phone the drawer is absolutely positioned over the top bar, so a
   // bell parked there would be unreachable at '/' where the drawer opens by
   // default -- it follows whichever surface is actually on top.
+  // DEC-078 — /ai* shares the chat shell: one side list (RoomList or
+  // AiConversationList, never both), the same is-conversation/is-chat-list
+  // mobile list<->detail machinery as /rooms/*.
   const roomOpen = location.pathname.startsWith('/rooms/');
-  const listOpen = location.pathname === '/' || sidebarOpen;
-  const chatSurface = roomOpen || location.pathname === '/';
+  const aiOpen = location.pathname.startsWith('/ai');
+  const aiConversationOpen = /^\/ai\/.+/.test(location.pathname);
+  const conversationOpen = roomOpen || aiConversationOpen;
+  const listOpen = location.pathname === '/' || location.pathname === '/ai' || sidebarOpen;
+  const chatSurface = roomOpen || aiOpen || location.pathname === '/';
   const bellInSidebar = !isMobileLayout || listOpen;
   const { connected } = useEcho();
-  useEffect(() => { setSidebarOpen(location.pathname === '/'); }, [location.pathname]);
+  useEffect(() => { setSidebarOpen(location.pathname === '/' || location.pathname === '/ai'); }, [location.pathname]);
 
   // TASK-WEB-018 — Ctrl/Cmd+K jumps to search
   useEffect(() => {
@@ -91,7 +98,7 @@ export function AppShell() {
   }
 
   return (
-    <div className={`bc-app flex h-full flex-col ${chatSurface ? 'bc-chat-shell' : ''} ${roomOpen ? 'is-conversation' : ''} ${listOpen ? 'is-chat-list' : ''}`}>
+    <div className={`bc-app flex h-full flex-col ${chatSurface ? 'bc-chat-shell' : ''} ${conversationOpen ? 'is-conversation' : ''} ${listOpen ? 'is-chat-list' : ''}`}>
       <ConnectionBanner />
       {/* In-flow banner, like ConnectionBanner above it, mounted here so it shows on
           every authenticated route and cannot overlap a control on any of them. */}
@@ -152,7 +159,11 @@ export function AppShell() {
               names the space, so this header keeps only search, "new chat" and
               the All/Unread filter (now inside RoomList). */}
 
-          <div className="min-h-0 flex-1"><RoomList key={`${me?.id}:${currentWorkspace.workspace.id}`} slug={currentWorkspace.workspace.slug} /></div>
+          <div className="min-h-0 flex-1">
+            {aiOpen
+              ? <AiConversationList key={`ai:${me?.id}`} slug={currentWorkspace.workspace.slug} />
+              : <RoomList key={`${me?.id}:${currentWorkspace.workspace.id}`} slug={currentWorkspace.workspace.slug} />}
+          </div>
           <div className="bc-sidebar-footer"><span className={connected ? 'bc-status-dot connected' : 'bc-status-dot'} />{connected ? 'Connected to your workspace' : 'Reconnecting…'}<span>✳</span></div>
         </aside>
         <main className="bc-main min-w-0 flex-1">
