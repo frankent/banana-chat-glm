@@ -11,16 +11,22 @@
   color: var(--chat-ink);
 }
 .bc-chat-shell { --bc-line: var(--chat-line); --bc-ink: var(--chat-ink); --bc-muted: var(--chat-muted); font-family: 'Banana Thai', 'DM Sans', 'Noto Sans Thai', system-ui, sans-serif; }
-.bc-chat-shell .bc-rail { width: 64px; background: #25332e; padding: 22px 0 18px; }
-.bc-chat-shell .bc-brand { border-radius: 14px; width: 40px; height: 40px; }
-.bc-chat-shell .bc-rail-links { gap: 10px; margin-top: 32px; }
-.bc-chat-shell .bc-sidebar { width: 336px; background: #fff; border-right-color: var(--chat-line); }
-.bc-chat-shell .bc-workspace { min-height: 80px; padding: 20px 24px 12px; gap: 10px; }
-.bc-chat-shell .bc-workspace-symbol { width: 32px; height: 32px; border-radius: 10px; background: #f3f5f2; border-color: #e7ebe4; font-size: 13px; color: #536448; }
-.bc-chat-shell .bc-workspace .bc-eyebrow { font-size: 9px; color: var(--chat-muted); letter-spacing: 1px; }
-.bc-chat-shell .bc-workspace select { font-size: 13px; color: var(--chat-ink); }
-.bc-chat-shell .bc-sidebar-footer { padding: 14px 24px; color: var(--chat-muted); font-size: 11px; gap: 8px; }
-.bc-chat-shell .bc-sidebar-footer > span:last-child { display: none; }
+/* DEC-080 — rail/sidebar/workspace is AppShell's persistent frame, not a
+   chat-surface concern, so it applies on every authenticated route. Only
+   the custom properties move to .bc-app (never `color`, which would bleed
+   into non-chat page content); pane styles below stay .bc-chat-shell-only. */
+.bc-app { --chat-ink: #202b36; --chat-muted: #607080; --chat-line: #e8ecf0; --chat-accent: #f2cf55; --chat-wash: #fff4ce; }
+.bc-app .bc-rail { width: 64px; background: #25332e; padding: 22px 0 18px; }
+.bc-app .bc-brand { border-radius: 14px; width: 40px; height: 40px; }
+.bc-app .bc-rail-links { gap: 10px; margin-top: 32px; }
+.bc-app .bc-sidebar { background: #fff; border-right-color: var(--chat-line); font-family: 'Banana Thai', 'DM Sans', 'Noto Sans Thai', system-ui, sans-serif; }
+@media (min-width: 1200px) { .bc-app .bc-sidebar { width: 336px; } }
+.bc-app .bc-workspace { min-height: 80px; padding: 20px 24px 12px; gap: 10px; }
+.bc-app .bc-workspace-symbol { width: 32px; height: 32px; border-radius: 10px; background: #f3f5f2; border-color: #e7ebe4; font-size: 13px; color: #536448; }
+.bc-app .bc-workspace .bc-eyebrow { font-size: 9px; color: var(--chat-muted); letter-spacing: 1px; }
+.bc-app .bc-workspace select { font-size: 13px; color: var(--chat-ink); }
+.bc-app .bc-sidebar-footer { padding: 14px 24px; color: var(--chat-muted); font-size: 11px; gap: 8px; }
+.bc-app .bc-sidebar-footer > span:last-child { display: none; }
 .bc-conversations { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .bc-conversations-title { display: flex; justify-content: space-between; align-items: center; padding: 8px 24px 20px; }
 .bc-conversations-title h1 { font-size: 25px; letter-spacing: -.6px; font-weight: 700; line-height: 1.25; }
@@ -158,13 +164,13 @@
 .bc-message-error { font-size: 12px; color: #a93737; }
 .bc-chat-shell :is(button, a, input, summary):focus-visible, .bc-message-menu button:focus-visible { outline: 2px solid #376fb0; outline-offset: 2px; }
 @media (min-width: 768px) and (max-width: 1199px) {
-  .bc-chat-shell .bc-rail { width: 56px; }
-  .bc-chat-shell .bc-sidebar { width: 280px; }
-  .bc-chat-shell .bc-workspace { padding-inline: 18px; }
+  .bc-app .bc-rail { width: 56px; }
+  .bc-app .bc-sidebar { width: 280px; }
+  .bc-app .bc-workspace { padding-inline: 18px; }
   .bc-timeline-content { padding-inline: 24px; }
 }
 @media (max-width: 767px) {
-  .bc-chat-shell .bc-rail { width: 56px; }
+  .bc-app .bc-rail { width: 56px; }
   .bc-chat-shell.is-conversation:not(.is-chat-list) .bc-rail,
   .bc-chat-shell.is-conversation:not(.is-chat-list) .bc-mobile-top { display: none; }
   .bc-chat-shell.is-chat-list .bc-sidebar { position: relative; inset: auto; display: flex; transform: none; width: calc(100vw - 56px); max-width: none; flex: 1; z-index: auto; box-shadow: none; }
