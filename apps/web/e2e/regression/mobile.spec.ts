@@ -78,6 +78,11 @@ test('mobile — login and composer editable controls never trigger focus auto-z
 
   await uiLogin(page, 'tony', 'Tony12345!');
 
+  // The room-list compose control now collapses the +DM/+Group panel behind a
+  // single toggle (locale-driven aria-label, so target it by class); opening
+  // it is a precondition for reaching NewRoomDialog's own +Group/+DM buttons.
+  await page.locator('.bc-new-chat').click();
+
   // NewRoomDialog collapses to two buttons until expanded, so its inputs are not
   // in the DOM for the sweep until we open it. The sidebar is still open here;
   // once a room is selected it is hidden at this width (index.css:158).
@@ -104,6 +109,8 @@ test('mobile — login and composer editable controls never trigger focus auto-z
   await expectEditableFontsAtLeast16(page, 'room view (probe removed)');
 
   // Room notes: a separate panel with its own compose textarea (DEC-058).
+  // Notes/media are now behind a single room-tools disclosure.
+  await page.locator('.bc-room-tools summary').click();
   await page.getByRole('button', { name: 'Room notes' }).click();
   await expect(page.getByLabel('Note text')).toBeVisible();
   await expectEditableFontsAtLeast16(page, 'room notes');

@@ -5,6 +5,10 @@ export function Banana({ size = 30 }: { size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 48 48" fill="none" aria-hidden="true"><path d="M34 9c2 15-7 27-24 22 5 10 22 13 29 0 4-7 2-13-2-17l-3-5Z" fill="currentColor" /><path d="m32 9 4-2 3 6-4 2" stroke="currentColor" strokeWidth="3" strokeLinejoin="round" /></svg>;
 }
 const paths = {
+  back: <path d="m14 5-7 7 7 7" />,
+  down: <path d="M12 4v16m-6-6 6 6 6-6" />,
+  close: <path d="m6 6 12 12M6 18 18 6" />,
+  check: <path d="m5 12 4 4L19 6" />,
   reply: <><path d="m9 5-6 6 6 6" /><path d="M3 11h10a7 7 0 0 1 7 7" /></>,
   pin: <><path d="m9 3 6 0-1 6 4 4v2H6v-2l4-4-1-6ZM12 15v6" /></>,
   edit: <><path d="m15 4 5 5M4 20l5-1L21 7a2 2 0 0 0-5-5L4 14v6Z" /></>,

@@ -11,7 +11,7 @@ import { useEcho } from '../echo/EchoProvider';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 
 /**
- * Where the notification bell is mounted, matching index.css's 760px breakpoint.
+ * Where the notification bell is mounted, matching chat.css's 767px breakpoint.
  *
  * The bell has to live in the mobile top bar: inside the sidebar it sits behind the
  * hamburger, so on a phone it was three taps from anywhere and effectively invisible
@@ -20,10 +20,10 @@ import { WorkspaceSwitcher } from './WorkspaceSwitcher';
  */
 function useIsMobileLayout(): boolean {
   const [isMobile, setIsMobile] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 760px)').matches,
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches,
   );
   useEffect(() => {
-    const query = window.matchMedia('(max-width: 760px)');
+    const query = window.matchMedia('(max-width: 767px)');
     const sync = () => setIsMobile(query.matches);
     sync();
     query.addEventListener('change', sync);
@@ -56,7 +56,10 @@ export function AppShell() {
   // unique. On a phone the drawer is absolutely positioned over the top bar, so a
   // bell parked there would be unreachable at '/' where the drawer opens by
   // default -- it follows whichever surface is actually on top.
-  const bellInSidebar = !isMobileLayout || sidebarOpen;
+  const roomOpen = location.pathname.startsWith('/rooms/');
+  const listOpen = location.pathname === '/' || sidebarOpen;
+  const chatSurface = roomOpen || location.pathname === '/';
+  const bellInSidebar = !isMobileLayout || listOpen;
   const { connected } = useEcho();
   useEffect(() => { setSidebarOpen(location.pathname === '/'); }, [location.pathname]);
 
@@ -88,7 +91,7 @@ export function AppShell() {
   }
 
   return (
-    <div className="bc-app flex h-full flex-col">
+    <div className={`bc-app flex h-full flex-col ${chatSurface ? 'bc-chat-shell' : ''} ${roomOpen ? 'is-conversation' : ''} ${listOpen ? 'is-chat-list' : ''}`}>
       <ConnectionBanner />
       {/* In-flow banner, like ConnectionBanner above it, mounted here so it shows on
           every authenticated route and cannot overlap a control on any of them. */}
@@ -148,9 +151,8 @@ export function AppShell() {
               and marketing caption here; the workspace switcher above already
               names the space, so this header keeps only search, "new chat" and
               the All/Unread filter (now inside RoomList). */}
-          <button className="bc-search" onClick={() => navigate('/search')}><Icon name="search" size={16} /><span>Search conversations</span><kbd>⌘ K</kbd></button>
-          <SidebarAiButton />
-          <div className="min-h-0 flex-1"><RoomList slug={currentWorkspace.workspace.slug} /></div>
+
+          <div className="min-h-0 flex-1"><RoomList key={`${me?.id}:${currentWorkspace.workspace.id}`} slug={currentWorkspace.workspace.slug} /></div>
           <div className="bc-sidebar-footer"><span className={connected ? 'bc-status-dot connected' : 'bc-status-dot'} />{connected ? 'Connected to your workspace' : 'Reconnecting…'}<span>✳</span></div>
         </aside>
         <main className="bc-main min-w-0 flex-1">
@@ -165,14 +167,4 @@ export function AppShell() {
 export function WelcomeView() {
   const navigate = useNavigate();
   return <div className="bc-welcome"><div className="bc-welcome-orbit"><div className="bc-welcome-mark"><Banana size={86} /></div><span className="bc-welcome-spark">✦</span><span className="bc-welcome-chat"><Icon name="chat" size={30} /></span></div><span className="bc-eyebrow">YOUR PEOPLE. YOUR SPACE.</span><h2>Good things happen together.</h2><p>Choose a conversation and bring your workspace together.</p><button className="bc-primary" onClick={() => navigate('/search')}>Find a conversation <Icon name="arrow" size={17} /></button><small><Icon name="lock" size={14} /> A private space for your workspace</small></div>;
-}
-
-/** FR-AI-001 — AI Assistant entry point, hidden when the feature is off. */
-function SidebarAiButton() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  if (location.pathname.startsWith('/ai')) {
-    return null; // already there
-  }
-  return <button className="bc-ai-entry" onClick={() => navigate('/ai')} title="AI Assistant"><span><Icon name="sparkle" size={23} /></span><div><strong>AI Assistant</strong><small>A little help, a lot of possibility</small></div><em>AI</em></button>;
 }

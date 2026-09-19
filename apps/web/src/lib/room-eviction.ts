@@ -1,3 +1,4 @@
+import { forgetChatPosition } from '../hooks/useChatScroll';
 import type { CacheScope } from '@banana-chat/chat-core';
 import { roomCache } from './cache';
 import { queryClient } from './query-client';
@@ -31,6 +32,7 @@ export function isRoomEvicted(scope: CacheScope, roomId: string): boolean {
 
 export async function evictRoom(scope: CacheScope, roomId: string): Promise<void> {
   evictedRooms.add(evictionKey(scope, roomId));
+  forgetChatPosition(evictionKey(scope, roomId));
 
   // 1. durable cache — messages + rooms-list row + outbox drafts
   try {

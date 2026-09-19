@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useChatText } from '../lib/use-chat-text';
 import { useQuery } from '@tanstack/react-query';
 import { endpoints } from '../lib/api';
 import { useSession } from '../state/session';
@@ -7,8 +9,8 @@ import { Markdown } from './ai/Markdown';
 import { Avatar, Icon } from './Visual';
 import type { Attachment, Message } from '@banana-chat/shared';
 
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+function formatTime(iso: string, locale: string): string {
+  return new Date(iso).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
 }
 
 function formatSize(bytes: number): string {
@@ -125,6 +127,8 @@ export interface MessageItemProps {
   message: Message;
   mine: boolean;
   grouped?: boolean;
+  showSender?: boolean;
+  replySender?: string;
   /** sender may edit+delete; room owner/admin may delete as moderator (FR-MSG-005/006) */
   canModerate?: boolean;
   onReply?: (message: Message) => void;
@@ -134,7 +138,9 @@ export interface MessageItemProps {
   onDelete?: (messageId: string) => Promise<unknown>;
 }
 
-export function MessageItem({ message, mine, canModerate = false, grouped = false, onEdit, onDelete, onReply, onPin, onJump }: MessageItemProps) {
+export function MessageItem({ message, mine, canModerate = false, grouped = false, showSender = true, replySender, onEdit, onDelete, onReply, onPin, onJump }: MessageItemProps) {
+  const { text, locale } = useChatText();
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -142,29 +148,22 @@ export function MessageItem({ message, mine, canModerate = false, grouped = fals
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const [actionsOpen, setActionsOpen] = useState(false);
   const bubbleRef = useRef<HTMLDivElement>(null);
-  const actionsRef = useRef<HTMLDivElement>(null);
+  const actionsRef = useRef<HTMLDialogElement>(null);
   const actionsToggleRef = useRef<HTMLButtonElement>(null);
 
-  // TASK-WEB-018: explicit, keyboard-accessible actions must not disappear
-  // while the pointer crosses the space between a message and its controls.
+  // A native modal dialog gives touch a sheet, desktop an anchored menu,
+  // and both a focus trap. Closed actions do not occupy any bubble layout.
   useEffect(() => {
-    if (!actionsOpen) return;
-    actionsRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
-    const dismiss = (event: PointerEvent) => {
-      if (!bubbleRef.current?.contains(event.target as Node)) setActionsOpen(false);
-    };
-    const escape = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setActionsOpen(false);
-        actionsToggleRef.current?.focus();
-      }
-    };
-    document.addEventListener('pointerdown', dismiss);
-    document.addEventListener('keydown', escape);
-    return () => {
-      document.removeEventListener('pointerdown', dismiss);
-      document.removeEventListener('keydown', escape);
-    };
+    const dialog = actionsRef.current;
+    if (!actionsOpen || !dialog) return;
+    const trigger = actionsToggleRef.current;
+    const rect = trigger?.getBoundingClientRect();
+    if (rect) {
+      dialog.style.setProperty('--menu-left', `${Math.max(12, Math.min(rect.right - 228, window.innerWidth - 240))}px`);
+      dialog.style.setProperty('--menu-top', `${Math.max(12, Math.min(rect.bottom + 6, window.innerHeight - 310))}px`);
+    }
+    dialog.showModal();
+    return () => { dialog.close(); trigger?.focus({ preventScroll: true }); };
   }, [actionsOpen]);
 
   useEffect(() => {
@@ -173,7 +172,7 @@ export function MessageItem({ message, mine, canModerate = false, grouped = fals
 
   if (message.type === 'system') {
     return (
-      <div className="my-2 text-center" data-testid="message" data-system="true">
+      <div className="bc-system-message my-2 text-center" data-testid="message" data-system="true">
         <span className="rounded-full bg-slate-200 px-3 py-1 text-xs text-slate-600">{systemText(message)}</span>
       </div>
     );
@@ -183,6 +182,7 @@ export function MessageItem({ message, mine, canModerate = false, grouped = fals
   const deleted = message.deleted_at !== null;
   const mayEdit = mine && !deleted && !pending && onEdit !== undefined;
   const mayDelete = !pending && !deleted && (mayEdit || (canModerate && onDelete !== undefined));
+  const compactText = !deleted && !editing && message.attachments.length === 0 && message.body !== null && message.body.trim().length > 0 && message.body.length <= 60 && !/[\n`#*|]/.test(message.body);
   const hasActions = !pending && !editing && !deleted && Boolean(mayEdit || mayDelete || onReply || onPin);
 
   const submitEdit = async () => {
@@ -214,12 +214,12 @@ export function MessageItem({ message, mine, canModerate = false, grouped = fals
 
   return (
     <div className={`bc-message group flex ${mine ? 'justify-end' : 'justify-start'}`} data-testid="message" data-mine={mine} data-grouped={grouped}>
-      {!mine && <Avatar name={message.sender?.display_name ?? 'Member'} className="bc-message-avatar" />}
-      <div ref={bubbleRef} className={`bc-message-bubble relative max-w-[70%] rounded-2xl px-3 py-1.5 ${mine ? 'bg-yellow-300' : 'bg-white'} ${pending ? 'opacity-60' : ''} shadow-sm`}>
-        {!mine && message.sender !== null && (
+      {!mine && showSender && <Avatar name={message.sender?.display_name ?? 'Member'} className="bc-message-avatar" />}
+      <div ref={bubbleRef} data-compact={compactText} className={`bc-message-bubble ${pending ? 'is-pending' : ''}`}>
+        {!mine && showSender && message.sender !== null && (
           <p className="text-xs font-semibold text-slate-600">{message.sender.display_name}</p>
         )}
-        {!deleted && message.reply_to && <button className="bc-reply-quote" onClick={() => message.reply_to?.seq && onJump?.(message.reply_to.seq)}><strong>Reply</strong><span>{message.reply_to.deleted ? 'Deleted message' : message.reply_to.snippet}</span></button>}
+        {!deleted && message.reply_to && <button className="bc-reply-quote" onClick={() => message.reply_to?.seq && onJump?.(message.reply_to.seq)}><strong>{replySender ?? text('message.reply')}</strong><span>{message.reply_to.deleted ? 'Deleted message' : message.reply_to.snippet}</span></button>}
         {deleted ? (
           <p className="text-sm italic text-slate-400" data-testid="deleted-placeholder">
             {message.delete_reason === 'moderator' ? 'This message was removed by a moderator' : 'This message was deleted'}
@@ -267,57 +267,27 @@ export function MessageItem({ message, mine, canModerate = false, grouped = fals
             {message.body !== null && <div className="bc-markdown"><Markdown content={message.body} /></div>}
           </>
         )}
-        <div className="bc-message-footer mt-0.5 text-right text-[10px] text-slate-500">
+        <div className="bc-message-footer">
         <p>
-          {pending ? 'sending…' : formatTime(message.created_at)}
-          {!deleted && message.edit_count > 0 && <span className="ml-1 italic" data-testid="edited-flag">(แก้ไขแล้ว)</span>}
+          {pending ? text('chat.sending') : formatTime(message.created_at, locale)}
+          {!deleted && message.edit_count > 0 && <span className="ml-1 italic" data-testid="edited-flag">({text('message.edited')})</span>}
         </p>
-        {hasActions && <button ref={actionsToggleRef} type="button" className="bc-message-actions-toggle" aria-label="Message actions" aria-expanded={actionsOpen} onClick={() => setActionsOpen(value => !value)}><Icon name="more" size={18} /></button>}
         </div>
-
-        {/* FR-MSG-005/006: persistent desktop menu; direct actions on touch. */}
-        {hasActions && (
-          <div
-            ref={actionsRef}
-            className="absolute top-0 flex gap-1"
-            data-testid="message-actions"
-            data-open={actionsOpen}
-            role="group"
-            aria-label="Message actions"
-          >
-            {onReply && <button aria-label="Reply" title="Reply" onClick={() => {setActionsOpen(false);onReply(message);}}><Icon name="reply" size={18} /></button>}
-            {onPin && <button aria-label="Pin message" title="Pin message" onClick={() => {setActionsOpen(false);onPin(message);}}><Icon name="pin" size={18} /></button>}
-            {mayEdit && (
-              <button
-                type="button"
-                title="แก้ไข"
-                aria-label="Edit message"
-                className="rounded-full bg-white px-2 py-0.5 text-xs shadow hover:bg-slate-100"
-                onClick={() => {
-                  setActionsOpen(false);
-                  setDraft(message.body ?? '');
-                  setError(null);
-                  setEditing(true);
-                }}
-                data-testid="edit-button"
-              >
-                <Icon name="edit" size={18} />
-              </button>
-            )}
-            {mayDelete && (
-              <button
-                type="button"
-                title="ลบ"
-                aria-label="Delete message"
-                disabled={busy}
-                className="rounded-full bg-white px-2 py-0.5 text-xs shadow hover:bg-red-50 disabled:opacity-40"
-                onClick={() => {setActionsOpen(false);void confirmDelete();}}
-                data-testid="delete-button"
-              >
-                <Icon name="trash" size={18} />
-              </button>
-            )}
-          </div>
+        {error && !editing && <p role="alert" className="bc-message-error">{error}</p>}
+        {hasActions && <button ref={actionsToggleRef} type="button" className="bc-message-actions-toggle" aria-label={text('chat.actions')} aria-haspopup="dialog" aria-expanded={actionsOpen} onClick={() => { setDeleteConfirm(false); setActionsOpen(true); }}><Icon name="more" size={18} /></button>}
+        {hasActions && actionsOpen && createPortal(
+          <dialog ref={actionsRef} className="bc-message-menu" data-testid="message-actions" data-open="true"
+            aria-label={text(deleteConfirm ? 'chat.deleteConfirm' : 'chat.actions')}
+            onCancel={() => setActionsOpen(false)}
+            onClick={event => { if (event.target === event.currentTarget) { const r = event.currentTarget.getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) setActionsOpen(false); } }}>
+            <div className="bc-message-menu-heading"><strong>{text(deleteConfirm ? 'chat.deleteConfirm' : 'chat.actions')}</strong><button autoFocus className="bc-chat-control" aria-label={text('chat.cancel')} onClick={() => setActionsOpen(false)}><Icon name="close" size={18} /></button></div>
+            {deleteConfirm ? <><p className="bc-delete-hint">{text('chat.deleteHint')}</p><button className="is-destructive" disabled={busy} onClick={async () => { await confirmDelete(); setActionsOpen(false); }}><Icon name="trash" size={18} />{text('message.delete')}</button><button onClick={() => setActionsOpen(false)}>{text('chat.cancel')}</button></> : <>
+              {onReply && <button aria-label="Reply" onClick={() => {setActionsOpen(false);onReply(message);}}><Icon name="reply" size={18} />{text('message.reply')}</button>}
+              {onPin && <button aria-label="Pin message" onClick={() => {setActionsOpen(false);onPin(message);}}><Icon name="pin" size={18} />{text('chat.pin')}</button>}
+              {mayEdit && <button aria-label="Edit message" data-testid="edit-button" onClick={() => {setActionsOpen(false);setDraft(message.body ?? '');setError(null);setEditing(true);}}><Icon name="edit" size={18} />{text('message.edit')}</button>}
+              {mayDelete && <button className="is-destructive" aria-label="Delete message" data-testid="delete-button" onClick={() => setDeleteConfirm(true)}><Icon name="trash" size={18} />{text('message.delete')}</button>}
+            </>}
+          </dialog>, document.body
         )}
       </div>
     </div>

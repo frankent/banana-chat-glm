@@ -332,3 +332,22 @@ Open decisions เหล่านี้ไม่ขัดขวางการ�
 ครั้งแรกวันที่ 19 กันยายน 2026 ลองบัญชีที่ผู้ใช้อนุญาตบน `https://chat.gamecoms.net` หนึ่งครั้ง ได้ **401 Unauthorized** โดยยังไม่ได้เข้าถึงห้อง ต่อมาผู้ใช้แก้ target เป็น `https://chat.cloudnds.com` และล็อกอินสำเร็จ **200** ตรวจ UI จริงแล้วตาม §3.3 ดังนั้นข้อจำกัด “ยังเข้า deployment ไม่ได้” ของความพยายามแรกถูกปลดแล้ว ไม่ต้องลองบัญชีซ้ำบนโดเมนเดิม
 
 ไม่ได้ส่งข้อความหรือแก้ไขข้อมูลแชท ปิดกั้น read receipt และคำขอเขียนข้อมูลแชทระหว่างตรวจ ไม่บันทึกรหัสผ่าน/token ลงเอกสารหรือไฟล์โปรเจกต์ และ logout session ที่ใช้ตรวจแล้ว ขั้นถัดไปคือสร้าง prototype และทดสอบกับ QA fixtures ตามแผน ไม่สรุปจาก 401 บนโดเมนแรกว่า credential ผิดหรือ auth ของโดเมนที่ถูกต้องมีบั๊ก
+
+
+## Implementation follow-up — 19 กันยายน 2026
+
+รอบแก้ต่อจาก handoff commit `4097d2e`: ปรับ web chat list, message bubble และ message-list UX ตาม DEC-078 แล้วใน working tree รายละเอียดหลักฐาน/ข้อจำกัดอยู่ใน [UI_REVIEW_ASTRA.md](UI_REVIEW_ASTRA.md)
+
+- รายการแชท: ลดส่วนตกแต่งที่แย่งพื้นที่, search ในรายการ, All/Unread, คงข้อมูล cache เมื่อ refresh ล้มเหลว; กลับจากห้องบนมือถือแล้วยังรักษา filter
+- ห้องแชท: mobile เต็มจอพร้อม Back; typography/spacing และสี bubble ชุดเดียว; รวม tools ในเมนู; contextual actions มีชื่อ, focus trap/Escape และยืนยันก่อนลบ
+- Timeline: รักษา seq+pixel offset เมื่อ prepend/edit/resize, single-flight pagination พร้อม retry, new-arrival count และ latest, scope การจำตำแหน่งตาม user/workspace/room, quote highlight/return และ read gating
+- Verification: browser fixtures แยกจาก production; รายละเอียดคำสั่งและผลอยู่ใน report ไม่ถือว่า fixture PASS คือ customer acceptance
+- ยังไม่ปิด TASK-UI-008: ไม่มี customer usability session/ความเห็นชอบด้านความสวยงามจากผู้ใช้ และยังไม่มี real iOS/Android keyboard acceptance ของรอบนี้
+- P1 ตามแผนเดิม: native Expo parity, authoritative first-unread landing, sticky date และ virtualization หาก benchmark จำเป็น
+
+รายการนี้ไม่แก้สถานะ historical planning evidence ด้านบน และไม่อ้างว่า FR-UI ทั้งหมดหรือ production rollout ผ่านแล้ว
+
+
+### Beauty-first refinement
+
+ตามคำสั่งล่าสุด ให้เน้นความสวยงามก่อน: ปรับ filter เป็น pill ขนาดพอดีข้อความ, selected row มี edge indicator, bubble/timeline ใช้เส้นขอบอ่อน, composer โค้งมนและปุ่มส่งวงกลม, mobile Back ไม่มีกรอบ และ self-host Noto Sans Thai พร้อม license เวลาแสดงตาม locale ของแอป รายละเอียด/preview อยู่ใน `UI_REVIEW_ASTRA.md` รอบนี้ full browser suite17/17 ผ่าน และ visual review อิสระไม่พบ blocking issue แต่ยังเป็น local preview ไม่ใช่ customer sign-off หรือ staging deployment

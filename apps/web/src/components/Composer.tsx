@@ -7,6 +7,7 @@ import { DEFAULT_SETTINGS } from '@banana-chat/shared';
 import type { UserStub } from '@banana-chat/shared';
 import { Icon } from './Visual';
 import { sessionOutbox } from '../lib/outbox';
+import { useChatText } from '../lib/use-chat-text';
 import { useUploader } from '../hooks/useUploader';
 
 interface ComposerProps {
@@ -18,6 +19,7 @@ interface ComposerProps {
   members?: UserStub[];
   reply?: Message | null;
   onReplyClear?: () => void;
+  onQueued?: () => void;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -30,7 +32,8 @@ const STATUS_LABEL: Record<string, string> = {
 const MENTION_AT_CARET = /(?:^|\s)@([a-zA-Z0-9_.]*)$/;
 
 /** TASK-WEB-006 — Enter sends, Shift+Enter newlines, optimistic insert, one draft per room. */
-export function Composer({ roomId, workspaceId, slug, senderId, members = [], reply, onReplyClear }: ComposerProps) {
+export function Composer({ roomId, workspaceId, slug, senderId, members = [], reply, onReplyClear, onQueued }: ComposerProps) {
+  const { text } = useChatText();
   const typing = useMemo(() => new TypingPublisher(value => {void endpoints.typing(roomId, slug, value).catch(() => undefined);}), [roomId, slug]);
   useEffect(() => () => typing.stop(), [typing]);
   useEffect(() => {if (reply) textareaRef.current?.focus();}, [reply]);
@@ -71,6 +74,7 @@ export function Composer({ roomId, workspaceId, slug, senderId, members = [], re
       const { outbox, ready } = sessionOutbox();
       await ready;
       await outbox.enqueue({ roomId, workspaceId: slug, body: trimmed, attachments, replyToMessageId: reply?.id });
+      onQueued?.();
       typing.stop(); onReplyClear?.();
       setBody('');
       window.sessionStorage.removeItem(draftKey);
@@ -219,12 +223,13 @@ export function Composer({ roomId, workspaceId, slug, senderId, members = [], re
           onKeyDown={onKeyDown}
           data-testid="composer-input"
           rows={Math.min(5, body.split('\n').length)}
-          placeholder="Message… (Enter to send, Shift+Enter for newline)"
+          aria-label={text('chat.message')} placeholder={text('chat.message')}
           className="flex-1 resize-none rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-yellow-400 focus:outline-none"
         />
         <button
           onClick={() => void send()}
           disabled={!canSend}
+          aria-label={text('chat.send')}
           data-testid="send-button"
           className="rounded-xl bg-yellow-400 px-4 py-2 text-sm font-semibold text-slate-900 hover:bg-yellow-300 disabled:opacity-50"
         >

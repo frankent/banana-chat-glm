@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { endpoints } from '../lib/api';
 import { roomCache } from '../lib/cache';
@@ -41,17 +41,37 @@ export function useMessagePage(roomId: string | undefined, slug: string | undefi
     }
     return () => { cancelled = true; };
   }, [store, roomId, me?.id, currentWorkspace?.workspace.id]);
-  const loadOlder = useCallback(async () => {
+  const [olderRemaining, setOlderRemaining] = useState<boolean | null>(null);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [olderError, setOlderError] = useState(false);
+  const olderRequest = useRef<Promise<boolean> | null>(null);
+  const generation = useRef(0);
+  useEffect(() => { generation.current++; olderRequest.current = null; setLoadingOlder(false); setOlderError(false); setOlderRemaining(null); }, [roomId, slug, me?.id, currentWorkspace?.workspace.id]);
+  const loadOlder = useCallback((): Promise<boolean> => {
+    if (olderRequest.current) return olderRequest.current;
     const oldest = store?.getState().messages[0]?.seq;
-    if (!roomId || !slug || !store || oldest === undefined || oldest <= 1) return false;
-    const page = await endpoints.messages(roomId, slug, { before_seq: oldest, limit: 50 });
-    store.add(page.messages);
-    return page.has_more_before;
-  }, [roomId, slug, store]);
+    if (!roomId || !slug || !store || oldest === undefined || oldest <= 1) return Promise.resolve(false);
+    const requestGeneration = generation.current;
+    setLoadingOlder(true);
+    setOlderError(false);
+    const request = endpoints.messages(roomId, slug, { before_seq: oldest, limit: 50 }).then(page => {
+      if (generation.current !== requestGeneration || (scope && isRoomEvicted(scope, roomId))) return false;
+      store.add(page.messages);
+      setOlderRemaining(page.has_more_before);
+      return page.has_more_before;
+    }).catch(() => {
+      if (generation.current === requestGeneration) setOlderError(true);
+      return true; // keep the retry affordance; do not claim end-of-history
+    }).finally(() => {
+      if (generation.current === requestGeneration) { olderRequest.current = null; setLoadingOlder(false); }
+    });
+    olderRequest.current = request;
+    return request;
+  }, [roomId, slug, store, me?.id, currentWorkspace?.workspace.id]);
   const fillGap = useCallback(async (afterSeq: number, beforeSeq: number) => {
     if (!roomId || !slug || !store) return;
     const page = await endpoints.messages(roomId, slug, { after_seq: afterSeq, limit: Math.min(100, beforeSeq - afterSeq - 1) });
     store.fillDelivered(page.messages);
   }, [roomId, slug, store]);
-  return { query, loadOlder, fillGap };
+  return { query, loadOlder, fillGap, loadingOlder, olderError, olderRemaining };
 }
