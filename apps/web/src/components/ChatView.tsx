@@ -213,6 +213,7 @@ export function ChatView() {
   useEffect(() => { receipts.current?.observe(state.messages.at(-1)?.seq ?? 0); }, [state.messages]);
 
   // FR-SRCH-001 — preserve the search anchor until the member returns to latest
+  const [highlightSeq, setHighlightSeq] = useState<number | undefined>(undefined);
   useEffect(() => {
     if (aroundSeq === undefined || query.isLoading || jumpedRef.current === `${roomId}:${aroundSeq}`) {
       return;
@@ -220,7 +221,12 @@ export function ChatView() {
     if (state.messages.some((m) => m.seq === aroundSeq)) {
       jumpedRef.current = `${roomId}:${aroundSeq}`;
       document.querySelector(`[data-seq="${aroundSeq}"]`)?.scrollIntoView({ block: 'center' });
-
+      // FR-UI-MB-005 — reply-quote jump (routed through the same around_seq
+      // mechanism as search) highlights its destination for 1.5s so landing
+      // somewhere in history isn't ambiguous.
+      setHighlightSeq(aroundSeq);
+      const timer = setTimeout(() => setHighlightSeq(undefined), 1500);
+      return () => clearTimeout(timer);
     }
   }, [aroundSeq, query.isLoading, state.messages, roomId, searchParams, setSearchParams]);
 
@@ -285,7 +291,8 @@ export function ChatView() {
   const secretActive = room !== undefined && isSecretRoomActive(room.room);
   const title = room?.room.type === 'dm' ? room.other_user?.display_name ?? membersQuery.data?.find(member => member.id !== me.id)?.display_name ?? 'Direct message' : room?.room.name ?? '…';
   const myMessages = state.messages.filter((m) => m.sender_id === me.id && m.deleted_at === null);
-  const myNewestSeq = myMessages.length > 0 ? myMessages[myMessages.length - 1]!.seq : 0;
+  const lastMineMessage = myMessages.length > 0 ? myMessages[myMessages.length - 1]! : null;
+  const myNewestSeq = lastMineMessage?.seq ?? 0;
   const other = readStatusQuery.data?.read_by.find((entry) => entry.user_id !== me.id);
   const seen = other !== undefined && other.last_read_seq >= myNewestSeq && myNewestSeq > 0;
 
@@ -325,7 +332,6 @@ export function ChatView() {
         <div className="flex items-center gap-2">
           {room && (room.room.type === 'dm' || room.room.type === 'group') && <CallButtons roomId={roomId} type={room.room.type} />}
           <button className="bc-tool-button" onClick={() => {setNotesOpen(!notesOpen);setMediaOpen(false);}} aria-label="Room notes"><Icon name="notes" size={18} /><span className="bc-call-label">Notes</span></button>
-          {seen && <span className="text-xs font-medium text-slate-400" data-testid="seen-indicator">Seen</span>}
           <button
             onClick={() => {setMediaOpen((v) => !v);setNotesOpen(false);}}
             aria-pressed={mediaOpen}
@@ -365,7 +371,7 @@ export function ChatView() {
           const divider = day !== lastDay;
           lastDay = day;
           return (
-            <div key={message.id} data-seq={message.seq}>
+            <div key={message.id} data-seq={message.seq} data-highlight={message.seq === highlightSeq}>
               {divider && (
                 <div className="bc-day-divider my-3 text-center">
                   <span className="rounded-full bg-slate-200 px-3 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">{day}</span>
@@ -382,6 +388,13 @@ export function ChatView() {
                 onJump={seq => setSearchParams({around_seq:String(seq)})}
                 onPin={async message => {try {await endpoints.pin(roomId, slug, message.id, true);void pinsQuery.refetch();}catch(e){setToolError(e instanceof Error ? e.message : 'Unable to pin');}}}
               />
+              {/* FR-READ-002 — Seen sits under our own latest message, not detached
+                  in the header where it wasn't tied to what was actually read. */}
+              {seen && message.id === lastMineMessage?.id && (
+                <div className="flex justify-end pr-1">
+                  <span className="text-xs font-medium text-slate-400" data-testid="seen-indicator">Seen</span>
+                </div>
+              )}
             </div>
           );
         })}

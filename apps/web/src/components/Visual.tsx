@@ -23,6 +23,9 @@ const paths = {
   send: <><path d="m3 3 18 9-18 9 4-9-4-9ZM7 12h14" /></>,
   files: <><rect x="4" y="3" width="16" height="18" rx="3" /><path d="M8 8h8M8 12h8M8 16h5" /></>,
   bell: <><path d="M5 9a7 7 0 0 1 14 0v6l2 3H3l2-3V9ZM10 21h4" /></>,
+  // FR-UI-CL-004 — muted-room badge (bell + slash), added to the closed icon
+  // map rather than a one-off inline svg so the row stays type-checked.
+  mute: <><path d="M5 9a7 7 0 0 1 11.7-5.1M19 9v6l2 3H8.8M10 21h4" /><path d="m3 3 18 18" /></>,
   menu: <path d="M4 6h16M4 12h16M4 18h16" />,
   arrow: <path d="M4 12h16m-6-6 6 6-6 6" />,
   lock: <><rect x="5" y="10" width="14" height="11" rx="3" /><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3" /></>,

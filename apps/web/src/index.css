@@ -84,9 +84,6 @@ input:focus,textarea:focus,select:focus { outline-color:#c8b564; }
 .bc-workspace select { background:transparent; border:0; border-radius:4px; padding:3px 14px 3px 0; font-size:13px; color:#354130; font-weight:650; }
 .bc-workspace [data-testid="notification-bell"] { display:grid; place-items:center; padding:6px; color:#869177; }
 .bc-workspace [data-testid="notification-panel"] { z-index:60; left:auto; right:0; width:min(320px,calc(100vw - 100px)); }
-.bc-sidebar-heading { padding:12px 22px 18px; }
-.bc-sidebar-heading h1 { font-size:23px; letter-spacing:-.9px; font-weight:700; }
-.bc-sidebar-heading h1>span { color:#d0b448; }
 .bc-caption { font-size:11px; color:#8b9581; }
 .bc-search { display:flex; align-items:center; gap:9px; margin:0 19px; padding:11px; border:1px solid #e8ecdf; border-radius:8px; background:#f0f2eb; color:#838e76; font-size:11px; text-align:left; }
 .bc-search>span { flex:1; }
@@ -101,16 +98,40 @@ input:focus,textarea:focus,select:focus { outline-color:#c8b564; }
 .bc-new-room>div>button { background:#e9eddf; border:1px solid #dfe5d5; color:#617152; border-radius:7px; font-size:11px; padding:8px 4px; }
 .bc-new-room>div>button:hover { background:#e0e7d5; }
 .bc-room-list { padding:0 10px 20px; scrollbar-width:thin; }
-.bc-list-label { padding:14px 11px 12px; font-size:9px; letter-spacing:1.1px; color:#8b9581; border-top:1px solid var(--bc-line); margin:0 9px; }
-.bc-room-row { display:flex; align-items:center; justify-content:space-between; gap:7px; min-height:74px; padding:13px 12px; border-radius:9px; margin-bottom:4px; }
+
+/* FR-UI-CL-005 — All/Unread filter tabs, replacing the old header caption. */
+.bc-room-filters { display:flex; gap:6px; margin:6px 19px 8px; }
+.bc-room-filters button { flex:1; padding:7px; border-radius:7px; border:1px solid transparent; background:transparent; color:#7d8b68; font-size:11px; font-weight:600; }
+.bc-room-filters button:hover { background:#eef1e7; }
+.bc-room-filters button.active { background:#fff; border-color:var(--bc-line); color:#3f4c37; box-shadow:0 1px 2px #29372f0d; }
+
+/* FR-UI-CL-001..004 — two-line row: avatar · name+time / preview+badges.
+   min-height matches the spec's 72px desktop / 76px touch floor. */
+.bc-room-row { display:flex; align-items:flex-start; gap:11px; min-height:72px; padding:13px 12px; border-radius:9px; margin-bottom:4px; }
+@media (hover:none), (pointer:coarse) { .bc-room-row { min-height:76px; } }
 .bc-room-row:hover { background:#eef1e7; }
 .bc-room-row.selected { background:#f7edc4; }
-.bc-room-content { display:flex; align-items:center; gap:11px; min-width:0; }
-.bc-room-content .block:first-child { font-size:12px; font-weight:650; line-height:1.7; }
-.bc-room-content .block:last-child:not(:first-child) { font-size:10px; line-height:1.8; color:#849078; }
+.bc-room-avatar { flex-shrink:0; }
 .bc-room-hash { width:36px; height:36px; display:grid; place-items:center; border-radius:11px; background:#eaeede; color:#8c9778; font-size:24px; font-weight:400; flex-shrink:0; }
 .bc-room-row.selected .bc-room-hash { background:#efdf9f; color:#9c8949; }
-.bc-room-row>span:last-child:not(:first-child) { font-size:10px; padding:2px 6px; min-width:20px; text-align:center; border-radius:6px; margin:0; }
+.bc-room-main { min-width:0; flex:1; display:flex; flex-direction:column; gap:3px; justify-content:center; min-height:36px; }
+.bc-room-line1 { display:flex; align-items:baseline; gap:8px; }
+.bc-room-name { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; font-weight:650; line-height:1.7; color:var(--bc-ink); }
+.bc-room-name.unread { font-weight:800; }
+.bc-room-time { flex-shrink:0; font-size:10px; color:#96a086; }
+.bc-room-line2 { display:flex; align-items:center; gap:8px; }
+.bc-room-preview { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; line-height:1.8; color:#849078; }
+.bc-room-badges { flex-shrink:0; display:flex; align-items:center; gap:5px; }
+.bc-room-muted { display:flex; align-items:center; gap:3px; font-size:9px; color:#96a086; }
+.bc-room-secret { font-size:10px; padding:2px 6px; min-width:20px; text-align:center; border-radius:6px; background:#e5e9df; color:#5b6953; }
+.bc-room-unread { font-size:10px; font-weight:800; padding:2px 6px; min-width:18px; height:18px; line-height:14px; text-align:center; border-radius:9px; background:#f4d35a; color:#29372f; }
+
+/* FR-UI-CL-007 — skeleton rows instead of a bare "Loading…" line. */
+.bc-room-skeleton { pointer-events:none; }
+.bc-skel-circle { width:36px; height:36px; border-radius:11px; background:linear-gradient(90deg,#eef1e7,#f5f7f1,#eef1e7); background-size:200% 100%; animation:bc-skel-shimmer 1.4s ease-in-out infinite; }
+.bc-skel-line { display:block; height:9px; margin:5px 0; border-radius:5px; background:linear-gradient(90deg,#eef1e7,#f5f7f1,#eef1e7); background-size:200% 100%; animation:bc-skel-shimmer 1.4s ease-in-out infinite; }
+@keyframes bc-skel-shimmer { 0% { background-position:200% 0; } 100% { background-position:-200% 0; } }
+@media(prefers-reduced-motion:reduce) { .bc-skel-circle,.bc-skel-line { animation:none; } }
 .bc-sidebar-footer { padding:20px; border-top:1px solid var(--bc-line); display:flex; align-items:center; gap:7px; color:#839076; font-size:9px; }
 .bc-sidebar-footer>span:last-child { margin-left:auto; font-size:21px; color:#a5b28c; }
 .bc-status-dot { width:5px; height:5px; background:#c8b451; border-radius:50%; }
@@ -204,25 +225,44 @@ input:focus,textarea:focus,select:focus { outline-color:#c8b564; }
 }
 @media(prefers-reduced-motion:reduce) { *,*:before,*:after{scroll-behavior:auto!important;transition:none!important;animation-duration:.01ms!important} }
 
+/* FR-UI-MB-005 — 1.5s highlight when a reply-quote or search jump lands on a
+   message; reduced motion swaps the fade for a static ring so it is still
+   visible, just not animated (the global rule above already collapses
+   animation-duration for it, this only supplies the static box-shadow). */
+@keyframes bc-highlight-ring { from { box-shadow: 0 0 0 3px #f4d35a; } to { box-shadow: 0 0 0 3px transparent; } }
+.bc-message[data-highlight="true"] .bc-message-bubble { animation: bc-highlight-ring 1.5s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .bc-message[data-highlight="true"] .bc-message-bubble { animation: none; box-shadow: 0 0 0 3px #f4d35a; }
+}
+
 h1,h2,h3 { font-family:Manrope,'DM Sans',system-ui,sans-serif; }
 
 /* TASK-WEB-040 / DEC-048: compact conversation tools, with touch targets. */
 .bc-chat-header{height:60px;padding:0 20px}.bc-chat-identity h2{font-size:14px}.bc-chat-identity .bc-avatar,.bc-chat-identity .bc-room-hash{width:33px;height:33px}
-.bc-message-list{padding:12px 22px}.bc-message{margin:3px 0;gap:8px}.bc-message-bubble{padding:7px 11px;border-radius:12px;max-width:min(78%,660px);box-shadow:0 1px 1px #29372f08}.bc-message-bubble>p.font-semibold{margin-bottom:2px}.bc-message-avatar{width:28px;height:28px;font-size:10px;margin-top:2px}
+.bc-message-list{padding:12px 22px}.bc-message{margin:3px 0;gap:8px}.bc-message-bubble{padding:7px 11px;border-radius:12px;max-width:min(72%,560px);box-shadow:0 1px 1px #29372f08}.bc-message-bubble>p.font-semibold{margin-bottom:2px}.bc-message-avatar{width:28px;height:28px;font-size:10px;margin-top:2px}
 .bc-markdown{font-size:13px;line-height:1.5;overflow-wrap:anywhere}.bc-markdown pre{max-width:100%;white-space:pre}.bc-mention{background:#f7e8b980;border-radius:4px;padding:0 2px;font-weight:600}
 .bc-message-bubble [data-testid="message-actions"]{left:auto;right:0;top:-27px;background:#fff;border:1px solid var(--bc-line);border-radius:7px;padding:2px;z-index:4;box-shadow:0 2px 8px #29372f15}.bc-message-bubble [data-testid="message-actions"] button{min-width:28px;min-height:24px}.bc-message-bubble:focus-within [data-testid="message-actions"]{display:flex}
 .bc-composer{padding:8px 18px 10px}.bc-compose-hint{display:none}.bc-compose-box{padding:5px 7px;border-radius:14px}.bc-compose-box textarea{font-size:13px;min-height:38px;padding:8px 6px}.bc-day-divider{margin:12px 0!important}
 .bc-tool-button{font-size:11px;padding:8px;border:1px solid var(--bc-line);border-radius:8px}.bc-typing{height:20px;flex-shrink:0;font-size:11px;color:#718261;padding:0 22px}.bc-typing-dots{letter-spacing:2px;color:#8a9a71}
 .bc-reply-compose{display:flex;justify-content:space-between;padding:7px 10px;background:#f0f3eb;border-left:3px solid #93a47c;border-radius:6px;margin-bottom:5px;font-size:12px}.bc-reply-compose span{min-width:0}.bc-reply-compose small{display:block;max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bc-reply-compose button{padding:6px}
-.bc-reply-quote{display:block;text-align:left;width:100%;border-left:3px solid #9da976;padding:4px 8px;background:#29372f09;border-radius:5px;margin-bottom:5px;font-size:11px}.bc-reply-quote strong,.bc-reply-quote span{display:block}.bc-reply-quote span{max-width:360px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bc-reply-quote{display:block;text-align:left;width:100%;border-left:3px solid #9da976;padding:4px 8px;background:#29372f09;border-radius:5px;margin-bottom:5px;font-size:11px}.bc-reply-quote strong{display:block}
+/* FR-UI-MB-005 — snippet clamps to 2 lines instead of one. */
+.bc-reply-quote span{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;max-width:360px;white-space:normal;overflow:hidden}
 .bc-pins{flex-shrink:0;max-height:88px;overflow:auto;border-bottom:1px solid var(--bc-line);background:#faf8e9;padding:3px 18px;font-size:12px}.bc-pins>div{display:flex;align-items:center;gap:10px}.bc-pins button{padding:5px}.bc-pins button:first-child{display:flex;gap:8px;flex:1;min-width:0;text-align:left}.bc-pins span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bc-bot-presence{display:flex;flex-wrap:wrap;gap:5px;align-items:center;padding:5px 20px;color:#7f8e70;background:#f8faf5;font-size:10px;border-bottom:1px solid var(--bc-line)}.bc-bot-presence a{text-decoration:underline}
 .bc-directory{height:100%;overflow:auto;padding:35px;max-width:1100px;margin:auto}.bc-directory h1{font-size:30px;font-weight:750;margin:6px 0}.bc-directory header p{font-size:13px;color:#839174}.bc-directory-search{display:flex;align-items:center;gap:10px;border:1px solid var(--bc-line);border-radius:12px;padding:12px;margin:25px 0 20px}.bc-directory-search input{outline:none;background:none;width:100%;font-size:13px}.bc-people{display:grid;grid-template-columns:repeat(auto-fill,minmax(235px,1fr));gap:10px;margin-bottom:20px}.bc-people>button{display:flex;align-items:center;gap:12px;text-align:left;border:1px solid var(--bc-line);padding:15px;border-radius:12px}.bc-people>button:hover{background:#f8f5e5}.bc-people>button:disabled{opacity:.55}.bc-people>button>span:nth-child(2){flex:1;min-width:0}.bc-people strong,.bc-people small{display:block;overflow:hidden;text-overflow:ellipsis}.bc-people strong{font-size:13px}.bc-people small{font-size:11px;color:#8b987c}
 .bc-notes{display:flex;flex-direction:column;width:350px;flex-shrink:0;border-left:1px solid var(--bc-line);background:#f8f9f4;min-height:0}.bc-notes>header{display:flex;justify-content:space-between;align-items:center;padding:15px;border-bottom:1px solid var(--bc-line)}.bc-notes header small{display:block;font-size:10px;color:#859275}.bc-note-compose{padding:12px;border-bottom:1px solid var(--bc-line);font-size:12px}.bc-note-compose textarea{resize:vertical;min-height:90px;width:100%;border:1px solid var(--bc-line);border-radius:8px;padding:9px;background:white}.bc-note-compose .bc-primary{padding:8px 12px;font-size:12px;margin-top:8px}.bc-note-upload{display:block;font-size:11px;margin:8px 0}.bc-note-upload input{display:block;max-width:100%;font-size:11px}.bc-note-list{overflow:auto;flex:1;padding:12px;font-size:13px}.bc-note-list article{border:1px solid var(--bc-line);border-radius:11px;background:white;padding:12px;margin-bottom:10px;overflow-wrap:anywhere}.bc-note-list article header{display:flex;justify-content:space-between;font-size:11px;margin-bottom:8px;color:#849176}.bc-note-list article footer{display:flex;gap:16px;margin-top:12px;font-size:10px}.bc-note-list article footer button:hover{text-decoration:underline}
 .bc-viewer{margin:auto;padding:0;border:1px solid #50634d;border-radius:12px;width:min(1100px,94vw);height:min(850px,92dvh);background:#18241f;color:#f7f8f4;max-width:94vw}.bc-viewer::backdrop{background:#101c17da}.bc-viewer header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #405046;gap:10px;font-size:13px}.bc-viewer header strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bc-viewer header>div{display:flex;gap:16px;align-items:center}.bc-viewer button,.bc-viewer a{padding:6px;font-size:12px}.bc-viewer-content{height:calc(100% - 65px);overflow:auto;padding:16px}.bc-viewer-content>img,.bc-viewer-content>video{display:block;max-height:100%;max-width:100%;margin:auto;object-fit:contain}.bc-viewer-content>img.zoom{max-width:none;max-height:none}.bc-viewer-content>div{background:white;color:#29372f;padding:20px;border-radius:8px;min-height:100%;font-size:14px}.bc-file-preview{font-size:12px;text-align:left;padding:8px;background:#29372f09;border-radius:7px;overflow-wrap:anywhere}
 @media(max-width:1050px){.bc-notes{position:absolute;inset:0 0 0 auto;max-width:100%;z-index:21;box-shadow:-10px 0 30px #29372f20}.bc-chat{position:relative}}
-@media(max-width:760px){.bc-directory{padding:20px 12px}.bc-chat-header{padding:0 10px;height:58px}.bc-chat-identity h2{max-width:125px}.bc-chat-header .flex.items-center.gap-2{gap:3px}.bc-message-list{padding:10px}.bc-message-bubble{max-width:91%;padding:6px 9px}.bc-message-bubble [data-testid="message-actions"]{position:static;border:0;box-shadow:none;background:transparent;padding:0;margin-top:2px}.bc-message-bubble [data-testid="message-actions"] button{min-height:28px;min-width:28px}.bc-typing{padding:0 12px}.bc-composer{padding:5px 8px 8px}.bc-notes{width:100%;max-width:100%}.bc-pins{padding:3px 8px}.bc-reply-compose small{max-width:200px}.bc-bot-presence{padding:4px 10px;font-size:9px}.bc-viewer header{padding:7px}.bc-viewer header>div{gap:3px}.bc-viewer-content{padding:8px}}
-.bc-message[data-grouped="true"] .bc-message-avatar{visibility:hidden}.bc-message[data-grouped="true"] .bc-message-bubble>p.font-semibold{display:none}.bc-message[data-grouped="true"]{margin-top:1px}.bc-message[data-grouped="true"] .bc-message-bubble{border-top-left-radius:5px}
+@media(max-width:760px){.bc-directory{padding:20px 12px}.bc-chat-header{padding:0 10px;height:58px}.bc-chat-identity h2{max-width:125px}.bc-chat-header .flex.items-center.gap-2{gap:3px}.bc-message-list{padding:10px}.bc-message-bubble{max-width:86%;padding:6px 9px}.bc-message-bubble [data-testid="message-actions"]{position:static;border:0;box-shadow:none;background:transparent;padding:0;margin-top:2px}.bc-message-bubble [data-testid="message-actions"] button{min-height:28px;min-width:28px}.bc-typing{padding:0 12px}.bc-composer{padding:5px 8px 8px}.bc-notes{width:100%;max-width:100%}.bc-pins{padding:3px 8px}.bc-reply-compose small{max-width:200px}.bc-bot-presence{padding:4px 10px;font-size:9px}.bc-viewer header{padding:7px}.bc-viewer header>div{gap:3px}.bc-viewer-content{padding:8px}}
+.bc-message[data-grouped="true"] .bc-message-avatar{visibility:hidden}.bc-message[data-grouped="true"] .bc-message-bubble>p.font-semibold{display:none}.bc-message[data-grouped="true"]{margin-top:1px}
+/* FR-UI-MB-002 — the joining (flattened) corner sits on the TAIL side: top-left
+   for incoming (left-aligned, tail already flat there), top-right for outgoing
+   (right-aligned, tail on the right). The old unconditional top-left flatten
+   left outgoing groups with an unflattened tail and an incorrectly-rounded
+   far corner. */
+.bc-message[data-grouped="true"] .bc-message-bubble{border-top-left-radius:5px}
+.bc-message[data-mine="true"][data-grouped="true"] .bc-message-bubble{border-top-left-radius:13px;border-top-right-radius:5px}
 
 /* FR-KAN-001..005: workspace board and ticket drawer */
 .bc-board{height:100%;display:flex;flex-direction:column;background:#f6f7f3;overflow:auto;padding:30px 28px;gap:23px;color:#354330}
@@ -281,9 +321,14 @@ h1,h2,h3 { font-family:Manrope,'DM Sans',system-ui,sans-serif; }
 .bc-message-actions-toggle:hover,.bc-message-actions-toggle[aria-expanded="true"] {background:#29372f12;}
 .bc-message-bubble [data-testid="message-actions"] {display:flex;visibility:hidden;opacity:0;pointer-events:none;top:auto;bottom:calc(100% - 4px);}
 .bc-message-bubble [data-testid="message-actions"][data-open="true"] {visibility:visible;opacity:1;pointer-events:auto;}
+/* FR-UI-MB-004 — touch used to show a persistent 3-4 button toolbar under every
+   message (forced visible, toggle hidden). Touch now gets the SAME single
+   44px "more" control as desktop (buttons.css sizes it per breakpoint); only
+   the OPEN menu's layout differs here (inline under the bubble instead of a
+   floating popover), matching how the touch [data-open] state already opens
+   above at the ≤1050px/≤760px breakpoints. */
 @media (hover:none), (pointer:coarse), (max-width:760px) {
-  .bc-message-actions-toggle {display:none;}
-  .bc-message-bubble [data-testid="message-actions"] {position:static;visibility:visible;opacity:1;pointer-events:auto;justify-content:flex-end;flex-wrap:wrap;margin-top:3px;border:0;box-shadow:none;background:transparent;padding:0;}
+  .bc-message-bubble [data-testid="message-actions"] {position:static;justify-content:flex-end;flex-wrap:wrap;margin-top:3px;border:0;box-shadow:none;background:transparent;padding:0;}
   .bc-message-bubble [data-testid="message-actions"] button {min-width:32px;min-height:32px;}
 }
 

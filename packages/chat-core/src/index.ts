@@ -30,6 +30,8 @@ export { applyRoomEvent } from './room-sync.js';
 export { TypingState, TypingPublisher } from './typing.js';
 
 export { continuesMessage } from './message-layout.js';
+export { roomListTime, roomPreviewText } from './room-list-presentation.js';
+export type { RoomListTime } from './room-list-presentation.js';
 export { NotificationGate, DesktopNotificationGate, desktopNotificationBody, unreadTitle } from './notification.js';
 export type { AlertKind } from './notification.js';
 export { ticketKey, deadlineState } from './kanban.js';

@@ -144,7 +144,10 @@ export function AppShell() {
         {sidebarOpen && <button className="bc-sidebar-shade" aria-label="Close conversations" onClick={() => setSidebarOpen(false)} />}
         <aside className={`bc-sidebar ${sidebarOpen ? 'is-open' : ''}`} onClick={(event) => { if ((event.target as HTMLElement).closest('a[href]')) setSidebarOpen(false); }}>
           <div className="bc-workspace"><span className="bc-workspace-symbol">{currentWorkspace.workspace.name[0]}</span><div><span className="bc-eyebrow">YOUR WORKSPACE</span><WorkspaceSwitcher /></div>{bellInSidebar && <NotificationCenter />}</div>
-          <div className="bc-sidebar-heading"><h1>Messages<span>.</span></h1><span className="bc-caption">Your people, closer</span></div>
+          {/* FR-UI-CL-005 — the sidebar previously duplicated a "Messages." heading
+              and marketing caption here; the workspace switcher above already
+              names the space, so this header keeps only search, "new chat" and
+              the All/Unread filter (now inside RoomList). */}
           <button className="bc-search" onClick={() => navigate('/search')}><Icon name="search" size={16} /><span>Search conversations</span><kbd>⌘ K</kbd></button>
           <SidebarAiButton />
           <div className="min-h-0 flex-1"><RoomList slug={currentWorkspace.workspace.slug} /></div>
