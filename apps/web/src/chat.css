@@ -89,7 +89,8 @@
 #root .bc-chat-shell .bc-room-tools-menu button:hover { background: #f2f5f4; }
 .bc-chat-ai-notice { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 18px; background: #fcfcf9; border-bottom: 1px solid #edf0e7; font-size: 11px; line-height: 1.5; color: #5b6855; }
 .bc-chat-ai-notice > svg { flex-shrink: 0; }
-.bc-chat-ai-notice a { text-decoration: underline; text-underline-offset: 2px; flex-shrink: 0; }
+.bc-chat-ai-notice > span { min-width: 0; }
+.bc-chat-ai-notice a { text-decoration: underline; text-underline-offset: 2px; flex-shrink: 0; white-space: nowrap; }
 .bc-chat-pins { background: white; border-bottom: 1px solid var(--chat-line); padding: 0 24px; }
 .bc-chat-pins > summary { display: flex; align-items: center; gap: 8px; list-style: none; cursor: pointer; min-height: 36px; font-size: 12px; color: #607080; }
 .bc-chat-pins > summary span { border-radius: 8px; background: #f1f3f5; padding: 1px 6px; font-size: 10px; }
@@ -193,7 +194,6 @@
   .bc-chat-shell .bc-room-tools .bc-call-label { display: inline; }
   .bc-room-tools > summary { width: 44px; height: 44px; }
   .bc-chat-ai-notice { padding: 7px 12px; font-size: 10px; align-items: flex-start; gap: 5px; }
-  .bc-chat-ai-notice a { max-width: 60px; }
   .bc-timeline-content { padding: 14px 12px 12px; }
   .bc-chat-shell .bc-message-avatar { display: none; }
   .bc-chat-shell .bc-message-bubble { max-width: 84%; padding: 8px 12px 5px; }
