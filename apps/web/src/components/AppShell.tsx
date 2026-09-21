@@ -1,7 +1,10 @@
 import { useEffect, useState, useRef } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import type { WorkspaceInvite } from '@banana-chat/shared';
 import { useSession } from '../state/session';
+import { useChatText } from '../lib/use-chat-text';
 import { ConnectionBanner } from './ConnectionBanner';
+import { InviteQrDialog } from './InviteQrDialog';
 import { NotificationCenter } from './NotificationCenter';
 import { NotificationPrompt } from './NotificationPrompt';
 import { RoomList } from './RoomList';
@@ -35,11 +38,18 @@ function useIsMobileLayout(): boolean {
 
 export function AppShell() {
   const { status, me, currentWorkspace, logout } = useSession();
+  const { text } = useChatText();
   const location = useLocation();
   const navigate = useNavigate();
   const [accountOpen, setAccountOpen] = useState(false);
   const isMobileLayout = useIsMobileLayout();
   const accountRef = useRef<HTMLDivElement>(null);
+  const accountTriggerRef = useRef<HTMLButtonElement>(null);
+  // FR-WS-006/DEC-081 — kept per-workspace so reopening the menu shows the
+  // still-live invite instead of minting a new one; naturally cleared on
+  // logout (AppShell unmounts) and never shown for a different workspace.
+  const [invitesByWorkspace, setInvitesByWorkspace] = useState<Record<string, WorkspaceInvite>>({});
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   // Close on outside click and Escape -- a menu you cannot dismiss is worse than
   // no menu, especially on touch where there is no Escape key.
   useEffect(() => {
@@ -97,6 +107,9 @@ export function AppShell() {
     return <Navigate to="/no-workspace" replace />;
   }
 
+  const canInvite = currentWorkspace.role === 'owner' || currentWorkspace.role === 'admin';
+  const currentInvite = invitesByWorkspace[currentWorkspace.workspace.id] ?? null;
+
   return (
     <div className={`bc-app flex h-full flex-col ${chatSurface ? 'bc-chat-shell' : ''} ${conversationOpen ? 'is-conversation' : ''} ${listOpen ? 'is-chat-list' : ''}`}>
       <ConnectionBanner />
@@ -126,6 +139,7 @@ export function AppShell() {
             <button onClick={() => void logout()} aria-label="Sign out" title="Sign out"><Icon name="logout" /></button>
             <div className="bc-account" ref={accountRef}>
               <button
+                ref={accountTriggerRef}
                 className="bc-account-trigger"
                 aria-haspopup="menu"
                 aria-expanded={accountOpen}
@@ -143,6 +157,11 @@ export function AppShell() {
                   <button role="menuitem" onClick={() => { setAccountOpen(false); navigate('/change-password'); }}>
                     <Icon name="lock" size={16} /> Change password
                   </button>
+                  {canInvite && (
+                    <button role="menuitem" aria-haspopup="dialog" onClick={() => { setAccountOpen(false); setInviteDialogOpen(true); }}>
+                      <Icon name="qr" size={16} /> {text('invite.menu')}
+                    </button>
+                  )}
                   <button role="menuitem" onClick={() => { setAccountOpen(false); void logout(); }}>
                     <Icon name="logout" size={16} /> Sign out
                   </button>
@@ -151,6 +170,16 @@ export function AppShell() {
             </div>
           </div>
         </nav>
+        {inviteDialogOpen && (
+          <InviteQrDialog
+            slug={currentWorkspace.workspace.slug}
+            workspaceName={currentWorkspace.workspace.name}
+            invite={currentInvite}
+            onIssued={invite => setInvitesByWorkspace(prev => ({ ...prev, [currentWorkspace.workspace.id]: invite }))}
+            onRevoked={() => setInvitesByWorkspace(prev => { const next = { ...prev }; delete next[currentWorkspace.workspace.id]; return next; })}
+            onClose={() => { setInviteDialogOpen(false); accountTriggerRef.current?.focus(); }}
+          />
+        )}
         {sidebarOpen && <button className="bc-sidebar-shade" aria-label="Close conversations" onClick={() => setSidebarOpen(false)} />}
         <aside className={`bc-sidebar ${sidebarOpen ? 'is-open' : ''}`} onClick={(event) => { if ((event.target as HTMLElement).closest('a[href]')) setSidebarOpen(false); }}>
           <div className="bc-workspace"><span className="bc-workspace-symbol">{currentWorkspace.workspace.name[0]}</span><div><span className="bc-eyebrow">YOUR WORKSPACE</span><WorkspaceSwitcher /></div>{bellInSidebar && <NotificationCenter />}</div>

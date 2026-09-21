@@ -37,6 +37,12 @@ const paths = {
   // from this CLOSED map, so a missing key is a TypeScript error rather than a
   // runtime fallback: the rail button cannot ship without this glyph.
   lifebuoy: <><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3.6" /><path d="m5.7 5.7 3.8 3.8M14.5 14.5l3.8 3.8M18.3 5.7l-3.8 3.8M9.5 14.5l-3.8 3.8" /></>,
+  // FR-WS-006 — workspace invite QR: two finder-pattern corners + scattered
+  // lower-right modules, matching the account menu's stroke-icon style.
+  qr: <><rect x="3" y="3" width="7" height="7" rx="1.2" /><rect x="14" y="3" width="7" height="7" rx="1.2" /><rect x="3" y="14" width="7" height="7" rx="1.2" /><path d="M15 15h2v2h-2zM19 15h2v2h-2zM15 19h2v2h-2zM19 19h2v2h-2z" /></>,
+  // FR-AUTH-008 — password visibility toggle on the public join form.
+  eye: <><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></>,
+  eyeOff: <><path d="M2 12s3.5-7 10-7c1.9 0 3.5.5 4.9 1.2M22 12s-3.5 7-10 7c-1.9 0-3.5-.5-4.9-1.2M9.9 9.9a3 3 0 0 0 4.2 4.2" /><path d="m3 3 18 18" /></>,
 };
 export function Icon({ name, size = 20 }: { name: keyof typeof paths; size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;

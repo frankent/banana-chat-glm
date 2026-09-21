@@ -16,6 +16,7 @@ import type {
   Attachment,
   FileSearchResult,
   InAppNotification,
+  JoinInvitePreview,
   Message,
   MessagePage,
   MessageSearchResult,
@@ -37,6 +38,7 @@ import type {
   SearchPage,
   UploadTicket,
   UserStub,
+  WorkspaceInvite,
   WorkspaceSummary,
 } from '@banana-chat/shared';
 import type { ApiClient } from './client.js';
@@ -455,6 +457,26 @@ export class Endpoints {
   readStatus(roomId: string, slug: string, seq?: number) {
     const query = seq !== undefined ? `?seq=${seq}` : '';
     return this.api.request<{ seq: number; read_by: ReadStatusEntry[] }>(`/api/v1/rooms/${roomId}/read-status${query}`, { workspaceSlug: slug });
+  }
+
+  // -- workspace invites (API-230..233, FR-WS-006/FR-AUTH-008, DEC-081) --
+
+  createWorkspaceInvite(slug: string) {
+    return this.api.request<WorkspaceInvite>('/api/v1/workspace-invites', { method: 'POST', workspaceSlug: slug });
+  }
+  revokeWorkspaceInvite(slug: string, id: string) {
+    return this.api.request<void>(`/api/v1/workspace-invites/${id}`, { method: 'DELETE', workspaceSlug: slug });
+  }
+  /** PUBLIC — no auth, no workspace header. Callable repeatedly. */
+  joinInvitePreview(token: string) {
+    return this.api.request<JoinInvitePreview>(`/api/v1/join/${token}`);
+  }
+  /** PUBLIC — creates the account, joins as member, and logs the caller in (LoginResponse shape). */
+  redeemInvite(token: string, username: string, password: string, displayName: string, device: { platform: string; name: string }, locale?: 'th' | 'en') {
+    return this.api.request<LoginResponse>(`/api/v1/join/${token}`, {
+      method: 'POST',
+      body: { username, password, display_name: displayName, device, locale },
+    });
   }
 
   // -- ai (API-100..113/117/118, §5.14) --

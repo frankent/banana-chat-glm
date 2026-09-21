@@ -67,6 +67,33 @@ class ApiException extends RuntimeException
         return new self('AUTH_PASSWORD_CHANGE_REQUIRED', 'กรุณาเปลี่ยนรหัสผ่านก่อนใช้งาน', 403);
     }
 
+    public static function usernameTaken(): self
+    {
+        return new self('AUTH_USERNAME_TAKEN', 'username นี้ถูกใช้แล้ว', 422);
+    }
+
+    // ---- Workspace invite (FR-WS-006/FR-AUTH-008, DEC-081, §7.1) ----
+
+    public static function inviteNotFound(): self
+    {
+        return new self('INVITE_NOT_FOUND', 'ไม่พบคำเชิญนี้', 404);
+    }
+
+    public static function inviteExpired(): self
+    {
+        return new self('INVITE_EXPIRED', 'คำเชิญนี้หมดอายุแล้ว', 410);
+    }
+
+    public static function inviteRevoked(): self
+    {
+        return new self('INVITE_REVOKED', 'คำเชิญนี้ถูกยกเลิกแล้ว', 410);
+    }
+
+    public static function inviteAlreadyUsed(): self
+    {
+        return new self('INVITE_ALREADY_USED', 'คำเชิญนี้ถูกใช้ไปแล้ว', 409);
+    }
+
     // ---- Room errors (FR-ROOM-001..008, §7.1) ----
 
     public static function roomDmSelf(): self

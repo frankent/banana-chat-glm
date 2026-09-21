@@ -120,6 +120,13 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('pchat-agent-typing', fn (Request $request) => Limit::perMinute(60)
             ->by('pchat-typing:'.($request->user()?->id ?: $request->ip())));
 
+        // FR-WS-006/FR-AUTH-008 (DEC-081) — invite issuance is per-admin (they're
+        // authenticated); preview/join are pre-auth, so IP is the only key we have.
+        RateLimiter::for('invite-issue', fn (Request $request) => Limit::perMinute(10)
+            ->by('invite-issue:'.$request->user()?->id));
+        RateLimiter::for('invite-preview', fn (Request $request) => Limit::perMinute(30)->by('invite-preview:'.$request->ip()));
+        RateLimiter::for('invite-join', fn (Request $request) => Limit::perMinute(5)->by('invite-join:'.$request->ip()));
+
         // FR-SETUP — wizard endpoints: 10/min, install itself 3/min
         RateLimiter::for('setup', fn (Request $request) => Limit::perMinute(10)->by('setup-ip:'.$request->ip()));
         RateLimiter::for('setup-install', fn (Request $request) => Limit::perMinute(3)->by('setup-install-ip:'.$request->ip()));

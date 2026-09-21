@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\AiController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CallController;
 use App\Http\Controllers\Api\V1\HealthController;
+use App\Http\Controllers\Api\V1\InviteRedemptionController;
 use App\Http\Controllers\Api\V1\KanbanController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\MeetingController;
@@ -17,6 +18,7 @@ use App\Http\Controllers\Api\V1\RoomToolsController;
 use App\Http\Controllers\Api\V1\SearchController;
 use App\Http\Controllers\Api\V1\UploadController;
 use App\Http\Controllers\Api\V1\WorkspaceController;
+use App\Http\Controllers\Api\V1\WorkspaceInviteController;
 use App\Http\Controllers\SetupController;
 use App\Http\Middleware\DenyExpiredSecretAttachment;
 use Illuminate\Support\Facades\Broadcast;
@@ -92,6 +94,14 @@ Route::prefix('v1')->group(function (): void {
     Route::post('/public-meetings/{code}/join', [MeetingController::class, 'join'])->where('code', '[a-f0-9]{64}')->middleware('throttle:20,1');
     Route::post('/public-meetings/{code}/leave', [MeetingController::class, 'leave'])->where('code', '[a-f0-9]{64}')->middleware('throttle:60,1');
     Route::get('/calls/authorize-media', [CallController::class, 'authorizeMedia']);
+
+    // API-232/233 — FR-AUTH-008/DEC-081. PUBLIC, unauthenticated: the token is
+    // the only credential. Declared per-route (not on a group) so a malformed
+    // token 404s at routing, matching the public-chat {code} convention below.
+    Route::get('/join/{token}', [InviteRedemptionController::class, 'show'])
+        ->where('token', '[a-f0-9]{64}')->middleware('throttle:invite-preview'); // API-232
+    Route::post('/join/{token}', [InviteRedemptionController::class, 'store'])
+        ->where('token', '[a-f0-9]{64}')->middleware('throttle:invite-join'); // API-233
 
     /*
     |----------------------------------------------------------------------
@@ -188,6 +198,10 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/board/tickets/{id}/comments', [KanbanController::class, 'comment'])->whereUlid('id');
 
         Route::get('/workspace', [WorkspaceController::class, 'show']);
+        // API-230/231 — FR-WS-006/DEC-081. Permission (ws admin+) is checked
+        // inside WorkspaceInviteService, matching RoomPolicy::isWsAdmin's style.
+        Route::post('/workspace-invites', [WorkspaceInviteController::class, 'store'])->middleware('throttle:invite-issue');
+        Route::delete('/workspace-invites/{id}', [WorkspaceInviteController::class, 'destroy'])->whereUlid('id');
         Route::get('/directory', [WorkspaceController::class, 'directory']);
         Route::get('/members', [WorkspaceController::class, 'members']);
         Route::get('/sync', [WorkspaceController::class, 'sync']);

@@ -2,7 +2,7 @@
 @font-face { font-family: 'Banana Thai'; src: url('/fonts/NotoSansThai-SemiBold.ttf') format('truetype'); font-weight: 500 900; font-style: normal; font-display: swap; unicode-range: U+0E00-0E7F; }
 /* DEC-078 / PLAN_ASTRA: chat owns its geometry. These rules intentionally
    follow buttons.css; content controls must not inherit generic 40px rows. */
-.bc-chat-shell, .bc-conversations, .bc-message-menu {
+.bc-chat-shell, .bc-conversations, .bc-message-menu, .bc-invite-dialog, .bc-join-page {
   --chat-ink: #202b36;
   --chat-muted: #607080;
   --chat-line: #e8ecf0;
@@ -172,6 +172,33 @@
 .bc-read-list-row { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 4px 8px; border-radius: 9px; }
 .bc-read-list-row .bc-avatar { width: 32px; height: 32px; border-radius: 50%; font-size: 12px; flex-shrink: 0; }
 .bc-read-list-row span { font-size: 14px; color: #354350; overflow-wrap: anywhere; }
+
+/* FR-WS-006 / DEC-081 — invite QR dialog: centered content, not an anchored
+   action list, so it overrides .bc-message-menu's geometry (like
+   .bc-read-list) but stays centered on mobile too, unlike .bc-read-list's
+   bottom sheet — a QR code reads better centered than pinned to the bottom. */
+.bc-invite-dialog { width: min(440px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 20px; display: flex; flex-direction: column; overflow-y: auto; }
+.bc-invite-workspace { display: flex; align-items: center; gap: 10px; margin: 2px 0 14px; font-weight: 600; font-size: 15px; }
+.bc-invite-workspace .bc-avatar { width: 32px; height: 32px; border-radius: 50%; font-size: 12px; flex-shrink: 0; }
+.bc-invite-hint { margin: 0 0 4px; font-size: 14px; line-height: 22px; color: var(--chat-muted); }
+.bc-invite-error { margin: 0 0 10px; font-size: 14px; line-height: 22px; color: #a13e32; }
+/* .bc-message-menu button (0,1,1) otherwise beats a bare .bc-invite-primary
+   (0,1,0) — same fix as .bc-message-menu .is-destructive's extra class. */
+.bc-message-menu .bc-invite-primary { width: 100%; height: auto; min-height: 44px; margin-top: 10px; padding: 10px 16px; border: 0; border-radius: 8px; background: var(--chat-accent); color: var(--chat-ink); font-size: 14px; font-weight: 600; cursor: pointer; }
+.bc-message-menu .bc-invite-primary:hover { filter: brightness(0.97); }
+.bc-invite-qr { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 6px 0 10px; }
+.bc-invite-qr canvas { border-radius: 8px; }
+.bc-invite-qr figcaption { font-size: 13px; color: var(--chat-muted); }
+.bc-invite-qr-placeholder { width: 240px; height: 240px; margin: 6px auto 10px; border-radius: 8px; background: #f4f6f5; }
+.bc-invite-expiry { margin: 0 0 14px; font-size: 13px; color: var(--chat-muted); text-align: center; }
+.bc-invite-link-label { display: block; margin-bottom: 6px; font-size: 12px; font-weight: 600; color: var(--chat-muted); }
+.bc-invite-link-row { display: flex; gap: 8px; margin-bottom: 10px; }
+.bc-invite-link-row input { flex: 1; min-width: 0; height: 40px; padding: 0 10px; border: 1px solid var(--chat-line); border-radius: 8px; background: #f4f6f5; font-size: 13px; font-family: ui-monospace, monospace; color: var(--chat-ink); }
+#root .bc-invite-link-row button, .bc-invite-link-row button { height: 40px; min-height: 0; width: auto; min-width: 0; padding: 0 14px; border: 0; border-radius: 8px; background: #eef1f4; color: var(--chat-ink); font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+.bc-invite-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+#root .bc-invite-actions button, .bc-invite-actions button { width: auto; min-width: 0; height: auto; min-height: 40px; padding: 8px 14px; }
+.bc-invite-revoke-confirm { margin-top: 6px; padding: 12px; border-radius: 10px; background: #fdf3f1; }
+.bc-invite-revoke-confirm p { margin: 0; font-size: 13px; line-height: 20px; color: var(--chat-ink); }
 .bc-read-receipt { display: flex; justify-content: flex-end; padding: 2px 4px 0 0; }
 #root .bc-read-receipt button { height: auto; min-height: 0; width: auto; min-width: 0; padding: 3px 5px; border: 0; background: transparent; border-radius: 6px; font-size: 12px; font-weight: 500; color: var(--chat-muted); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 #root .bc-read-receipt button:hover { background: #eef1f4; color: #354350; }
@@ -223,6 +250,9 @@
   .bc-message-menu-heading { padding-left: 16px; }
   .bc-read-list { inset: auto 0 0; left: 0; top: auto; transform: none; margin: 0; width: 100%; max-width: none; max-height: 80dvh; }
   .bc-read-list-row { min-height: 52px; padding: 6px 8px; }
+  /* Undo the .bc-message-menu bottom-sheet reset above — this dialog stays
+     centered at every width (see the desktop rule's rationale). */
+  .bc-invite-dialog { inset: auto; left: 50%; top: 50%; transform: translate(-50%, -50%); width: calc(100vw - 32px); max-width: 440px; border-radius: 16px; padding: 20px; }
 }
 @media (pointer: coarse) {
   #root .bc-chat-shell .bc-message-actions-toggle { opacity: 1; min-width: 44px; min-height: 44px; }

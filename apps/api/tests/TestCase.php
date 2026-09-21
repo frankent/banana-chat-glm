@@ -18,6 +18,13 @@ abstract class TestCase extends BaseTestCase
         if (config('app.env') === 'testing') {
             RateLimiter::for('login', fn () => Limit::none());
             RateLimiter::for('refresh', fn () => Limit::none());
+            // FR-WS-006/FR-AUTH-008 (DEC-081) — same reasoning: dense invite
+            // issue/preview/join loops in one test file would otherwise trip
+            // their own IP-keyed limiter (CACHE_STORE=array persists across
+            // tests within a run; RefreshDatabase doesn't touch it).
+            RateLimiter::for('invite-issue', fn () => Limit::none());
+            RateLimiter::for('invite-preview', fn () => Limit::none());
+            RateLimiter::for('invite-join', fn () => Limit::none());
         }
 
         // TASK-QA-008 — any test that lets a real HTTP call slip through

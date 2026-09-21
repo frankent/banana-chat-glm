@@ -187,6 +187,19 @@ export interface ReadStatusEntry {
   last_read_at: string | null;
 }
 
+/** FR-WS-006 / DEC-081 — `token`/`join_url` are only ever returned here, once. */
+export interface WorkspaceInvite {
+  id: string;
+  token: string;
+  join_url: string;
+  expires_at: string;
+}
+
+/** FR-AUTH-008 / DEC-081 — GET /join/{token} preview. */
+export interface JoinInvitePreview {
+  workspace: { name: string };
+}
+
 /** §9 event envelope */
 export interface EventEnvelope<T = unknown> {
   event: string;
@@ -274,6 +287,13 @@ export const ERROR_CODES = {
   API_SIGNATURE_INVALID: 401,
   API_TIMESTAMP_SKEW: 401,
   API_NONCE_REPLAYED: 409,
+  // FR-WS-006/FR-AUTH-008 (DEC-081) — invite issue/revoke/redeem.
+  INVITE_NOT_FOUND: 404,
+  INVITE_EXPIRED: 410,
+  INVITE_REVOKED: 410,
+  INVITE_ALREADY_USED: 409,
+  AUTH_USERNAME_TAKEN: 422,
+  AUTH_PASSWORD_WEAK: 422,
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_CODES;

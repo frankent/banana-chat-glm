@@ -200,6 +200,40 @@ input:focus,textarea:focus,select:focus { outline-color:#c8b564; }
 .bc-login-help { text-align:center; font-size:10px; color:#929e83; line-height:1.8; padding-top:6px; }
 .bc-login-secure { display:flex; align-items:center; justify-content:center; gap:8px; padding-top:25px; border-top:1px solid var(--bc-line); color:#99a38c; font-size:10px; }
 .bc-login-form-section>footer { position:absolute; bottom:28px; left:40px; right:40px; display:flex; justify-content:space-between; font-size:10px; color:#a0aa95; }
+
+/* FR-AUTH-008 / DEC-081 — public join/register page (/join/:token). A
+   top-level page like .bc-login, not a chat surface, but reuses .bc-join-page
+   in chat.css's token-scope list so var(--chat-muted) etc. resolve here too. */
+.bc-join-page { min-height: 100dvh; background: #f4f6f5; }
+.bc-join-header { min-height: 64px; display: flex; align-items: center; background: #fff; border-bottom: 1px solid var(--chat-line); padding: 0 20px; }
+.bc-join-brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 15px; color: var(--chat-ink); }
+.bc-join-content { max-width: 480px; margin: 0 auto; padding: 24px 20px max(24px, env(safe-area-inset-bottom)); }
+.bc-join-eyebrow { margin: 0 0 12px; font-size: 13px; color: var(--chat-muted); }
+.bc-join-workspace-tile { display: flex; align-items: center; gap: 12px; padding: 16px; border: 1px solid var(--chat-line); border-radius: 12px; background: #fff; font-weight: 600; font-size: 16px; color: var(--chat-ink); }
+.bc-join-workspace-tile.is-loading { color: var(--chat-muted); font-weight: 400; font-size: 14px; }
+.bc-join-workspace-tile .bc-avatar { width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; }
+.bc-join-error-state { padding: 16px; border: 1px solid #f3d9d4; border-radius: 12px; background: #fdf3f1; }
+.bc-join-error-state p { margin: 0; font-size: 14px; line-height: 22px; color: #a13e32; }
+.bc-join-content h1 { margin: 24px 0 8px; font-size: 24px; line-height: 34px; font-weight: 600; color: var(--chat-ink); }
+.bc-join-explanation { margin: 0 0 20px; font-size: 15px; line-height: 24px; color: var(--chat-muted); }
+.bc-join-form { display: flex; flex-direction: column; gap: 18px; }
+.bc-join-field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; color: var(--chat-ink); }
+.bc-join-field small { font-weight: 400; font-size: 12px; color: var(--chat-muted); }
+.bc-join-field-error { color: #a13e32; }
+.bc-join-input { height: 48px; padding: 0 12px; border: 1px solid #84918c; border-radius: 8px; background: #fff; font-size: 16px; font-weight: 400; color: var(--chat-ink); }
+.bc-join-input[aria-invalid="true"] { border-color: #a13e32; }
+.bc-join-password-row { position: relative; }
+.bc-join-password-row .bc-join-input { width: 100%; padding-right: 44px; }
+.bc-join-password-toggle { position: absolute; right: 4px; top: 4px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border: 0; background: transparent; color: var(--chat-muted); border-radius: 8px; }
+.bc-join-form-error { margin: 0; padding: 10px 12px; border-radius: 8px; background: #fdf3f1; color: #a13e32; font-size: 13px; }
+.bc-join-submit { height: 48px; margin-top: 4px; border: 0; border-radius: 8px; background: var(--chat-accent); color: var(--chat-ink); font-size: 14px; font-weight: 700; }
+.bc-join-submit:disabled { opacity: .6; }
+.bc-join-secondary { margin-top: 10px; height: 40px; padding: 0 16px; border: 1px solid var(--chat-line); border-radius: 8px; background: #fff; font-size: 13px; font-weight: 600; color: var(--chat-ink); }
+.bc-join-signed-in { margin-top: 16px; padding: 14px; border-radius: 12px; background: #fff4ce; }
+.bc-join-signed-in p { margin: 0 0 4px; font-size: 14px; color: var(--chat-ink); }
+.bc-join-existing { margin-top: 20px; font-size: 13px; text-align: center; color: var(--chat-muted); }
+.bc-join-existing a { color: #376fb0; font-weight: 600; }
+@media (min-width: 640px) { .bc-join-content { padding-top: 48px; } }
 @media(min-width:1500px) { .bc-sidebar{width:325px} .bc-message-list{padding:28px 45px} .bc-chat-header{padding:0 45px} .bc-composer{padding:16px 45px 20px} }
 @media(max-width:1000px) { .bc-sidebar{width:270px} .bc-chat-header{padding:0 22px} .bc-message-list{padding:22px} .bc-composer{padding:13px 22px} .bc-compose-hint>span:first-child{display:none} .bc-login-story{padding:35px} }
 @media(max-width:760px) {

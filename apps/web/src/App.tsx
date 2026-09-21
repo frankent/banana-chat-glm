@@ -1,6 +1,7 @@
 import { MeetingsPage } from "./pages/MeetingsPage";
 import { PublicMeetingPage } from "./pages/PublicMeetingPage";
 import { PublicChatVisitorPage } from "./pages/PublicChatVisitorPage";
+import { JoinInvitePage } from "./pages/JoinInvitePage";
 import { PublicChatListPage } from "./pages/PublicChatListPage";
 import { PublicChatRoomPage } from "./pages/PublicChatRoomPage";
 import { CallProvider } from "./components/calls/CallProvider";
@@ -60,6 +61,12 @@ export default function App() {
               mount in a subtree with no call context. Do not move it inside.
             */}
             <Route path="/support/:code" element={<PublicChatVisitorPage />} />
+            {/*
+              FR-AUTH-008/FR-WS-006 (DEC-081) — a brand-new person has no
+              account and no session yet, so this is a SIBLING of /meet/:code
+              and /support/:code, outside both providers, for the same reason.
+            */}
+            <Route path="/join/:token" element={<JoinInvitePage />} />
             <Route
               path="*"
               element={

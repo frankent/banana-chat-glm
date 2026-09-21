@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { UserStub, WorkspaceSummary } from '@banana-chat/shared';
+import type { LoginResponse } from '@banana-chat/api-client';
 import { endpoints, tokenManager } from '../lib/api';
 import { clearAllCaches } from '../lib/cache';
 import { resetSessionResources } from '../lib/session-resources';
@@ -16,6 +17,8 @@ interface SessionState {
   currentWorkspace: WorkspaceSummary | null;
   bootstrap: () => Promise<void>;
   login: (username: string, password: string) => Promise<'ok' | 'must_change_password'>;
+  /** FR-AUTH-008 — install an already-authenticated response (join-via-invite) without a separate login call. */
+  installSession: (res: LoginResponse) => 'ok' | 'must_change_password';
   logout: () => Promise<void>;
   switchWorkspace: (slug: string) => void;
 }
@@ -51,6 +54,10 @@ export const useSession = create<SessionState>((set, get) => ({
       platform: 'web',
       name: `Browser (${navigator.userAgent.slice(0, 40)})`,
     });
+    return get().installSession(res);
+  },
+
+  installSession(res) {
     tokenManager.setTokens(res.access_token, res.refresh_token);
     set({
       status: 'authenticated',
