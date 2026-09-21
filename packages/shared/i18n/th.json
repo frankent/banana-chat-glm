@@ -169,6 +169,8 @@
   "chat.searchAll": "ค้นหาข้อความทั้งหมด",
   "chat.all": "ทั้งหมด",
   "chat.unread": "ยังไม่อ่าน",
+  "chat.seen": "อ่านแล้ว",
+  "chat.readByCount": "อ่านแล้ว {count} คน",
   "chat.empty": "เริ่มบทสนทนาที่นี่",
   "chat.emptyHint": "เริ่มแชทกับสมาชิกใน workspace ของคุณ",
   "chat.caughtUp": "อ่านข้อความครบแล้ว",

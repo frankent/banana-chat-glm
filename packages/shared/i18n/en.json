@@ -169,6 +169,8 @@
   "chat.searchAll": "Search all messages",
   "chat.all": "All",
   "chat.unread": "Unread",
+  "chat.seen": "Seen",
+  "chat.readByCount": "Read by {count}",
   "chat.empty": "Your conversations start here",
   "chat.emptyHint": "Start a chat with someone in your workspace.",
   "chat.caughtUp": "You’re all caught up",

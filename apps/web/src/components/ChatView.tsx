@@ -4,7 +4,7 @@ import {CallButtons} from './calls/CallProvider';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { EventEnvelope, Message } from '@banana-chat/shared';
+import type { EventEnvelope, Message, ReadStatusEntry } from '@banana-chat/shared';
 import { ApiError } from '@banana-chat/api-client';
 import { continuesMessage, RoomSync, ReadReceiptReporter, secretExpiryAbsolute, secretExpiryState, isSecretRoomActive, type OutboxEntry } from '@banana-chat/chat-core';
 import { sessionOutbox } from '../lib/outbox';
@@ -15,6 +15,7 @@ import { useMessagePage } from '../hooks/useMessages';
 import { useEcho } from '../echo/EchoProvider';
 import { useSession } from '../state/session';
 import { MessageItem } from './MessageItem';
+import { ReadReceiptTrigger, ReadReceiptDialog } from './ReadReceipt';
 import { Avatar, Icon } from './Visual';
 import { Composer } from './Composer';
 import { useRoomTools } from '../hooks/useRoomTools';
@@ -39,12 +40,16 @@ export function ChatView() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const jumpedRef = useRef<string | undefined>(undefined);
   const [reply, setReply] = useState<Message | null>(null);
+  // FR-READ-002 — owned by the room, not by whichever message triggered it:
+  // sending a new own message changes lastMineMessage and unmounts that
+  // message's ReadReceiptTrigger, which must not also close this dialog.
+  const [readListFor, setReadListFor] = useState<ReadStatusEntry[] | null>(null);
   const [notesOpen, setNotesOpen] = useState(false);
   const [toolError, setToolError] = useState('');
   const typingNames = useRoomTools(roomId, slug, me?.id);
   const pinsQuery = useQuery({queryKey:['pins', slug, roomId, me?.id], queryFn:() => endpoints.pins(roomId!, slug!), enabled:!!roomId && !!slug, refetchInterval:15000});
   const [mediaOpen, setMediaOpen] = useState(false);
-  useEffect(() => {setReply(null);setNotesOpen(false);setMediaOpen(false);setToolError('');}, [roomId]);
+  useEffect(() => {setReply(null);setNotesOpen(false);setMediaOpen(false);setToolError('');setReadListFor(null);}, [roomId]);
   const listRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const visible = useRef(false);
@@ -100,10 +105,14 @@ export function ChatView() {
     staleTime: 60_000,
   });
 
+  // FR-READ-002 — dm shows "Seen"; group shows "Read by N" + who (both read
+  // the same room-agnostic endpoint, which already returns every member
+  // whose last_read_seq >= seq, self included).
   const readStatusQuery = useQuery({
     queryKey: ['read-status', roomId, me?.id, currentWorkspace?.workspace.id, myNewestSeq],
     queryFn: () => endpoints.readStatus(roomId!, slug!, myNewestSeq),
-    enabled: roomId !== undefined && slug !== undefined && roomQuery.data?.room.type === 'dm',
+    enabled: roomId !== undefined && slug !== undefined && myNewestSeq > 0
+      && (roomQuery.data?.room.type === 'dm' || roomQuery.data?.room.type === 'group'),
   });
 
   const markRead = (seq: number) => {
@@ -300,8 +309,9 @@ export function ChatView() {
   const room = roomQuery.data;
   const secretActive = room !== undefined && isSecretRoomActive(room.room);
   const title = room?.room.type === 'dm' ? room.other_user?.display_name ?? membersQuery.data?.find(member => member.id !== me.id)?.display_name ?? 'Direct message' : room?.room.name ?? '…';
-  const other = readStatusQuery.data?.read_by.find((entry) => entry.user_id !== me.id);
-  const seen = other !== undefined && other.last_read_seq >= myNewestSeq && myNewestSeq > 0;
+  // Backend already filters read_by to last_read_seq >= myNewestSeq, so
+  // everyone left after excluding me has read my latest message.
+  const readers = readStatusQuery.data?.read_by.filter((entry) => entry.user_id !== me.id) ?? [];
 
 
   // FR-MSG-005/006 — edit (sender only), delete (sender anytime, moderator for others)
@@ -391,12 +401,11 @@ export function ChatView() {
                 onJump={jumpTo}
                 onPin={async message => {try {await endpoints.pin(roomId, slug, message.id, true);void pinsQuery.refetch();}catch(e){setToolError(e instanceof Error ? e.message : 'Unable to pin');}}}
               />
-              {/* FR-READ-002 — Seen sits under our own latest message, not detached
-                  in the header where it wasn't tied to what was actually read. */}
-              {seen && message.id === lastMineMessage?.id && (
-                <div className="flex justify-end pr-1">
-                  <span className="text-xs font-medium text-slate-400" data-testid="seen-indicator">Seen</span>
-                </div>
+              {/* FR-READ-002 — read receipt sits under our own latest message,
+                  not detached in the header where it wasn't tied to what was
+                  actually read. */}
+              {room?.room.type !== undefined && message.id === lastMineMessage?.id && (
+                <ReadReceiptTrigger roomType={room.room.type === 'dm' ? 'dm' : 'group'} others={readers} text={text} onOpen={setReadListFor} />
               )}
             </div>
           );
@@ -421,6 +430,7 @@ export function ChatView() {
       </div>
       {notesOpen && <NotesPanel key={roomId} roomId={roomId} slug={slug} me={me.id} canModerate={canModerate} onClose={() => setNotesOpen(false)} />}
       {mediaOpen && <RoomMediaPanel roomId={roomId} slug={slug} onClose={() => setMediaOpen(false)} />}
+      {readListFor !== null && <ReadReceiptDialog entries={readListFor} onClose={() => setReadListFor(null)} text={text} />}
     </div>
   );
 }

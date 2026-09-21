@@ -120,7 +120,7 @@
 .bc-chat-shell .bc-markdown table { display: block; overflow-x: auto; max-width: 100%; }
 .bc-chat-shell .bc-message-footer { display: flex; justify-content: flex-end; align-items: center; gap: 5px; margin-top: 1px; min-height: 16px; font-size: 12px; line-height: 16px; color: #667363; font-variant-numeric: tabular-nums; }
 .bc-chat-shell .bc-message-footer p { margin: 0; }
-#root .bc-chat-shell .bc-message-actions-toggle { position: absolute; top: 50%; left: calc(100% + 5px); transform: translateY(-50%); width: 30px; min-width: 30px; height: 32px; min-height: 32px; padding: 0; border: 0; background: transparent; border-radius: 9px; color: #667381; opacity: 0; }
+#root .bc-chat-shell .bc-message-actions-toggle { position: absolute; bottom: 0; left: calc(100% + 5px); width: 30px; min-width: 30px; height: 32px; min-height: 32px; padding: 0; border: 0; background: transparent; border-radius: 9px; color: #667381; opacity: 0; }
 #root .bc-chat-shell [data-mine=true] .bc-message-actions-toggle { left: auto; right: calc(100% + 5px); }
 #root .bc-chat-shell .bc-message:hover .bc-message-actions-toggle, #root .bc-chat-shell .bc-message:focus-within .bc-message-actions-toggle { opacity: 1; }
 #root .bc-chat-shell .bc-message-actions-toggle:hover { background: #e9edf1; }
@@ -163,7 +163,18 @@
 .bc-message-menu .is-destructive { color: #b2403c; }
 .bc-delete-hint { padding: 10px; font-size: 13px; line-height: 1.6; color: #607080; }
 .bc-message-error { font-size: 12px; color: #a93737; }
-.bc-chat-shell :is(button, a, input, summary):focus-visible, .bc-message-menu button:focus-visible { outline: 2px solid #376fb0; outline-offset: 2px; }
+.bc-chat-shell :is(button, a, input, summary):focus-visible, .bc-message-menu button:focus-visible, .bc-read-receipt button:focus-visible { outline: 2px solid #376fb0; outline-offset: 2px; }
+/* FR-READ-002 — group "Read by N" reuses .bc-message-menu's portal/backdrop
+   mechanics but centers on desktop (dozens of readers read better centered
+   than anchored to a 228px panel) instead of anchoring to the trigger. */
+.bc-read-list { width: 380px; max-width: calc(100vw - 32px); max-height: min(70dvh, 520px); left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; }
+.bc-read-list-items { overflow-y: auto; display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 2px 0 0; list-style: none; }
+.bc-read-list-row { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 4px 8px; border-radius: 9px; }
+.bc-read-list-row .bc-avatar { width: 32px; height: 32px; border-radius: 50%; font-size: 12px; flex-shrink: 0; }
+.bc-read-list-row span { font-size: 14px; color: #354350; overflow-wrap: anywhere; }
+.bc-read-receipt { display: flex; justify-content: flex-end; padding: 2px 4px 0 0; }
+#root .bc-read-receipt button { height: auto; min-height: 0; width: auto; min-width: 0; padding: 3px 5px; border: 0; background: transparent; border-radius: 6px; font-size: 12px; font-weight: 500; color: var(--chat-muted); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+#root .bc-read-receipt button:hover { background: #eef1f4; color: #354350; }
 @media (min-width: 768px) and (max-width: 1199px) {
   .bc-app .bc-rail { width: 56px; }
   .bc-app .bc-sidebar { width: 280px; }
@@ -210,9 +221,15 @@
   .bc-message-menu::backdrop { background: #16232d50; }
   .bc-message-menu button { min-height: 48px; font-size: 15px; padding: 12px 16px; }
   .bc-message-menu-heading { padding-left: 16px; }
+  .bc-read-list { inset: auto 0 0; left: 0; top: auto; transform: none; margin: 0; width: 100%; max-width: none; max-height: 80dvh; }
+  .bc-read-list-row { min-height: 52px; padding: 6px 8px; }
 }
 @media (pointer: coarse) {
   #root .bc-chat-shell .bc-message-actions-toggle { opacity: 1; min-width: 44px; min-height: 44px; }
+  /* A 44px bottom-anchored touch target on two grouped one-line bubbles can
+     come within a fraction of a px of the target above it at the default
+     4px grouped margin; a coarse pointer needs a bit more breathing room. */
+  .bc-chat-shell .bc-message[data-grouped=true] { margin-top: 6px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .bc-chat-shell *, .bc-message-menu * { scroll-behavior: auto; transition: none; animation: none; }
