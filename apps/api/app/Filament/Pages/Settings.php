@@ -3,8 +3,12 @@
 namespace App\Filament\Pages;
 
 use App\Domain\Admin\ModerationService;
+use App\Models\AppSetting;
 use App\Services\AuditLogger;
 use App\Services\SettingsService;
+use Filament\Actions\Action;
+use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\TagsInput;
 use Filament\Forms\Components\TextInput;
@@ -12,7 +16,10 @@ use Filament\Forms\Components\Toggle;
 use Filament\Forms\Form;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\HtmlString;
 
 /** FR-ADM-009 / TC-ADM-071: every runtime key, typed and range-validated. */
 class Settings extends Page
@@ -72,6 +79,12 @@ class Settings extends Page
     {
         $groups = [];
         foreach (SettingsService::DEFAULTS as $key => $default) {
+            // FR-ADM-015/DEC-082 — a file path, not a scalar this loop's
+            // bool/array/string/numeric branches know how to render. Handled
+            // by its own Section below instead.
+            if ($key === 'branding.logo_path') {
+                continue;
+            }
             $label = ucwords(str_replace(['.', '_'], ' ', $key));
             if (is_bool($default)) {
                 $field = Toggle::make($key);
@@ -114,7 +127,67 @@ class Settings extends Page
             $sections[] = Section::make(ucfirst($name))->schema($fields)->columns(2)->collapsible();
         }
 
+        // FR-ADM-015/DEC-082 — kept outside the DEFAULTS-driven loop above and
+        // never prefilled with the current path: Filament's FileUpload builds
+        // its edit-time preview via Storage::disk()->url(), which the `local`
+        // disk (deliberately not `public` — see BrandingController) can't
+        // serve. The current logo is instead shown via the Placeholder below,
+        // pointed at the public streaming route; the FileUpload is only ever
+        // "pick a new file to replace it", and "Remove logo" is a header
+        // action (getHeaderActions()), not a form field.
+        array_unshift($sections, Section::make('Branding')->schema([
+            Placeholder::make('current_logo')
+                ->label('Current logo')
+                ->content(function (): Htmlable {
+                    $path = app(SettingsService::class)->get('branding.logo_path');
+                    if (! is_string($path) || $path === '') {
+                        return new HtmlString('<span class="text-sm text-gray-500">No logo set — the built-in mark is shown.</span>');
+                    }
+                    $version = AppSetting::query()->where('key', 'branding.logo_path')->first()?->updated_at?->getTimestamp() ?? 0;
+                    $url = url('/api/v1/branding/logo')."?v={$version}";
+
+                    return new HtmlString('<img src="'.e($url).'" alt="" style="width:64px;height:64px;object-fit:contain;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:6px;">');
+                }),
+            FileUpload::make('branding_logo_upload')
+                ->label(fn () => is_string(app(SettingsService::class)->get('branding.logo_path')) && app(SettingsService::class)->get('branding.logo_path') !== '' ? 'Replace logo' : 'Upload logo')
+                ->image()
+                ->acceptedFileTypes(['image/png', 'image/jpeg', 'image/webp'])
+                ->maxSize(2048)
+                ->disk('local')
+                ->directory('branding')
+                ->visibility('private')
+                ->helperText('Shown across this installation, including sign-in and invitation pages. A square symbol works best. Recommended PNG size: 256×256 px. Wide logos will appear smaller. PNG, JPEG or WebP · Maximum 2 MB. Save settings to apply. Open pages may need refreshing to see the change.'),
+        ])->columns(1));
+
         return $form->schema($sections)->statePath('data');
+    }
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            Action::make('removeLogo')
+                ->label('Remove logo')
+                ->color('danger')
+                ->requiresConfirmation()
+                ->modalDescription('The built-in Banana mark will be shown instead everywhere the logo currently appears.')
+                ->modalSubmitActionLabel('Remove logo')
+                ->visible(fn () => is_string(app(SettingsService::class)->get('branding.logo_path')) && app(SettingsService::class)->get('branding.logo_path') !== '')
+                ->action(function () {
+                    $settings = app(SettingsService::class);
+                    $old = $settings->get('branding.logo_path');
+                    if (is_string($old) && $old !== '' && Storage::disk('local')->exists($old)) {
+                        Storage::disk('local')->delete($old);
+                    }
+                    $settings->set('branding.logo_path', null, auth('admin')->id());
+                    app(AuditLogger::class)->log('settings.updated', auth('admin')->user(), 'settings', null, ['changed' => ['branding.logo_path'], 'old' => ['branding.logo_path' => $old], 'new' => ['branding.logo_path' => null]]);
+                    // Otherwise a stale FileUpload value from an earlier upload
+                    // this same page load survives in Livewire state and gets
+                    // written straight back on the next Save — pointing the
+                    // setting at a path whose file this action just deleted.
+                    data_set($this->data, 'branding_logo_upload', null);
+                    Notification::make()->title('Logo removed')->success()->send();
+                }),
+        ];
     }
 
     public function save(): void
@@ -125,6 +198,10 @@ class Settings extends Page
         $old = [];
         $new = [];
         foreach (SettingsService::DEFAULTS as $key => $default) {
+            // FR-ADM-015/DEC-082 — not a form-generated scalar; see below.
+            if ($key === 'branding.logo_path') {
+                continue;
+            }
             $v = data_get($data, $key);
             $value = match (true) {
                 is_bool($default) => (bool) $v,is_int($default) => (int) $v,is_float($default) => (float) $v,is_array($default) => array_values($v ?? []),$default === null => $v === null || $v === '' ? null : (float) $v,default => (string) ($v ?? '')
@@ -134,11 +211,40 @@ class Settings extends Page
                 $new[$key] = $value;
             }
         }
+
+        // FR-ADM-015/DEC-082 — the FileUpload field is never prefilled (see
+        // form()), so any non-empty value here is a genuinely NEW file that
+        // Filament has already moved onto the `local` disk under branding/.
+        // "Remove logo" is the header action above, not this form — a blank
+        // field on save means "no change", never "clear it".
+        $uploadedPath = data_get($data, 'branding_logo_upload');
+        $oldLogoPath = $settings->get('branding.logo_path');
+        if (is_string($uploadedPath) && $uploadedPath !== '' && $uploadedPath !== $oldLogoPath) {
+            $old['branding.logo_path'] = $oldLogoPath;
+            $new['branding.logo_path'] = $uploadedPath;
+        }
+
         DB::transaction(function () use ($settings, $old, $new) {
             foreach ($new as $key => $value) {
                 $settings->set($key, $value, auth('admin')->id());
-            }app(AuditLogger::class)->log('settings.updated', auth('admin')->user(), 'settings', null, ['changed' => array_keys($new), 'old' => $old, 'new' => $new]);
+            }
+            app(AuditLogger::class)->log('settings.updated', auth('admin')->user(), 'settings', null, ['changed' => array_keys($new), 'old' => $old, 'new' => $new]);
         });
+
+        // Outside the transaction, mirroring removeLogo(): filesystem deletes
+        // don't roll back with the DB anyway, and this only runs once the
+        // setting write above has already succeeded.
+        if (isset($new['branding.logo_path']) && is_string($oldLogoPath) && $oldLogoPath !== '' && Storage::disk('local')->exists($oldLogoPath)) {
+            Storage::disk('local')->delete($oldLogoPath);
+        }
+
+        // Otherwise this already-consumed value survives in Livewire state and
+        // gets written straight back on the NEXT Save even with no new file
+        // picked — see the identical comment in removeLogo() above.
+        if (isset($new['branding.logo_path'])) {
+            data_set($this->data, 'branding_logo_upload', null);
+        }
+
         $settings->flush();
         Notification::make()->title('Settings saved')->success()->send();
     }

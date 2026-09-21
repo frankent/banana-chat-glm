@@ -14,7 +14,8 @@ import { t } from '@banana-chat/shared';
 import type { Locale } from '@banana-chat/shared';
 import { endpoints } from '../lib/api';
 import { useSession } from '../state/session';
-import { Avatar, Banana, Icon } from '../components/Visual';
+import { Avatar, Icon } from '../components/Visual';
+import { Logo } from '../components/Logo';
 
 const TERMINAL_ERROR_KEYS: Record<string, string> = {
   INVITE_NOT_FOUND: 'join.errorNotFound',
@@ -112,7 +113,7 @@ function JoinInvite({ token }: { token: string }) {
   return (
     <main className="bc-join-page">
       <header className="bc-join-header">
-        <span className="bc-join-brand"><Banana size={28} /> {text('join.brand')}</span>
+        <span className="bc-join-brand"><Logo size={28} /> {text('join.brand')}</span>
       </header>
       <section className="bc-join-content">
         <p className="bc-join-eyebrow">{text('join.invitation')}</p>

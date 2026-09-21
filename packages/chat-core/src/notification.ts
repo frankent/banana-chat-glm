@@ -11,9 +11,17 @@ export class NotificationGate {
     return true;
   }
 }
-export function unreadTitle(workspaces: ReadonlyArray<{total_unread: number}>): string {
+/**
+ * FR-NOTI-007/DEC-082 — N stays the cross-workspace total (unchanged); only
+ * the trailing label changes with the active workspace. `activeWorkspaceName`
+ * is the CURRENT workspace's own name, not a system-wide setting — there is
+ * deliberately no admin-configurable app name, only a logo (see Logo.tsx).
+ * No active workspace (or logged out) falls back to the product name.
+ */
+export function unreadTitle(workspaces: ReadonlyArray<{total_unread: number}>, activeWorkspaceName?: string | null): string {
   const count = workspaces.reduce((sum, workspace) => sum + Math.max(0, workspace.total_unread), 0);
-  return `${count > 0 ? `(${count}) ` : ''}Banana Chat`;
+  const label = activeWorkspaceName ?? 'Banana Chat';
+  return `${count > 0 ? `(${count}) ` : ''}${label}`;
 }
 
 /** Alert kinds carried by EVT-063 `notification.alert` (NotificationAlert.php:36). */

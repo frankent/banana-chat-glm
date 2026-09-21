@@ -14,6 +14,12 @@ describe('TC-NOTI-025 browser attention', () => {
     expect(unreadTitle([{total_unread:3},{total_unread:4}])).toBe('(7) Banana Chat');
     expect(unreadTitle([])).toBe('Banana Chat');
   });
+  it('DEC-082 the active workspace name replaces the brand suffix, but N stays the cross-workspace total', () => {
+    expect(unreadTitle([{total_unread:3},{total_unread:4}], 'TryCatch')).toBe('(7) TryCatch');
+    expect(unreadTitle([{total_unread:0}], 'TryCatch')).toBe('TryCatch');
+    expect(unreadTitle([{total_unread:3}], null)).toBe('(3) Banana Chat');
+    expect(unreadTitle([{total_unread:3}], undefined)).toBe('(3) Banana Chat');
+  });
 });
 
 describe('DesktopNotificationGate (FR-NOTI-003)', () => {

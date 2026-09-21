@@ -117,6 +117,14 @@ class SettingsService
         // page for every admin — taking down the very page that turns this
         // feature off. Add both halves in the same change, never one.
         'publicchat.enabled' => false,
+        // FR-ADM-015/DEC-082 — the admin-uploaded system logo's storage path
+        // (local disk, `branding/` dir), or null when unset. Deliberately NOT
+        // rendered by Settings::form()'s generic type-inference loop — a file
+        // path needs a FileUpload widget, not a text/numeric field, so
+        // Settings.php special-cases and skips this key explicitly in both
+        // form() and save(). See that file before assuming this key behaves
+        // like every other DEFAULTS entry.
+        'branding.logo_path' => null,
     ];
 
     /**

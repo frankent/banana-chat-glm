@@ -38,6 +38,10 @@ input:focus,textarea:focus,select:focus { outline-color:#c8b564; }
 .bc-app { height:100dvh; overflow:hidden; }
 .bc-rail { width:72px; flex-shrink:0; background:#29372f; display:flex; flex-direction:column; align-items:center; padding:23px 0 22px; z-index:40; }
 .bc-brand { width:42px; height:42px; border-radius:13px; display:grid; place-items:center; background:#f4d35a; color:#3f472c; flex-shrink:0; }
+/* FR-ADM-015/DEC-082 — the whole tile goes white with an uploaded logo, not
+   just the inner .bc-logo-mark (leaving a yellow ring around it). Yellow is
+   reserved for the built-in Banana fallback (unset OR image-load failure). */
+.bc-brand:has(.bc-logo-mark.has-logo) { background: #fff; }
 .bc-rail-links { display:flex; flex-direction:column; gap:15px; margin-top:40px; }
 .bc-rail-links > button,.bc-rail-bottom > button { width:43px; height:43px; display:grid; place-items:center; border-radius:11px; color:#a5b39f; position:relative; }
 .bc-rail-links > button:hover,.bc-rail-bottom > button:hover { background:#3c4a3e; }
@@ -162,6 +166,13 @@ input:focus,textarea:focus,select:focus { outline-color:#c8b564; }
 .bc-compose-hint { display:flex; justify-content:space-between; gap:10px; font-size:9px; color:#96a086; padding:10px 2px 0; }
 .bc-compose-hint kbd { font:inherit; }
 .bc-mobile-top,.bc-sidebar-shade { display:none; }
+/* FR-ADM-015/DEC-082 — the admin-uploaded system logo, or the built-in
+   Banana mark. Global (not chat.css-scoped) since Logo renders on /login
+   and /join/:token too, outside .bc-app/.bc-chat-shell entirely. */
+.bc-logo-mark { display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.bc-logo-mark.has-logo { background:#fff; border-radius:8px; }
+.bc-logo-mark img { width:100%; height:100%; object-fit:contain; display:block; }
+.bc-mobile-brand { width:32px; height:32px; }
 .bc-welcome { min-height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:50px 24px; }
 .bc-welcome-orbit { width:240px; height:240px; border:1px dashed #e7ecd9; border-radius:50%; display:grid; place-items:center; position:relative; margin-bottom:24px; }
 .bc-welcome-orbit:before { content:''; position:absolute; inset:30px; border:1px solid #e7ecd9; border-radius:50%; }

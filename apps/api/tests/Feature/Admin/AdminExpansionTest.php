@@ -39,8 +39,22 @@ test('TC-ADM-071 all runtime settings have editable fields', function () {
     $this->actingAs(User::factory()->systemAdmin()->create(), 'admin');
     $page = Livewire::test(Settings::class);
     foreach (array_keys(SettingsService::DEFAULTS) as $key) {
+        // FR-ADM-015/DEC-082 — the one deliberate exception: a file path, not
+        // a bool/array/string/numeric scalar this generic per-key loop
+        // renders. Its field is named `branding_logo_upload`, not
+        // `branding.logo_path`, precisely so it never gets auto-prefilled by
+        // mount()'s SettingsService::all() dump — see Settings::form()'s own
+        // comment on why. TC-ADM-071a below covers that field directly.
+        if ($key === 'branding.logo_path') {
+            continue;
+        }
         $page->assertFormFieldExists($key);
     }
+});
+
+test('TC-ADM-071a the branding logo field exists under its own (non-DEFAULTS-key) name', function () {
+    $this->actingAs(User::factory()->systemAdmin()->create(), 'admin');
+    Livewire::test(Settings::class)->assertFormFieldExists('branding_logo_upload');
 });
 
 test('TC-ADM-054 restore rejects expired rooms and audits a valid restore', function () {

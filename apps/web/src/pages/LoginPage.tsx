@@ -6,6 +6,7 @@ import { ApiError } from '@banana-chat/api-client';
 import { useSession } from '../state/session';
 
 import { Banana, Icon, Avatar } from '../components/Visual';
+import { Logo } from '../components/Logo';
 
 export function LoginPage() {
   const { login } = useSession();
@@ -33,7 +34,7 @@ export function LoginPage() {
   return (
     <div className="bc-login">
       <section className="bc-login-story">
-        <div className="bc-wordmark"><span className="bc-brand"><Banana /></span>banana<span>chat</span></div>
+        <div className="bc-wordmark"><span className="bc-brand"><Logo size={30} /></span>banana<span>chat</span></div>
         <div className="bc-story-content"><span className="bc-eyebrow">A LITTLE CLOSER, EVERY DAY</span><h1>Great work starts<br />with a <span>hello.</span></h1><p>A place for your people, your ideas,<br />and everything you’ll create together.</p><div className="bc-story-message"><Avatar name="Your workspace" /><div><strong>Your workspace</strong><p>Good things happen together.</p></div></div><div className="bc-story-message second"><span>Let’s make something great ✨</span></div></div>
         <footer>YOUR PEOPLE. YOUR SPACE. <span>✳</span> BANANA CHAT</footer>
         <div className="bc-story-decoration"><Banana size={380} /></div>

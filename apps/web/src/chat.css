@@ -17,7 +17,10 @@
    into non-chat page content); pane styles below stay .bc-chat-shell-only. */
 .bc-app { --chat-ink: #202b36; --chat-muted: #607080; --chat-line: #e8ecf0; --chat-accent: #f2cf55; --chat-wash: #fff4ce; }
 .bc-app .bc-rail { width: 64px; background: #25332e; padding: 22px 0 18px; }
-.bc-app .bc-brand { border-radius: 14px; width: 40px; height: 40px; }
+.bc-app .bc-brand { border-radius: 14px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; }
+/* FR-ADM-015/DEC-082 — same rule as index.css's base .bc-brand, restated at
+   this rule's specificity so it wins inside the authenticated shell too. */
+.bc-app .bc-brand:has(.bc-logo-mark.has-logo) { background: #fff; }
 .bc-app .bc-rail-links { gap: 10px; margin-top: 32px; }
 .bc-app .bc-sidebar { background: #fff; border-right-color: var(--chat-line); font-family: 'Banana Thai', 'DM Sans', 'Noto Sans Thai', system-ui, sans-serif; }
 @media (min-width: 1200px) { .bc-app .bc-sidebar { width: 336px; } }

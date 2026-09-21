@@ -25,10 +25,13 @@ import { useSession } from "./state/session";
 import { queryClient } from "./lib/query-client";
 
 function SessionGate({ children }: { children: React.ReactNode }) {
-  const { bootstrap, workspaces, status } = useSession();
+  const { bootstrap, workspaces, status, currentWorkspace } = useSession();
   useEffect(() => {
-    document.title = unreadTitle(status === "authenticated" ? workspaces : []);
-  }, [workspaces, status]);
+    document.title = unreadTitle(
+      status === "authenticated" ? workspaces : [],
+      status === "authenticated" ? currentWorkspace?.workspace.name : null,
+    );
+  }, [workspaces, status, currentWorkspace]);
   useEffect(() => {
     const unlock = (event: Event) => {
       if (event.isTrusted) unlockNotificationAudio();

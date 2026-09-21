@@ -14,6 +14,7 @@ import type {
   AiShareResponse,
   AiStatus,
   Attachment,
+  AppConfig,
   FileSearchResult,
   InAppNotification,
   JoinInvitePreview,
@@ -218,6 +219,11 @@ export class Endpoints {
 
   myWorkspaces() {
     return this.api.request<WorkspaceSummary[]>('/api/v1/me/workspaces');
+  }
+
+  /** API-234, FR-ADM-015/DEC-082 — PUBLIC, pre-auth: /login and /join/:token render it too. */
+  appConfig() {
+    return this.api.request<AppConfig>('/api/v1/app-config');
   }
 
   // -- workspace (API-011..014) --

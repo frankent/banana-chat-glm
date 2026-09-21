@@ -5,6 +5,7 @@ import { useSession } from '../state/session';
 import { useChatText } from '../lib/use-chat-text';
 import { ConnectionBanner } from './ConnectionBanner';
 import { InviteQrDialog } from './InviteQrDialog';
+import { Logo } from './Logo';
 import { NotificationCenter } from './NotificationCenter';
 import { NotificationPrompt } from './NotificationPrompt';
 import { RoomList } from './RoomList';
@@ -118,7 +119,7 @@ export function AppShell() {
       <NotificationPrompt />
       <div className="flex min-h-0 flex-1">
         <nav className="bc-rail" aria-label="Main navigation">
-          <button className="bc-brand" aria-label="Banana Chat home" onClick={() => navigate('/')}><Banana /></button>
+          <button className="bc-brand" aria-label="Home" onClick={() => navigate('/')}><Logo size={32} fallbackSize={30} /></button>
           <div className="bc-rail-links">
             <button className={!location.pathname.startsWith('/meetings') && !location.pathname.startsWith('/board') && !location.pathname.startsWith('/ai') && !location.pathname.startsWith('/search') && !location.pathname.startsWith('/public-chat') && location.pathname !== '/members' ? 'active' : ''} aria-label="Conversations" title="Conversations" onClick={() => { navigate('/'); setSidebarOpen(true); }}><Icon name="chat" size={23} /></button>
             <button className={location.pathname.startsWith('/search') ? 'active' : ''} onClick={() => navigate('/search')} aria-label="Search (Ctrl+K)" title="Search (Ctrl+K)" data-testid="open-search"><Icon name="search" size={23} /></button>
@@ -196,7 +197,7 @@ export function AppShell() {
           <div className="bc-sidebar-footer"><span className={connected ? 'bc-status-dot connected' : 'bc-status-dot'} />{connected ? 'Connected to your workspace' : 'Reconnecting…'}<span>✳</span></div>
         </aside>
         <main className="bc-main min-w-0 flex-1">
-          <div className="bc-mobile-top"><button aria-label="Show conversations" aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(!sidebarOpen)}><Icon name="menu" /></button><span>Banana Chat</span>{!bellInSidebar && <div className="bc-mobile-top-actions"><NotificationCenter /></div>}</div>
+          <div className="bc-mobile-top"><button aria-label="Show conversations" aria-expanded={sidebarOpen} onClick={() => setSidebarOpen(!sidebarOpen)}><Icon name="menu" /></button><span className="bc-mobile-brand"><Logo size={28} fallbackSize={26} /></span>{!bellInSidebar && <div className="bc-mobile-top-actions"><NotificationCenter /></div>}</div>
           <div className="bc-outlet"><Outlet /></div>
         </main>
       </div>

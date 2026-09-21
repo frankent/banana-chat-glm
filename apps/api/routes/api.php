@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\AiController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\BrandingController;
 use App\Http\Controllers\Api\V1\CallController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\InviteRedemptionController;
@@ -102,6 +103,11 @@ Route::prefix('v1')->group(function (): void {
         ->where('token', '[a-f0-9]{64}')->middleware('throttle:invite-preview'); // API-232
     Route::post('/join/{token}', [InviteRedemptionController::class, 'store'])
         ->where('token', '[a-f0-9]{64}')->middleware('throttle:invite-join'); // API-233
+
+    // API-234/235 — FR-ADM-015/DEC-082. PUBLIC, unauthenticated: the logo
+    // must render on /login and /join/:token before any session exists.
+    Route::get('/app-config', [BrandingController::class, 'config'])->middleware('throttle:120,1'); // API-234
+    Route::get('/branding/logo', [BrandingController::class, 'logo'])->middleware('throttle:120,1'); // API-235
 
     /*
     |----------------------------------------------------------------------

@@ -24,6 +24,11 @@ export interface WorkspaceSummary {
   total_unread: number;
 }
 
+/** API-234, FR-ADM-015/DEC-082 — public, pre-auth. logo_url is already cache-busted (?v=). */
+export interface AppConfig {
+  logo_url: string | null;
+}
+
 export interface Room {
   id: string;
   workspace_id: string;
