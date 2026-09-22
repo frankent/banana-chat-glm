@@ -159,7 +159,11 @@ input:focus,textarea:focus,select:focus { outline-color:#c8b564; }
 .bc-composer { background:#fff; padding:15px 32px 18px; }
 .bc-compose-box { background:#fdfefa; border:1px solid #dfe5d7; padding:8px; border-radius:12px; box-shadow:0 3px 10px #354d2504; }
 .bc-compose-box:focus-within { border-color:#c7b564; box-shadow:0 0 0 3px #f4d35a15; }
-.bc-compose-box textarea { border:0; box-shadow:none; outline:none; background:transparent; font-size:13px; padding:9px 5px; }
+/* flex/resize belong here, not on the element: the room composer carries them as
+   Tailwind utilities, so any composer that doesn't (the AI one) rendered a
+   ~22%-wide box with a stray resize grabber. Mirrors .bc-pchat-compose-box
+   textarea, which already owned both in CSS. */
+.bc-compose-box textarea { flex:1; resize:none; border:0; box-shadow:none; outline:none; background:transparent; font-size:13px; padding:9px 5px; }
 .bc-compose-box textarea::placeholder { color:#939d86; font-size:11px; }
 .bc-compose-box [data-testid="attach-button"] { border:0; color:#8b977d; background:transparent; padding:10px 8px; }
 .bc-compose-box [data-testid="send-button"] { display:flex; align-items:center; gap:9px; font-size:11px; border-radius:8px; padding:11px 15px; }

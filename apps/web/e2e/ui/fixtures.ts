@@ -21,7 +21,12 @@ const rooms: RoomListItem[] = [
   { room: { ...room, id: 'ui-product', name: 'Product team / ทีมพัฒนาผลิตภัณฑ์ที่มีชื่อยาว' }, my_role: 'member', other_user: null, last_message: { ...allMessages[37], body: 'https://example.test/' + 'long-path-'.repeat(20) }, unread_count: 125, muted: false },
 ];
 
-export async function installChatFixture(page: Page) {
+const aiConversation = { id: 'ui-ai', title: 'AI composer layout', title_source: 'auto' as const, message_count: 0, last_message_at: null, archived_at: null, generating: false };
+
+// aiConsented defaults to true so the 19 pre-existing tests are untouched; TC-UI-013
+// flips it to assert the composer's consent-required label, which is the only way to
+// catch a regression back to a FIXED aria-label (a fixed one is still non-empty).
+export async function installChatFixture(page: Page, opts: { aiConsented?: boolean } = {}) {
   let roomsFail = false;
   let olderRequests = 0;
   const reads: Array<{ roomId: string; seq: number }> = [];
@@ -57,6 +62,22 @@ export async function installChatFixture(page: Page) {
       return respond(url.searchParams.get('filter') === 'unread' ? rooms.filter(r => r.unread_count > 0) : rooms);
     }
     if (/^\/rooms\/[^/]+$/.test(path)) { const match = rooms.find(r => r.room.id === path.split('/')[2]) ?? rooms[0]; return respond({ ...match, members: [me, peer] }); }
+    // AI (DEC-078) — declared BEFORE the generic /messages handlers below, which
+    // would otherwise answer /ai/conversations/:id/messages with room messages.
+    if (path === '/ai/status') {
+      return respond({
+        enabled: true, configured: true, allowed_in_workspace: true,
+        provider: { name: 'mock', model: 'mock-1', window_size: 8000 },
+        limits: { daily_messages: 200, max_message_chars: 32000 },
+        usage_today: { date: '2026-09-23', messages: 0, tokens_in: 0, tokens_out: 0, failed: 0 },
+        memory_enabled: false, consented: opts.aiConsented ?? true,
+      });
+    }
+    if (path === '/ai/conversations' && request.method() === 'GET') return respond({ conversations: [aiConversation], next_cursor: null });
+    if (/^\/ai\/conversations\/[^/]+$/.test(path)) return respond({ conversation: aiConversation });
+    if (/^\/ai\/conversations\/[^/]+\/messages$/.test(path) && request.method() === 'GET') {
+      return respond({ messages: [], has_more_before: false, oldest_seq: null, summary_up_to_seq: 0 });
+    }
     if (path.endsWith('/messages') && request.method() === 'POST') {
       const input = request.postDataJSON();
       return respond({ message: { ...message(41, input.body), room_id: path.split('/')[2], sender_id: me.id, sender: me, client_message_id: input.client_message_id } });

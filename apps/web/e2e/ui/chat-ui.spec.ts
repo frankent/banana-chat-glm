@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 import { installChatFixture, me, message, openChat } from './fixtures';
 
 for (const width of [320, 390, 1440]) {
@@ -276,3 +276,78 @@ test('TC-UI-007/FR-RT-003: typing subscription survives quote navigation and ret
   await fixture.emit('room.typing', { ...typing, typing: false });
   await expect(indicator).not.toContainText(typing.display_name);
 });
+
+// TC-UI-013 / DEC-078 — the AI composer shares .bc-compose-box with the room
+// composer, but its textarea carries no Tailwind classes. Layout therefore has
+// to come from CSS: when it didn't, the AI textarea rendered flex-grow:0 at 22%
+// of the pill with a stray resize grabber, while the room's own `flex-1
+// resize-none` utilities hid the gap. Geometry, not class names, is the guard.
+for (const width of [390, 1440]) {
+  test(`TC-UI-013: ${width}px AI composer input fills its pill like the room composer`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await installChatFixture(page);
+
+    const fill = async (url: string, testId: string) => {
+      await page.goto(url);
+      const input = page.getByTestId(testId);
+      await expect(input).toBeVisible();
+      await expect(input).toHaveCSS('resize', 'none');
+      const box = await input.boundingBox();
+      // the input's OWN pill, not .first() — both surfaces are asserted in one
+      // test and the room page also renders a list behind the conversation.
+      const pill = await input.locator('xpath=ancestor::*[contains(@class,"bc-compose-box")][1]').boundingBox();
+      expect(box, `${testId} has no box`).not.toBeNull();
+      expect(pill, `${testId} has no pill`).not.toBeNull();
+      return box!.width / pill!.width;
+    };
+
+    // Floor catches the regression itself (the AI field was 0.22). Deliberately
+    // NOT `ai >= room`: the room is legitimately narrower because it spends a
+    // 44px touch target on an attach button, and that inventory can change.
+    expect(await fill('/ai/ui-ai', 'ai-composer-input')).toBeGreaterThan(0.6);
+    expect(await fill('/rooms/ui-design', 'composer-input')).toBeGreaterThan(0.6);
+  });
+}
+
+// The width guard above only covers the CSS half of the fix; these cover the two
+// AiChatPane props, so reverting either one fails a test rather than passing green.
+test('TC-UI-013: AI composer grows 1→5 rows and names itself like the room composer', async ({ page }) => {
+  await installChatFixture(page);
+  await page.goto('/ai/ui-ai');
+  const input = page.getByTestId('ai-composer-input');
+  await expect(input).toBeVisible();
+
+  // was rows={2}, which made the AI pill 75px tall against the room's 56px
+  await expect(input).toHaveAttribute('rows', '1');
+  await input.fill('one\ntwo\nthree');
+  await expect(input).toHaveAttribute('rows', '3');
+  await input.fill('1\n2\n3\n4\n5\n6\n7');
+  await expect(input).toHaveAttribute('rows', '5');
+
+  // assert the attribute, not the accessible NAME: a bare <textarea placeholder>
+  // already resolves a name from its placeholder, so toHaveAccessibleName would
+  // pass with the aria-label reverted — i.e. guard nothing.
+  await expectLabelMatchesPlaceholder(input);
+});
+
+// ...and even a non-empty aria-label is not enough, because a FIXED label is non-empty
+// too. The un-consented state is the one that distinguishes them, and it is the state
+// that matters: a fixed label overrides the placeholder as the accessible name, so a
+// screen reader would announce "ask anything" on a composer that cannot be typed in.
+test('TC-UI-013: consent-required AI composer announces the instruction, not the placeholder', async ({ page }) => {
+  await installChatFixture(page, { aiConsented: false });
+  await page.goto('/ai/ui-ai');
+  const input = page.getByTestId('ai-composer-input');
+  await expect(input).toBeVisible();
+  await expect(input).toBeDisabled();
+  await expectLabelMatchesPlaceholder(input);
+});
+
+// Compared against the live placeholder rather than a literal: the ui fixture runs in
+// Thai, so hard-coded English strings pass nothing, and the invariant we actually care
+// about is that the two never diverge — which is exactly what a fixed label breaks.
+async function expectLabelMatchesPlaceholder(input: Locator) {
+  const placeholder = await input.getAttribute('placeholder');
+  expect(placeholder, 'composer has no placeholder to compare against').toBeTruthy();
+  await expect(input).toHaveAttribute('aria-label', placeholder!);
+}

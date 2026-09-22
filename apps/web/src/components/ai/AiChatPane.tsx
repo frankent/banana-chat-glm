@@ -364,8 +364,13 @@ export function AiChatPane({ conversationId, slug }: { conversationId: string; s
                 void onSubmit();
               }
             }}
-            rows={2}
+            rows={Math.min(5, draft.split('\n').length)}
             disabled={status !== null && !status.consented}
+            // Same string as the placeholder rather than a fixed one: an
+            // aria-label overrides the placeholder as the accessible name, so a
+            // stable label would have hidden the consent-required instruction
+            // from a screen reader while sighted users could read it.
+            aria-label={status !== null && !status.consented ? text('ai.consentRequired') : text('ai.placeholder')}
             placeholder={status !== null && !status.consented ? text('ai.consentRequired') : text('ai.placeholder')}
             data-testid="ai-composer-input"
           />
