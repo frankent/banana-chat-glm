@@ -524,6 +524,12 @@ test('FR-PCHAT-033 the settings page renders with the publicchat keys present an
     // Every shipped key still has a field — the page must not be taken down by
     // the publicchat additions (TC-ADM-071's invariant, re-asserted here).
     foreach (array_keys(SettingsService::DEFAULTS) as $key) {
+        // FR-ADM-015/DEC-082 — the one deliberate exception, same as
+        // TC-ADM-071: this key renders as `branding_logo_upload`, not under
+        // its own DEFAULTS name. TC-ADM-071a covers it directly.
+        if ($key === 'branding.logo_path') {
+            continue;
+        }
         $page->assertFormFieldExists($key);
     }
 
@@ -541,6 +547,14 @@ test('FR-PCHAT-033 every numeric settings key has a ranges() entry, so the setti
     $missing = [];
     foreach (SettingsService::DEFAULTS as $key => $default) {
         if (is_bool($default) || is_array($default) || is_string($default)) {
+            continue;
+        }
+
+        // FR-ADM-015/DEC-082 — `branding.logo_path` defaults to null (a file
+        // path, not a number) and is entirely hand-built as a FileUpload
+        // field; it never passes through the generic numeric-TextInput
+        // branch this test guards, so it needs no ranges() entry.
+        if ($key === 'branding.logo_path') {
             continue;
         }
 

@@ -33,7 +33,7 @@ test('TC-ADM-070 administration covers rooms media sessions devices operations a
     $admin = User::factory()->systemAdmin()->create();
     Livewire::test(Login::class)->fillForm(['login' => $admin->username, 'password' => 'Password123!'])->call('authenticate')->assertHasNoErrors();
     $this->get('/admin/'.$path)->assertOk();
-})->with(['rooms', 'messages', 'room-notes', 'attachments', 'chat-sessions', 'devices', 'operations', 'api-coverage', 'ai-conversations']);
+})->with(['rooms', 'messages', 'room-notes', 'attachments', 'chat-sessions', 'devices', 'operations', 'api-coverage', 'ai-conversations', 'public-chat-integration']);
 
 test('TC-ADM-071 all runtime settings have editable fields', function () {
     $this->actingAs(User::factory()->systemAdmin()->create(), 'admin');

@@ -209,9 +209,15 @@ stateDiagram-v2
     end note
 ```
 
-A room cannot sit in any status other than `new` with a null assignee. That is
-the one transition guard, and violating it is `422 PCHAT_INVALID_TRANSITION`
-(agent surface only — you cannot hit it from Tier 1).
+On the **agent transition surface (API-224)** the resulting state of a PATCH
+must be `new`, or have an assignee — `422 PCHAT_INVALID_TRANSITION` (FR-PCHAT-009)
+otherwise. That is broader than just "leaving `new`": it also rejects
+unassigning a `problem` or `done` room, and even a no-op re-patch of an
+already-unassigned `done` room. The guard belongs to API-224 alone: it is not
+a database-wide invariant. **API-202 partner close bypasses it entirely** — it
+writes `status=done` directly, with no assignee check — so closing a room that
+was never claimed by an agent produces a `done` room with `assigned_to` still
+`null`, which is normal and does not error.
 
 ### 3.3 HMAC verification order — also your 401 debugging guide
 
@@ -220,7 +226,7 @@ you get back, so read your error code against this chart top-down.
 
 ```mermaid
 flowchart TD
-    R[Request arrives] --> H{All four headers present<br/>and well-formed?}
+    R[Request arrives] --> H{All four headers present,<br/>key/timestamp/nonce well-formed?}
     H -- no --> E1[401 API_KEY_INVALID]
     H -- yes --> T{Timestamp within<br/>300s of server time?}
     T -- no --> E2[401 API_TIMESTAMP_SKEW]
@@ -234,6 +240,13 @@ flowchart TD
     G -- no --> E5[503 PCHAT_DISABLED]
     G -- yes --> OK[Controller runs]
 ```
+
+The "well-formed" check at node H only validates the *shape* of `X-PChat-Key`,
+`X-PChat-Timestamp` and `X-PChat-Nonce` — a malformed `X-PChat-Signature` (wrong
+length, missing `v1=`, garbage hex) is **not** caught there. It reaches node S
+and fails the HMAC comparison like any other wrong signature, so you get
+`401 API_SIGNATURE_INVALID`, not `API_KEY_INVALID`, for a malformed signature
+header specifically.
 
 Two consequences worth internalising:
 
@@ -547,11 +560,16 @@ Request body:
 | `meta` | object | no | Free-form. ≤8192 bytes once JSON-encoded. Partner-private: stored, visible to support staff and admins, **never served to the visitor**. |
 
 `customer_name`, `provider_name` and `external_ref` are sanitised at ingest:
-control characters, zero-width characters and bidi overrides are stripped, runs
-of whitespace collapse to a single space, and the result is truncated to 120
-characters. A `customer_name` or `provider_name` that is empty or whitespace-only
-after that is `422 VALIDATION_FAILED`. Note the truncation is silent — send names
-that already fit.
+control characters, zero-width characters and bidi overrides are stripped, and
+runs of whitespace collapse to a single space. **The 120-character cap is
+enforced first, by request validation** (on the request body after Laravel's
+global outer-whitespace trim, before this feature's own sanitiser runs) — a
+field over 120 characters is `422 VALIDATION_FAILED`, never a silent
+truncation. (The sanitiser also caps at 120 as a second layer, but that
+branch cannot fire through this API: validation already guarantees the input
+is ≤120 chars, and stripping/collapsing only ever shortens a string.) A
+`customer_name` or `provider_name` that is empty or whitespace-only *after*
+sanitising a validly-sized input is `422 VALIDATION_FAILED`.
 
 Responses:
 
@@ -682,7 +700,7 @@ expired rooms — which produces two different views of the same room:
 
 | | Once `expires_at` has passed |
 |---|---|
-| **Visitor** (Tier 2) | *Every* route returns `410 PCHAT_LINK_EXPIRED`, channel auth included, so a live socket cannot outlive the link. The link is dead. |
+| **Visitor** (Tier 2) | *Every* HTTP route returns `410 PCHAT_LINK_EXPIRED`, channel auth included, so no **new** page load or reconnect can authenticate past expiry. Note this blocks new access, not an already-open one: nothing actively evicts a socket that authenticated and subscribed *before* expiry and has stayed connected since — if an agent replies into that room afterward, that still-open tab receives it live, same as before expiry. |
 | **You** (API-201) | Still `200`. The room is **not** auto-closed, auto-deleted or moved out of `new`. `status` stays exactly what it was and `closed_at` stays `null`. |
 
 So a room whose customer never showed up sits at `status: "new"`,
@@ -873,7 +891,7 @@ echoed if you send your own. Quote it when you report a problem.
 | `PCHAT_DISABLED` | 503 | The feature is switched off. Write paths only. `Retry-After: 60` and `details.retry_after_seconds`. | Retry on that schedule. Ask the provider's admin to enable it. Your credentials are fine — this code proves it. |
 | `PCHAT_ROOM_NOT_FOUND` | 404 | No such room for this key's workspace. Also returned for another workspace's room, and by API-215 for a channel name that is not this room's. | Check you are sending `room.id` (a ULID) and not the code. |
 | `PCHAT_ROOM_CLOSED` | 409 | The room is `done`. Returned by API-202 on a double close, by API-203 on a closed room, and by visitor sends. | Treat a double-close as already-closed. To reopen, an agent uses API-224. |
-| `PCHAT_LINK_EXPIRED` | 410 | Past `expires_at`, or soft-deleted. `details.expires_at`. Every Tier 2 route answers this, including channel auth, so a socket cannot outlive its link. (A *rotated-away* code is **not** this — it is `404 PCHAT_ROOM_NOT_FOUND`, because the old code no longer matches any room.) | Create a new room (API-200) or rotate (API-203) and re-deliver. |
+| `PCHAT_LINK_EXPIRED` | 410 | Past `expires_at`, or soft-deleted. `details.expires_at`. Every Tier 2 route answers this, including channel auth, so no *new* page load or channel subscription can succeed past expiry (see §5.1.1 for what this does and does not guarantee about an already-open tab). (A *rotated-away* code is **not** this — it is `404 PCHAT_ROOM_NOT_FOUND`, because the old code no longer matches any room.) | Create a new room (API-200) or rotate (API-203) and re-deliver. |
 | `PCHAT_INVALID_TRANSITION` | 422 | A room may not leave `new` while unassigned, and may not be unassigned while not `new`. Agent surface (API-224) only. | Not reachable from Tier 1. |
 | `PCHAT_SIGNED_IN` | 403 | A signed-in Banana Chat member tried to **write** on the visitor tier. | Open the room from the staff Public Chat queue instead. If your own widget hit this, stop sending an `Authorization` header. |
 | `VALIDATION_FAILED` | 422 | A field failed validation. `details.fields` is a map of field → messages. Also covers `meta` over 8 KB. | Fix the field named in `details.fields`. |
