@@ -1,6 +1,10 @@
 import { resolve } from 'node:path';
 import { expect, test, type Locator } from '@playwright/test';
 import { installChatFixture, me, message, openChat } from './fixtures';
+// Referenced, not transcribed: `getByLabel('แชทใหม่')` matched nothing at all
+// (ai.newChat is 'บทสนทนาใหม่'), so every toHaveCount(0) against it passed vacuously.
+// A wrong key is a compile error here; a wrong literal is a silently green test.
+import th from '../../../../packages/shared/i18n/th.json' with { type: 'json' };
 
 for (const width of [320, 390, 1440]) {
   test(`TC-UI-001/012: ${width}px conversation reflows without horizontal overflow`, async ({ page }, testInfo) => {
@@ -380,9 +384,9 @@ for (const width of [390, 1440]) {
     // the invitation, and every control behind it, is gone -- not merely `hidden`,
     // which would have leaned on Tailwind preflight's [hidden]{display:none!important}
     // to beat these elements' own display:flex
-    await expect(page.getByText('ยังไม่มีบทสนทนา')).toHaveCount(0);
-    await expect(page.getByLabel('แชทใหม่')).toHaveCount(0);
-    await expect(page.getByPlaceholder('ค้นหาบทสนทนา AI')).toHaveCount(0);
+    await expect(page.getByText(th['ai.empty'])).toHaveCount(0);
+    await expect(page.getByLabel(th['ai.newChat'])).toHaveCount(0);
+    await expect(page.getByPlaceholder(th['ai.search'])).toHaveCount(0);
 
     // member wording: no admin panel link
     await expect(page.getByTestId('ai-admin-panel-link')).toHaveCount(0);
@@ -406,12 +410,12 @@ test('TC-UI-014: a denied workspace loses the controls without being told to set
   await installChatFixture(page, { aiAllowedInWorkspace: false });
   await page.goto('/ai');
   await expect(page.getByTestId('ai-not-configured')).toHaveCount(0);
-  await expect(page.getByLabel('แชทใหม่')).toHaveCount(0);
-  await expect(page.getByPlaceholder('ค้นหาบทสนทนา AI')).toHaveCount(0);
+  await expect(page.getByLabel(th['ai.newChat'])).toHaveCount(0);
+  await expect(page.getByPlaceholder(th['ai.search'])).toHaveCount(0);
   // and it says so, rather than falling through to "start a new chat" with no button.
   // Two matches by design -- sidebar and pane, like the not-configured notice.
-  await expect(page.getByText('AI Assistant ไม่พร้อมใช้งานใน workspace นี้').filter({ visible: true })).not.toHaveCount(0);
-  await expect(page.getByText('ยังไม่มีบทสนทนา')).toHaveCount(0);
+  await expect(page.getByText(th['ai.notAllowed']).filter({ visible: true })).not.toHaveCount(0);
+  await expect(page.getByText(th['ai.empty'])).toHaveCount(0);
 });
 
 // Gating loadConversations on status left `loading` false while status was in flight,
@@ -421,10 +425,10 @@ test('TC-UI-014: a denied workspace loses the controls without being told to set
 test('TC-UI-014: a slow status shows the skeleton, never an empty-list lie', async ({ page }) => {
   await installChatFixture(page, { aiStatusDelayMs: 900 });
   await page.goto('/ai');
-  await expect(page.getByLabel('กำลังโหลด').first()).toBeVisible();
+  await expect(page.getByLabel(th['chat.loading']).first()).toBeVisible();
   // point-in-time, NOT the auto-retrying matcher: that would simply wait out the
   // delay and pass no matter what was on screen during it.
-  expect(await page.getByText('ยังไม่มีบทสนทนา').count(), 'empty-list lie shown while status was still unknown').toBe(0);
+  expect(await page.getByText(th['ai.empty']).count(), 'empty-list lie shown while status was still unknown').toBe(0);
   // and once status lands the real list arrives
   await expect(page.getByText('AI composer layout')).toBeVisible();
 });
@@ -435,4 +439,9 @@ test('TC-UI-014: a configured workspace still gets the composer, not the setup n
   await page.goto('/ai/ui-ai');
   await expect(page.getByTestId('ai-composer-input')).toBeVisible();
   await expect(page.getByTestId('ai-not-configured')).toHaveCount(0);
+  // The point of these two: they prove the locators above actually MATCH something
+  // when they should. Without a positive case, a typo'd label passes every
+  // toHaveCount(0) in this file and the hiding is never really tested.
+  await expect(page.getByLabel(th['ai.newChat'])).toBeVisible();
+  await expect(page.getByPlaceholder(th['ai.search'])).toBeVisible();
 });
