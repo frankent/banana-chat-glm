@@ -1,12 +1,13 @@
+import { createPortal } from 'react-dom';
 import { useChatText } from '../lib/use-chat-text';
 import { useChatScroll } from '../hooks/useChatScroll';
 import {CallButtons} from './calls/CallProvider';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { EventEnvelope, Message, ReadStatusEntry } from '@banana-chat/shared';
 import { ApiError } from '@banana-chat/api-client';
-import { continuesMessage, RoomSync, ReadReceiptReporter, secretExpiryAbsolute, secretExpiryState, isSecretRoomActive, type OutboxEntry } from '@banana-chat/chat-core';
+import { SECRET_EXPIRY_MIN_DAYS, SECRET_EXPIRY_MAX_DAYS, continuesMessage, RoomSync, ReadReceiptReporter, secretExpiryAbsolute, secretExpiryState, isSecretRoomActive, type OutboxEntry } from '@banana-chat/chat-core';
 import { sessionOutbox } from '../lib/outbox';
 import { endpoints } from '../lib/api';
 import { evictRoom } from '../lib/room-eviction';
@@ -44,12 +45,13 @@ export function ChatView() {
   // sending a new own message changes lastMineMessage and unmounts that
   // message's ReadReceiptTrigger, which must not also close this dialog.
   const [readListFor, setReadListFor] = useState<ReadStatusEntry[] | null>(null);
+  const [secretChatFor, setSecretChatFor] = useState<string | null>(null);
   const [notesOpen, setNotesOpen] = useState(false);
   const [toolError, setToolError] = useState('');
   const typingNames = useRoomTools(roomId, slug, me?.id);
   const pinsQuery = useQuery({queryKey:['pins', slug, roomId, me?.id], queryFn:() => endpoints.pins(roomId!, slug!), enabled:!!roomId && !!slug, refetchInterval:15000});
   const [mediaOpen, setMediaOpen] = useState(false);
-  useEffect(() => {setReply(null);setNotesOpen(false);setMediaOpen(false);setToolError('');setReadListFor(null);}, [roomId]);
+  useEffect(() => {setSecretChatFor(null);setReply(null);setNotesOpen(false);setMediaOpen(false);setToolError('');setReadListFor(null);}, [roomId]);
   const listRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const visible = useRef(false);
@@ -308,6 +310,7 @@ export function ChatView() {
   if (query.isError || roomQuery.isError) return <p role="alert" className="p-4">Unable to open this room. Check your connection and room access.</p>;
   const room = roomQuery.data;
   const secretActive = room !== undefined && isSecretRoomActive(room.room);
+  const peerId = room?.other_user?.id ?? membersQuery.data?.find(member => member.id !== me.id)?.id;
   const title = room?.room.type === 'dm' ? room.other_user?.display_name ?? membersQuery.data?.find(member => member.id !== me.id)?.display_name ?? 'Direct message' : room?.room.name ?? '…';
   // Backend already filters read_by to last_read_seq >= myNewestSeq, so
   // everyone left after excluding me has read my latest message.
@@ -354,10 +357,18 @@ export function ChatView() {
               <div className="bc-mobile-calls">{room && (room.room.type === 'dm' || room.room.type === 'group') && <CallButtons roomId={roomId} type={room.room.type} />}</div>
               <button onClick={() => {setNotesOpen(!notesOpen);setMediaOpen(false);}} aria-label="Room notes"><Icon name="notes" size={18} />{text('chat.notes')}</button>
               <button onClick={() => {setMediaOpen(v => !v);setNotesOpen(false);}} aria-pressed={mediaOpen} aria-label="Media and files" data-testid="room-media-toggle"><Icon name="files" size={18} />{text('chat.files')}</button>
+              {room?.room.type === 'dm' && !secretActive && (
+                <button disabled={!peerId} onClick={() => setSecretChatFor(roomId)}>
+                  <span aria-hidden="true">🔒</span>{text('chat.openSecretChat')}
+                </button>
+              )}
             </div>
           </details>
         </div>
       </header>
+      {secretChatFor === roomId && room?.room.type === 'dm' && !secretActive && peerId && (
+        <SecretChatDialog key={`${slug}:${roomId}`} peerId={peerId} slug={slug} onClose={() => setSecretChatFor(null)} />
+      )}
       {room?.room.type === 'group' && <div className="bc-chat-ai-notice"><Icon name="sparkle" size={14} /><span>{text('chat.aiNotice')}</span><a href="/ai">{text('chat.aiDetails')}</a></div>}
       {!!pinsQuery.data?.length && <details className="bc-chat-pins"><summary><Icon name="pin" size={14} />{text('chat.pinned')}<span>{pinsQuery.data.length}</span></summary><div>{pinsQuery.data.map(pin => <div key={pin.id}><button onClick={() => jumpTo(pin.seq)}>{pin.body ?? pin.attachments[0]?.original_name ?? 'Message'}</button><button aria-label="Unpin message" onClick={async () => {try {await endpoints.pin(roomId, slug, pin.id, false);void pinsQuery.refetch();}catch(e){setToolError(e instanceof Error ? e.message : 'Unable to unpin');}}}><Icon name="close" size={16} /></button></div>)}</div></details>}
       {toolError && <p role="alert">{toolError}</p>}
@@ -432,5 +443,50 @@ export function ChatView() {
       {mediaOpen && <RoomMediaPanel roomId={roomId} slug={slug} onClose={() => setMediaOpen(false)} />}
       {readListFor !== null && <ReadReceiptDialog entries={readListFor} onClose={() => setReadListFor(null)} text={text} />}
     </div>
+  );
+}
+
+/** FR-ROOM-012: explicit expiry and disclosure before opening a separate secret DM. */
+function SecretChatDialog({ peerId, slug, onClose }: { peerId: string; slug: string; onClose: () => void }) {
+  const { text } = useChatText();
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const mounted = useRef(false);
+  const [expiryDays, setExpiryDays] = useState(7);
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  useEffect(() => {
+    mounted.current = true;
+    dialogRef.current?.showModal();
+    return () => { mounted.current = false; };
+  }, []);
+  const create = useMutation({
+    mutationFn: () => endpoints.createDm(peerId, slug, { secret: true, expiryDays }),
+    onSuccess: async detail => {
+      await queryClient.invalidateQueries({ queryKey: ['rooms', slug] });
+      if (!mounted.current) return;
+      onClose();
+      navigate(`/rooms/${detail.room.id}`);
+    },
+  });
+  return createPortal(
+    <dialog ref={dialogRef} className="bc-message-menu bc-read-list" aria-label={text('chat.openSecretChat')}
+      onCancel={event => { if (create.isPending) event.preventDefault(); else onClose(); }}>
+      <div className="bc-message-menu-heading"><strong>🔒 {text('chat.openSecretChat')}</strong></div>
+      <form className="space-y-3 p-3" onSubmit={event => { event.preventDefault(); if (!create.isPending) create.mutate(); }}>
+        <label className="flex items-center gap-2 text-sm">
+          {text('room.secret.expiryDays')}
+          <select autoFocus value={expiryDays} disabled={create.isPending} onChange={event => setExpiryDays(Number(event.target.value))}
+            className="rounded-lg border border-slate-300 px-2 py-1 text-sm">
+            {Array.from({ length: SECRET_EXPIRY_MAX_DAYS - SECRET_EXPIRY_MIN_DAYS + 1 }, (_, i) => SECRET_EXPIRY_MIN_DAYS + i).map(days => (
+              <option key={days} value={days}>{text('room.secret.days').replace('{days}', String(days))}</option>
+            ))}
+          </select>
+        </label>
+        <p className="text-xs leading-relaxed text-slate-500">{text('room.secret.explain')}</p>
+        {create.isError && <p role="alert" className="text-sm text-red-700">{create.error instanceof ApiError ? create.error.message : text('common.error')}</p>}
+        <button type="submit" disabled={create.isPending}>{text(create.isPending ? 'common.loading' : 'chat.openSecretChat')}</button>
+        <button type="button" disabled={create.isPending} onClick={onClose}>{text('common.cancel')}</button>
+      </form>
+    </dialog>, document.body,
   );
 }

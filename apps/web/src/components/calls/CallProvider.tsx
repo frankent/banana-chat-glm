@@ -1,3 +1,4 @@
+import { useChatText } from '../../lib/use-chat-text';
 import { Icon } from "../Visual";
 import {
   createContext,
@@ -220,6 +221,7 @@ export function CallButtons({
   type: "dm" | "group";
 }) {
   const c = useCalls();
+  const { text } = useChatText();
   if (!c.enabled) return null;
   const ongoing = c.calls.find((call) => call.room_id === roomId);
   return (
@@ -230,7 +232,7 @@ export function CallButtons({
           disabled={c.busy}
           onClick={() => c.join(ongoing)}
         >
-          Join call
+          {text('chat.joinCall')}
         </button>
       ) : (
         <>
@@ -238,21 +240,21 @@ export function CallButtons({
             <button
               className="bc-tool-button"
               disabled={c.busy}
-              aria-label="Start voice call"
+              aria-label={text('chat.voiceCall')}
               onClick={() => c.start(roomId, "voice")}
             >
               <Icon name="phone" size={16} />{" "}
-              <span className="bc-call-label">Voice</span>
+              <span className="bc-call-label">{text('chat.voiceCall')}</span>
             </button>
           )}
           <button
             className="bc-tool-button"
             disabled={c.busy}
-            aria-label="Start video call"
+            aria-label={text('chat.videoCall')}
             onClick={() => c.start(roomId, "video")}
           >
             <Icon name="video" size={16} />{" "}
-            <span className="bc-call-label">Video</span>
+            <span className="bc-call-label">{text('chat.videoCall')}</span>
           </button>
         </>
       )}

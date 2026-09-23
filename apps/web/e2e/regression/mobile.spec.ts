@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from './fixtures';
+import th from '../../../../packages/shared/i18n/th.json' with { type: 'json' };
 
 /**
  * DEC-058 / TC-WEB-071 — mobile browser composer auto-zoom regression.
@@ -146,6 +147,85 @@ test('mobile — login and composer editable controls never trigger focus auto-z
   await expect(page.getByLabel('Search tickets')).toBeVisible();
   await expectEditableFontsAtLeast16(page, 'workspace board');
   await shot(page, '05-board-mobile');
+
+  await context.close();
+});
+
+/**
+ * FR-ROOM-012 — mobile room-tools "..." menu shortcut that opens a separate
+ * secret (auto-deleting) DM alongside an ordinary one. Only a live run can
+ * prove the CREATE contract end to end: apps/web/e2e/ui/room-tools.spec.ts
+ * proves the dialog/labels/gating against a mocked POST /api/v1/rooms, but
+ * the server's dm_key dedupe (CreateRoomAction::createDm) — the thing that
+ * makes repeated clicks land on the SAME secret room instead of spawning a
+ * new one every time — only exists in the real API.
+ *
+ * Uses the DatabaseSeeder tony↔somchai DM (ordinary, non-secret) as the
+ * starting room. The secret DM this test creates dedupes on tony+somchai
+ * (dm_key is independent of the chosen expiry), so re-running this test
+ * against the same seeded DB reuses the same secret room rather than
+ * accumulating new ones — hence asserting `is_secret===true` off the
+ * response body instead of asserting 201 on the first click.
+ */
+test('secret chat shortcut creates a separate room then dedupes on repeat click (FR-ROOM-012)', async ({ browser, uiLogin }) => {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+    locale: 'th-TH',
+  });
+  const page = await context.newPage();
+  await uiLogin(page, 'tony', 'Tony12345!');
+
+  // Seeded ordinary DM: tony ↔ somchai (สมชาย ใจดี). The room list is only
+  // visible pre-selection at this width (index.css:158). On a re-run of this
+  // test the secret DM this test creates ALSO shows "สมชาย ใจดี" in the list
+  // (same peer, no distinguishing name) — the ordinary DM is the row WITHOUT
+  // the secret-room-badge testid, so filter on that rather than `.first()`.
+  const dmRow = page.locator('aside .bc-room-row')
+    .filter({ hasText: 'สมชาย ใจดี' })
+    .filter({ hasNot: page.getByTestId('secret-room-badge') });
+  await expect(dmRow).toHaveCount(1);
+  await dmRow.click();
+  await expect(page.getByTestId('composer-input')).toBeVisible();
+  const dmUrl = page.url();
+
+  const openDialogAndConfirm = async () => {
+    await page.locator('.bc-room-tools > summary').click();
+    await page.getByRole('button', { name: th['chat.openSecretChat'] }).click();
+    const dialog = page.getByRole('dialog', { name: th['chat.openSecretChat'] });
+    await expect(dialog).toBeVisible();
+    const [response] = await Promise.all([
+      page.waitForResponse(r => r.url().endsWith('/api/v1/rooms') && r.request().method() === 'POST'),
+      dialog.getByRole('button', { name: th['chat.openSecretChat'] }).click(),
+    ]);
+    return { dialog, response };
+  };
+
+  // 1. Create (or, on a re-run against the same DB, dedupe onto the
+  // already-existing secret room — either way this is a real server round trip).
+  const first = await openDialogAndConfirm();
+  expect([200, 201], `unexpected status creating the secret DM: ${await first.response.text()}`).toContain(first.response.status());
+  const created = (await first.response.json()).data.room;
+  expect(created.is_secret).toBe(true);
+  await expect(first.dialog).not.toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/rooms/${created.id}$`));
+  expect(page.url()).not.toBe(dmUrl);
+  await expect(page.getByTestId('secret-expiry-header')).toBeVisible();
+
+  // Secret DM active ⇒ the shortcut itself must now be hidden on that room.
+  await page.locator('.bc-room-tools > summary').click();
+  await expect(page.getByRole('button', { name: th['chat.openSecretChat'] })).toHaveCount(0);
+
+  // 2. Back to the ordinary DM, click the shortcut again — must land on the
+  // SAME secret room (server dedupe), not create a second one.
+  await page.goto(dmUrl);
+  await expect(page.getByTestId('composer-input')).toBeVisible();
+  const second = await openDialogAndConfirm();
+  expect(second.response.status(), 'repeat click must dedupe (200), not create a second room').toBe(200);
+  const reused = (await second.response.json()).data.room;
+  expect(reused.id).toBe(created.id);
+  await expect(page).toHaveURL(new RegExp(`/rooms/${created.id}$`));
 
   await context.close();
 });

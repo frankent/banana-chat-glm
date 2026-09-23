@@ -103,7 +103,6 @@
 #root input[type="file"]::file-selector-button:hover {background: #f0f2eb;}
 
 @media (max-width: 1050px) {
-  #root .bc-chat-header .bc-call-label {display: none;}
   #root .bc-chat-header button {width: var(--bc-button-size); padding: 0;}
 }
 @media (hover: none), (pointer: coarse), (max-width: 760px) {
