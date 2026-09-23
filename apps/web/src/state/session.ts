@@ -8,6 +8,13 @@ import { resetSessionResources } from '../lib/session-resources';
 export interface Me extends UserStub {
   locale: string;
   must_change_password?: boolean;
+  /**
+   * UserResource has always sent this; it was simply never typed, so no screen
+   * could branch on it. FR-AI-001 needs it to tell an admin who can fix an
+   * unconfigured AI provider from a member who can only go ask one. Workspace
+   * role is not a substitute — system admin is instance-wide.
+   */
+  is_system_admin?: boolean;
 }
 
 interface SessionState {

@@ -351,3 +351,88 @@ async function expectLabelMatchesPlaceholder(input: Locator) {
   expect(placeholder, 'composer has no placeholder to compare against').toBeTruthy();
   await expect(input).toHaveAttribute('aria-label', placeholder!);
 }
+
+// TC-UI-014 / FR-AI-001 AC#2 — `ai.enabled` is on but no provider is
+// `is_enabled && is_default`. The spec keeps the nav entry and explains on open.
+// Before this, `configured` was returned by the API, typed in shared, and read by
+// nothing: the sidebar showed its ordinary "no conversations yet / start a new
+// chat" invitation and `/ai/:id` mounted a working-looking composer, so the user
+// only learned the truth from a failed send.
+for (const width of [390, 1440]) {
+  test(`TC-UI-014: ${width}px unconfigured AI explains itself instead of inviting a doomed chat`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await installChatFixture(page, { aiConfigured: false });
+
+    // Both routes, because the mobile shell shows exactly one surface at a time:
+    // `/ai` shows the sidebar and hides .bc-main, `/ai/:id` does the reverse. The
+    // notice lives on both so that whichever is on screen carries it -- asserting
+    // `.first()` would have tested DOM order, and did: it picked the hidden one.
+    for (const url of ['/ai', '/ai/ui-ai']) {
+      await page.goto(url);
+      await expect(
+        page.getByTestId('ai-not-configured').filter({ visible: true }),
+        `nothing visible explains the unconfigured state at ${url}`,
+      ).not.toHaveCount(0);
+      // deep link included: a /ai/:id link must not mount a composer that cannot send
+      await expect(page.getByTestId('ai-composer-input')).toHaveCount(0);
+    }
+
+    // the invitation, and every control behind it, is gone -- not merely `hidden`,
+    // which would have leaned on Tailwind preflight's [hidden]{display:none!important}
+    // to beat these elements' own display:flex
+    await expect(page.getByText('ยังไม่มีบทสนทนา')).toHaveCount(0);
+    await expect(page.getByLabel('แชทใหม่')).toHaveCount(0);
+    await expect(page.getByPlaceholder('ค้นหาบทสนทนา AI')).toHaveCount(0);
+
+    // member wording: no admin panel link
+    await expect(page.getByTestId('ai-admin-panel-link')).toHaveCount(0);
+  });
+}
+
+// The copy is role-dependent, so a single-role test would let the admin branch rot.
+test('TC-UI-014: a system admin gets the actionable hint and a link to /admin', async ({ page }) => {
+  await installChatFixture(page, { aiConfigured: false, systemAdmin: true });
+  await page.goto('/ai');
+  const link = page.getByTestId('ai-admin-panel-link').first();
+  await expect(link).toBeVisible();
+  // a real navigation out of the SPA — /admin is Filament behind its own guard
+  await expect(link).toHaveAttribute('href', '/admin');
+});
+
+// A workspace that is DENIED reports configured:true, so the not-configured notice must
+// NOT claim setup is missing -- but the controls still have to go, because every one of
+// them 403s. This is the case `hidden={notConfigured}` missed entirely.
+test('TC-UI-014: a denied workspace loses the controls without being told to set up AI', async ({ page }) => {
+  await installChatFixture(page, { aiAllowedInWorkspace: false });
+  await page.goto('/ai');
+  await expect(page.getByTestId('ai-not-configured')).toHaveCount(0);
+  await expect(page.getByLabel('แชทใหม่')).toHaveCount(0);
+  await expect(page.getByPlaceholder('ค้นหาบทสนทนา AI')).toHaveCount(0);
+  // and it says so, rather than falling through to "start a new chat" with no button.
+  // Two matches by design -- sidebar and pane, like the not-configured notice.
+  await expect(page.getByText('AI Assistant ไม่พร้อมใช้งานใน workspace นี้').filter({ visible: true })).not.toHaveCount(0);
+  await expect(page.getByText('ยังไม่มีบทสนทนา')).toHaveCount(0);
+});
+
+// Gating loadConversations on status left `loading` false while status was in flight,
+// so the HEALTHY path rendered "no conversations yet / start a new chat" for one RTT --
+// the exact lie this whole change removes, reintroduced into the 99% case. Instant mocks
+// cannot see it, so the status response is deliberately held open here.
+test('TC-UI-014: a slow status shows the skeleton, never an empty-list lie', async ({ page }) => {
+  await installChatFixture(page, { aiStatusDelayMs: 900 });
+  await page.goto('/ai');
+  await expect(page.getByLabel('กำลังโหลด').first()).toBeVisible();
+  // point-in-time, NOT the auto-retrying matcher: that would simply wait out the
+  // delay and pass no matter what was on screen during it.
+  expect(await page.getByText('ยังไม่มีบทสนทนา').count(), 'empty-list lie shown while status was still unknown').toBe(0);
+  // and once status lands the real list arrives
+  await expect(page.getByText('AI composer layout')).toBeVisible();
+});
+
+// Guards the flags apart: a configured instance must be untouched by all of the above.
+test('TC-UI-014: a configured workspace still gets the composer, not the setup notice', async ({ page }) => {
+  await installChatFixture(page);
+  await page.goto('/ai/ui-ai');
+  await expect(page.getByTestId('ai-composer-input')).toBeVisible();
+  await expect(page.getByTestId('ai-not-configured')).toHaveCount(0);
+});

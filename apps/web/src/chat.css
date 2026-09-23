@@ -64,6 +64,10 @@
 .bc-conversations .bc-room-secret { display: inline-flex; align-items: center; gap: 3px; color: #6b5d3e; font-size: 10px; }
 .bc-chat-list-empty { padding: 36px 18px; display: flex; align-items: center; text-align: center; flex-direction: column; gap: 12px; color: #607080; font-size: 13px; }
 .bc-chat-list-empty strong { color: #354350; font-weight: 600; }
+/* FR-AI-001 — setup CTA inside the two AI empty states. .bc-primary is sized for
+   hero use (30px top margin); these containers already space with `gap`, and the
+   sidebar one is ~230px wide, so the label must not wrap to one word per line. */
+.bc-empty-conversation > .bc-primary, .bc-chat-list-empty > .bc-primary { margin-top: 4px; padding: 10px 16px; white-space: nowrap; }
 .bc-list-error { margin: 0 8px 10px; padding: 10px; background: #fff7df; border-radius: 10px; font-size: 12px; color: #685824; }
 #root .bc-list-error button { height: 32px; min-height: 32px; background: transparent; text-decoration: underline; }
 #root .bc-search-all { margin: 8px 20px 16px; font-size: 12px; background: #f2f5f4; color: #354350; border: 0; }

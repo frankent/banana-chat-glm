@@ -26,7 +26,7 @@ const aiConversation = { id: 'ui-ai', title: 'AI composer layout', title_source:
 // aiConsented defaults to true so the 19 pre-existing tests are untouched; TC-UI-013
 // flips it to assert the composer's consent-required label, which is the only way to
 // catch a regression back to a FIXED aria-label (a fixed one is still non-empty).
-export async function installChatFixture(page: Page, opts: { aiConsented?: boolean } = {}) {
+export async function installChatFixture(page: Page, opts: { aiConsented?: boolean; aiConfigured?: boolean; aiAllowedInWorkspace?: boolean; systemAdmin?: boolean; aiStatusDelayMs?: number } = {}) {
   let roomsFail = false;
   let olderRequests = 0;
   const reads: Array<{ roomId: string; seq: number }> = [];
@@ -55,7 +55,7 @@ export async function installChatFixture(page: Page, opts: { aiConsented?: boole
     const respond = (data: unknown) => route.fulfill({ json: { data } });
     if (path === '/broadcasting/auth') return route.fulfill({ json: { auth: 'synthetic:signature' } });
     if (path === '/auth/refresh') return respond({ access_token: 'synthetic-access', refresh_token: 'synthetic-ui-token' });
-    if (path === '/me') return respond({ user: { ...me, locale: 'th' }, settings: { locale: 'th', timezone: 'Asia/Bangkok', notification: null } });
+    if (path === '/me') return respond({ user: { ...me, locale: 'th', is_system_admin: opts.systemAdmin ?? false }, settings: { locale: 'th', timezone: 'Asia/Bangkok', notification: null } });
     if (path === '/me/workspaces') return respond([{ workspace: { id: 'ui-workspace', slug: 'ui-studio', name: 'Banana Studio', status: 'active' }, role: 'member', unread_rooms_count: 2, total_unread: 128 }]);
     if (path === '/rooms') {
       if (roomsFail) return route.fulfill({ status: 503, json: { error: { code: 'UNAVAILABLE', message: 'Synthetic offline response' } } });
@@ -65,13 +65,21 @@ export async function installChatFixture(page: Page, opts: { aiConsented?: boole
     // AI (DEC-078) — declared BEFORE the generic /messages handlers below, which
     // would otherwise answer /ai/conversations/:id/messages with room messages.
     if (path === '/ai/status') {
+      // Mocks answer instantly, which hides every "while status is unknown" defect.
+      // TC-UI-014 uses this to hold the window open long enough to look at it.
+      if (opts.aiStatusDelayMs !== undefined) await new Promise(r => setTimeout(r, opts.aiStatusDelayMs));
       return respond({
-        enabled: true, configured: true, allowed_in_workspace: true,
-        provider: { name: 'mock', model: 'mock-1', window_size: 8000 },
+        enabled: true, configured: opts.aiConfigured ?? true, allowed_in_workspace: opts.aiAllowedInWorkspace ?? true,
+        provider: (opts.aiConfigured ?? true) ? { name: 'mock', model: 'mock-1', window_size: 8000 } : null,
         limits: { daily_messages: 200, max_message_chars: 32000 },
         usage_today: { date: '2026-09-23', messages: 0, tokens_in: 0, tokens_out: 0, failed: 0 },
         memory_enabled: false, consented: opts.aiConsented ?? true,
       });
+    }
+    // Mirror AiGate: with no default provider every gated AI route is 503, which is
+    // what makes the fixture a real test of the UI rather than of the fixture.
+    if ((opts.aiConfigured ?? true) === false && path.startsWith('/ai/') && path !== '/ai/status') {
+      return route.fulfill({ status: 503, json: { error: { code: 'AI_PROVIDER_NOT_CONFIGURED', message: 'No default AI provider' } } });
     }
     if (path === '/ai/conversations' && request.method() === 'GET') return respond({ conversations: [aiConversation], next_cursor: null });
     if (/^\/ai\/conversations\/[^/]+$/.test(path)) return respond({ conversation: aiConversation });

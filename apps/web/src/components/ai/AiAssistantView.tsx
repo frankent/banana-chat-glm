@@ -8,6 +8,7 @@ import { useChatText } from '../../lib/use-chat-text';
 import { AiChatPane } from './AiChatPane';
 import { AiConsentDialog } from './AiConsentDialog';
 import { AiMemoriesPanel } from './AiMemoriesPanel';
+import { AiNotConfigured } from './AiNotConfigured';
 import { Icon } from '../Visual';
 
 /**
@@ -29,9 +30,15 @@ export function AiAssistantView() {
   // phone, toggling a flag left `.bc-main` display:none under `is-chat-list`
   // with nothing else to show it (the consent-dialog bug, recurring).
   const memoriesOpen = conversationId === 'memories';
+  // FR-AI-001 AC#2. Positively confirmed, not `!== false`: while status is still
+  // unknown we must not fire requests the gate is about to 503, and
+  // `open()` -> loadMessages awaits without a catch while its caller discards the
+  // promise, so a doomed call surfaces as an unhandled rejection rather than noise.
+  const aiReady = status !== null && status.configured && status.allowed_in_workspace;
+  const notConfigured = status !== null && !status.configured;
 
   useEffect(() => {
-    if (conversationId !== undefined && !memoriesOpen && slug !== '') {
+    if (aiReady && conversationId !== undefined && !memoriesOpen && slug !== '') {
       void open(conversationId, slug);
       // API-118 — release the push-suppression window when leaving/switching
       return () => {
@@ -40,12 +47,12 @@ export function AiAssistantView() {
     }
     closeConversation();
     return undefined;
-  }, [conversationId, memoriesOpen, slug, open, closeConversation]);
+  }, [aiReady, conversationId, memoriesOpen, slug, open, closeConversation]);
 
   const { data: memories } = useQuery({
     queryKey: ['ai', 'memories', slug],
     queryFn: () => endpoints.aiMemories(slug),
-    enabled: memoriesOpen && slug !== '',
+    enabled: aiReady && memoriesOpen && slug !== '',
   });
 
   if (status?.enabled === false) {
@@ -68,7 +75,12 @@ export function AiAssistantView() {
           </div>
         </div>
       </header>
-      {memoriesOpen ? (
+      {notConfigured ? (
+        // Before the chat/memories branches and before the deep-link case: a
+        // /ai/:id link must not mount a composer that cannot send. Rendered inside
+        // the pane rather than instead of it so the header keeps its back button.
+        <AiNotConfigured variant="pane" />
+      ) : memoriesOpen ? (
         <AiMemoriesPanel memories={memories?.memories ?? []} slug={slug} />
       ) : conversationId !== undefined ? (
         <AiChatPane conversationId={conversationId} slug={slug} />

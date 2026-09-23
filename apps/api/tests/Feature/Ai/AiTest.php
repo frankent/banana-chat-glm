@@ -146,6 +146,37 @@ test('TC-AI-003 workspace not in allowed list → 403 AI_WORKSPACE_NOT_ALLOWED; 
     $this->getJson('/api/v1/ai/conversations', wsHeaders($this->tonyToken, 'acme'))->assertOk();
 });
 
+test('TC-AI-125 status tells "not configured" apart from "workspace not allowed" (FR-AI-001)', function () {
+    // Both cases used to report configured:false + allowed_in_workspace:true, because
+    // the flags were derived from AiGate's provider, which is null for either reason.
+    // The client therefore could not tell a missing provider from a denied workspace,
+    // and would have told a denied user to go ask an admin to set up AI that exists.
+    $this->provider->forceFill(['allowed_workspace_ids' => ['01J00000000000000000000000']])->save();
+
+    $this->getJson('/api/v1/ai/status', wsHeaders($this->tonyToken, 'acme'))
+        ->assertOk()
+        ->assertJsonPath('data.configured', true)
+        ->assertJsonPath('data.allowed_in_workspace', false)
+        // name/model are the admin's provider config; a denied workspace gets nothing
+        ->assertJsonPath('data.provider', null);
+
+    // allowed again -> provider details come back
+    $this->provider->forceFill(['allowed_workspace_ids' => null])->save();
+    $this->getJson('/api/v1/ai/status', wsHeaders($this->tonyToken, 'acme'))
+        ->assertOk()
+        ->assertJsonPath('data.configured', true)
+        ->assertJsonPath('data.allowed_in_workspace', true)
+        ->assertJsonPath('data.provider.model', $this->provider->model);
+
+    // and with no provider at all the two flags are now distinguishable
+    $this->provider->delete();
+    $this->getJson('/api/v1/ai/status', wsHeaders($this->tonyToken, 'acme'))
+        ->assertOk()
+        ->assertJsonPath('data.configured', false)
+        ->assertJsonPath('data.allowed_in_workspace', true)
+        ->assertJsonPath('data.provider', null);
+});
+
 test('TC-AI-004 no default provider → 503 AI_PROVIDER_NOT_CONFIGURED', function () {
     $this->provider->delete();
 

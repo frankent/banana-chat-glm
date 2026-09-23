@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { endpoints } from '../../lib/api';
 import { useAiStore } from '../../state/ai';
 import { useChatText } from '../../lib/use-chat-text';
+import { AiNotConfigured } from './AiNotConfigured';
 import { Icon } from '../Visual';
 
 /**
@@ -27,22 +28,40 @@ export function AiConversationList({ slug }: { slug: string }) {
     return () => window.clearTimeout(debounceRef.current);
   }, [search]);
 
+  // FR-AI-001 AC#2 — no provider is is_enabled && is_default. Status still has to
+  // load (it is what tells us), but nothing that needs the gate should run.
+  const notConfigured = status !== null && !status.configured;
+  const aiReady = status !== null && status.configured && status.allowed_in_workspace;
+
   useEffect(() => {
     if (slug !== '') {
       void refreshStatus(slug);
-      void loadConversations(slug);
     }
-  }, [slug, refreshStatus, loadConversations]);
+  }, [slug, refreshStatus]);
+
+  // `loading` alone is not enough: aiReady flips during render, and loadConversations
+  // cannot set loading:true until the effect runs after commit, leaving one frame in
+  // which ai.empty would render. Only a completed load proves the list is really empty.
+  const [everLoaded, setEverLoaded] = useState(false);
+  useEffect(() => {
+    if (aiReady && slug !== '') {
+      void loadConversations(slug).finally(() => setEverLoaded(true));
+    }
+  }, [aiReady, slug, loadConversations]);
 
   const { data: searchPage, isFetching: searching } = useQuery({
     queryKey: ['ai', 'search', slug, debounced],
     queryFn: () => endpoints.aiSearch(slug, debounced),
-    enabled: slug !== '' && debounced.length >= 2,
+    enabled: aiReady && slug !== '' && debounced.length >= 2,
   });
   const searchResults = useMemo(() => searchPage?.results ?? [], [searchPage]);
   const isSearching = debounced.length >= 2;
 
   const startNewChat = () => {
+    // Status still loading is "unknown", not "fine": without this, a cold load on an
+    // unconfigured instance renders the button (notConfigured is false while status
+    // is null), and the 503 lands in the catch below as a consent dialog.
+    if (!aiReady) return;
     void newConversation(slug)
       .then((id) => {
         if (id !== null) void navigate(`/ai/${id}`);
@@ -54,6 +73,12 @@ export function AiConversationList({ slug }: { slug: string }) {
     <div className="bc-conversations">
       <div className="bc-conversations-title">
         <h1>{text('ai.title')}</h1>
+        {/* Not rendered rather than `hidden`: these 503/403 whenever the gate is not
+            satisfied, and `aiReady` covers all three of unknown, unconfigured and
+            workspace-denied (which reports configured:true, so notConfigured missed
+            it). It also drops a dependency on Tailwind preflight's
+            [hidden]{display:none!important} to beat these elements' own display:flex. */}
+        {aiReady && (
         <div className="flex gap-1">
           <NavLink
             to="/ai/memories"
@@ -66,7 +91,9 @@ export function AiConversationList({ slug }: { slug: string }) {
             <Icon name="edit" size={19} />
           </button>
         </div>
+        )}
       </div>
+      {aiReady && (
       <label className="bc-chat-search">
         <Icon name="search" size={18} />
         <input
@@ -81,8 +108,22 @@ export function AiConversationList({ slug }: { slug: string }) {
           </button>
         )}
       </label>
+      )}
       <nav className="bc-room-list" aria-label={text('ai.title')}>
-        {isSearching ? (
+        {notConfigured ? (
+          // Ahead of every other branch, including cached conversations: rows can
+          // survive in the offline cache after a provider is removed, and showing
+          // them would offer links that 503 on open.
+          <AiNotConfigured variant="list" />
+        ) : status !== null && !status.allowed_in_workspace ? (
+          // Unreachable until the status fix above, which is what made denial
+          // distinguishable at all. Without this it fell through to ai.empty and
+          // invited a new chat with no button rendered to start one.
+          <div className="bc-chat-list-empty">
+            <Icon name="sparkle" size={28} />
+            <strong>{text('ai.notAllowed')}</strong>
+          </div>
+        ) : aiReady && isSearching ? (
           <>
             <p className="bc-list-error" role="status">
               {searching ? text('ai.searching') : text('ai.searchResults').replace('{count}', String(searchResults.length))}
@@ -112,7 +153,7 @@ export function AiConversationList({ slug }: { slug: string }) {
           </>
         ) : (
           <>
-            {loading && conversations.length === 0 && (
+            {(status === null || loading || !everLoaded) && conversations.length === 0 && (
               <div aria-label={text('chat.loading')}>
                 {Array.from({ length: 5 }, (_, i) => (
                   <div key={i} className="bc-room-row bc-room-skeleton">
@@ -144,7 +185,11 @@ export function AiConversationList({ slug }: { slug: string }) {
                 </span>
               </NavLink>
             ))}
-            {!loading && conversations.length === 0 && (
+            {/* `aiReady &&` matters: gating loadConversations on status means `loading`
+                is still false while status is in flight, so this branch would other-
+                wise render "no conversations yet / start a new chat" on every healthy
+                cold load -- to a returning user with a full cached list, no less. */}
+            {aiReady && everLoaded && !loading && conversations.length === 0 && (
               <div className="bc-chat-list-empty">
                 <Icon name="sparkle" size={28} />
                 <strong>{text('ai.empty')}</strong>

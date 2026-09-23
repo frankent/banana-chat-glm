@@ -43,7 +43,7 @@ class AiController extends Controller
     /** API-100 — gate report for the sidebar entry + limits + today's usage. */
     public function status(Request $request): JsonResponse
     {
-        [$provider, $error] = $this->gate->resolve($request->user()->id, $this->context->id(), requireConsent: false);
+        [, $error] = $this->gate->resolve($request->user()->id, $this->context->id(), requireConsent: false);
 
         if ($error === 'AI_DISABLED') {
             return $this->error(403, 'AI_DISABLED');
@@ -52,13 +52,23 @@ class AiController extends Controller
         /** @var User $user */
         $user = $request->user();
 
+        // Resolve the provider independently of the gate. The gate collapses "no
+        // provider" and "workspace not allowed" into the same null, so deriving the
+        // flags from it reported a denied workspace as configured:false +
+        // allowed_in_workspace:true — i.e. both of the two flags this endpoint exists
+        // to report were wrong, and the client could not tell the cases apart.
+        // Same query the gate uses (is_enabled && is_default), so nothing else moves.
+        $provider = AiProvider::defaultProvider();
+        $allowed = $provider === null
+            || $this->context->id() === null
+            || $provider->allowsWorkspace($this->context->id());
+
         return response()->json(['data' => [
             'enabled' => true,
             'configured' => $provider !== null,
-            'allowed_in_workspace' => $provider !== null && $this->context->id() !== null
-                ? $provider->allowsWorkspace($this->context->id())
-                : true,
-            'provider' => $provider !== null ? [
+            'allowed_in_workspace' => $allowed,
+            // withheld from a workspace that is not allowed to use it
+            'provider' => $provider !== null && $allowed ? [
                 'name' => $provider->name,
                 'model' => $provider->model,
                 'window_size' => (int) $provider->window_size,
