@@ -84,6 +84,23 @@ export interface Message {
   /** FR-MSG-008 — user ids mentioned by this message */
   mentions: string[];
   attachments: Attachment[];
+  /** FR-MSG-011 — set when this message is a forwarded copy; always the ORIGINAL author */
+  forwarded_from?: ForwardedFrom | null;
+}
+
+/** FR-MSG-011 / DEC-083 — display_name is a snapshot taken at forward time */
+export interface ForwardedFrom {
+  sender_id: string | null;
+  display_name: string | null;
+  message_id: string | null;
+  room_id: string | null;
+  created_at: string | null;
+}
+
+/** API-047 response */
+export interface ForwardMessagesResponse {
+  results: { room_id: string; messages: Message[] }[];
+  failed_room_ids: string[];
 }
 
 export type AttachmentKind = 'image' | 'video' | 'file' | 'avatar';

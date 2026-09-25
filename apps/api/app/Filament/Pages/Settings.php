@@ -53,7 +53,7 @@ class Settings extends Page
     public static function ranges(): array
     {
         return [
-            'message.max_length' => [1, 32000], 'message.edit_window_minutes' => [0, 525600], 'message.max_attachments' => [1, 20],
+            'message.max_length' => [1, 32000], 'message.edit_window_minutes' => [0, 525600], 'message.max_attachments' => [1, 20], 'message.forward_max_messages' => [1, 100], 'message.forward_max_rooms' => [1, 50],
             'room.group.max_members' => [2, 10000], 'room.deleted_purge_days' => [1, 365],
             'call.max_participants' => [2, 50],
             'auth.password.min_length' => [8, 128], 'auth.lockout.threshold' => [3, 100], 'auth.lockout.minutes' => [1, 1440],

@@ -312,6 +312,7 @@ export default function RoomScreen() {
               style={[styles.bubble, mine ? styles.mine : styles.theirs]}
             >
               {!mine && <Text style={styles.sender}>{m.sender?.display_name ?? m.sender_id}</Text>}
+              {!gone && m.type !== 'system' && m.forwarded_from && <Text style={[styles.forwarded, mine && styles.forwardedMine]}>{m.forwarded_from.display_name ? t('message.forwardedFrom').replace('{name}', m.forwarded_from.display_name) : t('message.forwardedUnknown')}</Text>}
               {m.reply_to !== null && (
                 <View style={styles.replyQuote}>
                   <Text style={styles.replyQuoteText} numberOfLines={1}>
@@ -394,9 +395,9 @@ export default function RoomScreen() {
             </Pressable>
             {actionsFor?.sender_id === me?.id && (
               <>
-                <Pressable style={styles.sheetItem} onPress={() => { setEditing(actionsFor); setReplyTo(null); setDraft(actionsFor?.body ?? ''); setActionsFor(null); }}>
+                {!actionsFor?.forwarded_from && <Pressable style={styles.sheetItem} onPress={() => { setEditing(actionsFor); setReplyTo(null); setDraft(actionsFor?.body ?? ''); setActionsFor(null); }}>
                   <Text style={styles.sheetText}>{t('message.edit')}</Text>
-                </Pressable>
+                </Pressable>}
                 <Pressable style={styles.sheetItem} onPress={() => { const m = actionsFor; setActionsFor(null); if (m) void removeMessage(m); }}>
                   <Text style={[styles.sheetText, styles.sheetDanger]}>{t('message.delete')}</Text>
                 </Pressable>
@@ -420,6 +421,8 @@ const styles = StyleSheet.create({
   theirs: { alignSelf: 'flex-start', backgroundColor: theme.colors.surface },
   failed: { backgroundColor: theme.colors.surfaceAlt, borderWidth: 1, borderColor: theme.colors.danger },
   sender: { color: theme.colors.primary, fontSize: 12, marginBottom: 2 },
+  forwarded: { color: '#b8c6d9', fontSize: 12, marginBottom: 4 },
+  forwardedMine: { color: '#394638' },
   bubbleText: { color: theme.colors.text, fontSize: 15 },
   time: { color: theme.colors.textMuted, fontSize: 11, alignSelf: 'flex-end', marginTop: 2 },
   pendingText: { color: theme.colors.textMuted, fontSize: 11, marginTop: 2 },

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Message\MessageEditor;
+use App\Domain\Message\MessageForwarder;
 use App\Domain\Message\MessageSerializer;
 use App\Domain\Message\MessageWriter;
 use App\Domain\Room\RoomPolicy;
@@ -30,7 +31,43 @@ class MessageController extends Controller
         private readonly MessageWriter $writer,
         private readonly MessageSerializer $serializer,
         private readonly MessageEditor $editor,
+        private readonly MessageForwarder $forwarder,
     ) {}
+
+    /**
+     * API-047 — forward messages into other rooms (FR-MSG-011, DEC-083).
+     */
+    public function forward(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'client_forward_id' => ['required', 'uuid'],
+            'source_room_id' => ['required', 'ulid'],
+            'message_ids' => ['required', 'array', 'min:1', 'max:100'],
+            'message_ids.*' => ['ulid'],
+            'room_ids' => ['required', 'array', 'min:1', 'max:50'],
+            'room_ids.*' => ['ulid'],
+        ]);
+
+        /** @var User $user */
+        $user = $request->user();
+
+        $outcome = $this->forwarder->forward(
+            $user,
+            $data['client_forward_id'],
+            $data['source_room_id'],
+            $data['message_ids'],
+            $data['room_ids'],
+        );
+
+        $results = array_map(fn (array $result) => [
+            'room_id' => $result['room_id'],
+            'messages' => array_map(fn ($message) => MessageSerializer::forEvent($message), $result['messages']),
+        ], $outcome['results']);
+
+        return response()->json([
+            'data' => ['results' => $results, 'failed_room_ids' => $outcome['failed_room_ids']],
+        ], $outcome['created'] ? 201 : 200);
+    }
 
     /**
      * API-041 — history by seq cursor (FR-MSG-003).

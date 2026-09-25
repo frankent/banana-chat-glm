@@ -69,6 +69,11 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(20)->by('ai:'.$request->user()?->id);
         });
 
+        // FR-MSG-011: one forward can fan out to forward_max_messages × forward_max_rooms copies
+        RateLimiter::for('message-forward', function (Request $request) {
+            return Limit::perMinute(20)->by('forward:'.$request->user()?->id);
+        });
+
         /*
         |------------------------------------------------------------------
         | FR-PCHAT-031 — PUBLIC CHAT LIMITERS. NAMED, NEVER numeric.

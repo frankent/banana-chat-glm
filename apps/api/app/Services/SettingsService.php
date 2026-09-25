@@ -19,6 +19,8 @@ class SettingsService
         'message.max_length' => 4000,
         'message.edit_window_minutes' => 1440,
         'message.max_attachments' => 10,
+        'message.forward_max_messages' => 20,
+        'message.forward_max_rooms' => 10,
         'upload.image.max_bytes' => 20971520,
         'upload.video.max_bytes' => 209715200,
         'upload.file.max_bytes' => 104857600,

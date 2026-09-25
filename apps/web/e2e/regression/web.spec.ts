@@ -107,3 +107,74 @@ test('AI assistant — conversation streams a mock answer (FR-AI-002/003)', asyn
   await page.waitForTimeout(1_000);
   await shot(page, '04-ai-answer');
 });
+
+/**
+ * FR-MSG-011 / API-047 / DEC-083 — the only harness that proves the real
+ * server contract: attribution survives the round trip and arrives over
+ * Reverb in a room the source author is watching, while the copy is sent by
+ * the forwarder. TC-WEB-079 covers the dialog against a mocked endpoint.
+ */
+test('TC-MSG-061 / TC-WEB-079 forward — anna sees somchai’s forward of her message arrive live with “forwarded from Anna”', async ({ browser, uiLogin, shot }) => {
+  const anna = await browser.newContext({ locale: 'th-TH' });
+  // somchai forwards, not tony: the suite already spends tony's 10-logins/15-min cap (FR-AUTH-006)
+  const forwarder = await browser.newContext({ locale: 'th-TH' });
+  const annaPage = await anna.newPage();
+  const forwarderPage = await forwarder.newPage();
+  const text = `pw-forward ${stamp}`;
+
+  await uiLogin(annaPage, 'anna', 'Anna12345!');
+  await annaPage.locator('aside').getByText('Engineering').first().click();
+  await annaPage.getByTestId('composer-input').fill(text);
+  await annaPage.getByTestId('send-button').click();
+  await expect(annaPage.getByTestId('message').filter({ hasText: text })).toHaveCount(1, { timeout: 15_000 });
+  // anna now watches General, where the forward will land
+  await annaPage.locator('aside').getByText('General').first().click();
+  await expect(annaPage.getByTestId('message-list')).toBeVisible();
+
+  await uiLogin(forwarderPage, 'somchai', 'Somchai12345!');
+  await forwarderPage.locator('aside').getByText('Engineering').first().click();
+  const source = forwarderPage.getByTestId('message').filter({ hasText: text });
+  await expect(source).toHaveCount(1, { timeout: 15_000 });
+  await source.hover();
+  await source.locator('.bc-message-actions-toggle').click();
+  await forwarderPage.getByTestId('message-actions').getByRole('button', { name: 'ส่งต่อ', exact: true }).click();
+
+  const dialog = forwarderPage.getByTestId('forward-dialog');
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('checkbox', { name: /General/ }).check();
+  await dialog.getByRole('checkbox', { name: 'Tony Starr', exact: true }).check(); // not the 🔒 secret DM with him
+  const [response] = await Promise.all([
+    forwarderPage.waitForResponse(r => r.url().endsWith('/api/v1/messages/forward') && r.request().method() === 'POST'),
+    dialog.getByRole('button', { name: /ส่งต่อ \(2\)/ }).click(),
+  ]);
+  expect(response.status(), await response.text()).toBe(201);
+  const body = await response.json();
+  expect(body.data.failed_room_ids).toEqual([]);
+  expect(body.data.results).toHaveLength(2);
+  for (const result of body.data.results) {
+    expect(result.messages[0].body).toBe(text);
+    expect(result.messages[0].sender.username).toBe('somchai');
+    expect(result.messages[0].forwarded_from.display_name).toBe('Anna Garcia');
+  }
+  await expect(dialog).toBeHidden();
+  await shot(forwarderPage, '01-forwarded');
+
+  // live arrival in anna's open General room, attributed to her, sent by somchai
+  const arrived = annaPage.getByTestId('message').filter({ hasText: text });
+  await expect(arrived).toHaveCount(1, { timeout: 20_000 });
+  await expect(arrived.getByTestId('forwarded-header')).toHaveText(/ส่งต่อจาก Anna Garcia/);
+  await shot(annaPage, '02-anna-sees-forward');
+
+  // somchai's own copy in his DM with tony: header shown even though DMs hide sender names, and not editable
+  await forwarderPage.locator('aside .bc-room-row').filter({ hasText: 'Tony Starr' }).filter({ hasNot: forwarderPage.getByTestId('secret-room-badge') }).click();
+  const copy = forwarderPage.getByTestId('message').filter({ hasText: text });
+  await expect(copy.getByTestId('forwarded-header')).toHaveText(/ส่งต่อจาก Anna Garcia/);
+  await copy.hover();
+  await copy.locator('.bc-message-actions-toggle').click();
+  await expect(forwarderPage.getByTestId('message-actions').getByTestId('edit-button')).toHaveCount(0);
+  await expect(forwarderPage.getByTestId('message-actions').getByTestId('delete-button')).toBeVisible();
+  await shot(forwarderPage, '03-dm-copy');
+
+  await anna.close();
+  await forwarder.close();
+});

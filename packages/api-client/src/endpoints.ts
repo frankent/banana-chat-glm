@@ -12,6 +12,7 @@ import type {
   AiSearchResult,
   AiSendResponse,
   AiShareResponse,
+  ForwardMessagesResponse,
   AiStatus,
   Attachment,
   AppConfig,
@@ -582,6 +583,23 @@ export class Endpoints {
   }
 
   /** FR-AI-015 — share an assistant answer into a room. */
+  /** API-047 — FR-MSG-011 forward messages into other rooms; reuse clientForwardId on retry */
+  forwardMessages(
+    slug: string,
+    input: { clientForwardId: string; sourceRoomId: string; messageIds: string[]; roomIds: string[] },
+  ) {
+    return this.api.request<ForwardMessagesResponse>('/api/v1/messages/forward', {
+      method: 'POST',
+      body: {
+        client_forward_id: input.clientForwardId,
+        source_room_id: input.sourceRoomId,
+        message_ids: input.messageIds,
+        room_ids: input.roomIds,
+      },
+      workspaceSlug: slug,
+    });
+  }
+
   aiShare(messageId: string, slug: string, roomId: string) {
     return this.api.request<AiShareResponse>(`/api/v1/ai/messages/${messageId}/share`, {
       method: 'POST',

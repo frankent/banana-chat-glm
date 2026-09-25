@@ -492,6 +492,15 @@ components:
         attachments:
           type: array
           items: { type: object }
+        forwarded_from:
+          description: FR-MSG-011 — original author of a forwarded copy (snapshot); null otherwise
+          type: [object, 'null']
+          properties:
+            sender_id: { type: [string, 'null'] }
+            display_name: { type: [string, 'null'] }
+            message_id: { type: [string, 'null'] }
+            room_id: { type: [string, 'null'] }
+            created_at: { type: [string, 'null'] }
 
 security:
   - bearerAuth: []
@@ -1080,6 +1089,44 @@ paths:
         '201': {description: 'sent'}
         '200': {description: 'idempotent replay of the same client_message_id'}
         '422': {description: 'MSG_EMPTY / MSG_TOO_LONG / MSG_REPLY_INVALID'}
+  /messages/forward:
+    parameters:
+      - { $ref: '#/components/parameters/workspaceSlug' }
+    post:
+      summary: API-047 forward messages into other rooms (FR-MSG-011, DEC-083)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [client_forward_id, source_room_id, message_ids, room_ids]
+              properties:
+                client_forward_id: { type: string, format: uuid, description: reuse on retry — copies are idempotent }
+                source_room_id: { type: string }
+                message_ids: { type: array, minItems: 1, items: { type: string }, description: 'max message.forward_max_messages (20)' }
+                room_ids: { type: array, minItems: 1, items: { type: string }, description: 'max message.forward_max_rooms (10)' }
+      responses:
+        '201':
+          description: copies created (one per target × source message, source seq order)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        room_id: { type: string }
+                        messages: { type: array, items: { $ref: '#/components/schemas/Message' } }
+                  failed_room_ids: { type: array, items: { type: string } }
+        '200': {description: 'pure replay of the same client_forward_id'}
+        '403': {description: 'ROOM_NOT_MEMBER of the source room'}
+        '404': {description: 'a target room is missing, foreign, expired or not joined — nothing written'}
+        '410': {description: 'ROOM_EXPIRED source'}
+        '422': {description: 'MSG_FORWARD_INVALID (details.reason) / VALIDATION_FAILED'}
+        '429': {description: 'RATE_LIMITED (message-forward, 20/min/user)'}
   /rooms/{roomId}/read:
     post:
       summary: API-045 mark read (monotonic, clamped)

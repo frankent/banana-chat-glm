@@ -129,6 +129,8 @@ export interface MessageItemProps {
   grouped?: boolean;
   showSender?: boolean;
   replySender?: string;
+  secretActive?: boolean;
+  onForward?: (message: Message, trigger: HTMLButtonElement | null) => void;
   /** sender may edit+delete; room owner/admin may delete as moderator (FR-MSG-005/006) */
   canModerate?: boolean;
   onReply?: (message: Message) => void;
@@ -138,7 +140,7 @@ export interface MessageItemProps {
   onDelete?: (messageId: string) => Promise<unknown>;
 }
 
-export function MessageItem({ message, mine, canModerate = false, grouped = false, showSender = true, replySender, onEdit, onDelete, onReply, onPin, onJump }: MessageItemProps) {
+export function MessageItem({ message, mine, canModerate = false, grouped = false, showSender = true, replySender, secretActive = false, onForward, onEdit, onDelete, onReply, onPin, onJump }: MessageItemProps) {
   const { text, locale } = useChatText();
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -180,10 +182,11 @@ export function MessageItem({ message, mine, canModerate = false, grouped = fals
 
   const pending = message.id.startsWith('optimistic-');
   const deleted = message.deleted_at !== null;
-  const mayEdit = mine && !deleted && !pending && onEdit !== undefined;
-  const mayDelete = !pending && !deleted && (mayEdit || (canModerate && onDelete !== undefined));
+  const mayEdit = mine && !message.forwarded_from && !deleted && !pending && onEdit !== undefined;
+  const mayDelete = !pending && !deleted && (mine || canModerate) && onDelete !== undefined;
+  const mayForward = !pending && !deleted && !secretActive && onForward !== undefined;
   const compactText = !deleted && !editing && message.attachments.length === 0 && message.body !== null && message.body.trim().length > 0 && message.body.length <= 60 && !/[\n`#*|]/.test(message.body);
-  const hasActions = !pending && !editing && !deleted && Boolean(mayEdit || mayDelete || onReply || onPin);
+  const hasActions = !pending && !editing && !deleted && Boolean(mayEdit || mayDelete || mayForward || onReply || onPin);
 
   const submitEdit = async () => {
     const body = draft.trim();
@@ -219,6 +222,7 @@ export function MessageItem({ message, mine, canModerate = false, grouped = fals
         {!mine && showSender && message.sender !== null && (
           <p className="text-xs font-semibold text-slate-600">{message.sender.display_name}</p>
         )}
+        {!deleted && message.forwarded_from && <p className="bc-forwarded-header" data-testid="forwarded-header"><span aria-hidden="true">↪ </span>{message.forwarded_from.display_name ? text('message.forwardedFrom').replace('{name}', message.forwarded_from.display_name) : text('message.forwardedUnknown')}</p>}
         {!deleted && message.reply_to && <button className="bc-reply-quote" onClick={() => message.reply_to?.seq && onJump?.(message.reply_to.seq)}><strong>{replySender ?? text('message.reply')}</strong><span>{message.reply_to.deleted ? 'Deleted message' : message.reply_to.snippet}</span></button>}
         {deleted ? (
           <p className="text-sm italic text-slate-400" data-testid="deleted-placeholder">
@@ -284,6 +288,7 @@ export function MessageItem({ message, mine, canModerate = false, grouped = fals
             {deleteConfirm ? <><p className="bc-delete-hint">{text('chat.deleteHint')}</p><button className="is-destructive" disabled={busy} onClick={async () => { await confirmDelete(); setActionsOpen(false); }}><Icon name="trash" size={18} />{text('message.delete')}</button><button onClick={() => setActionsOpen(false)}>{text('chat.cancel')}</button></> : <>
               {onReply && <button aria-label="Reply" onClick={() => {setActionsOpen(false);onReply(message);}}><Icon name="reply" size={18} />{text('message.reply')}</button>}
               {onPin && <button aria-label="Pin message" onClick={() => {setActionsOpen(false);onPin(message);}}><Icon name="pin" size={18} />{text('chat.pin')}</button>}
+              {mayForward && <button onClick={() => { setActionsOpen(false); onForward?.(message, actionsToggleRef.current); }}><Icon name="arrow" size={18} />{text('message.forward')}</button>}
               {mayEdit && <button aria-label="Edit message" data-testid="edit-button" onClick={() => {setActionsOpen(false);setDraft(message.body ?? '');setError(null);setEditing(true);}}><Icon name="edit" size={18} />{text('message.edit')}</button>}
               {mayDelete && <button className="is-destructive" aria-label="Delete message" data-testid="delete-button" onClick={() => setDeleteConfirm(true)}><Icon name="trash" size={18} />{text('message.delete')}</button>}
             </>}

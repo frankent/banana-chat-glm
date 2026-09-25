@@ -173,6 +173,12 @@ class ApiException extends RuntimeException
         return new self('MSG_NOT_EDITABLE', 'ข้อความนี้แก้ไขไม่ได้ (ข้อความระบบหรือถูกลบไปแล้ว)', 422);
     }
 
+    /** FR-MSG-011 — reason is a short machine token for clients/tests. */
+    public static function msgForwardInvalid(string $reason): self
+    {
+        return new self('MSG_FORWARD_INVALID', 'ส่งต่อข้อความนี้ไม่ได้', 422, ['reason' => $reason]);
+    }
+
     // ---- Media errors (FR-MEDIA-001, §7.1) ----
 
     public static function mediaTooLarge(int $maxBytes): self

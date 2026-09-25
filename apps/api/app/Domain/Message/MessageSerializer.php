@@ -54,6 +54,7 @@ class MessageSerializer
             'seq' => (int) $message->seq,
             'client_message_id' => $message->client_message_id,
             'reply_to' => $replyTo,
+            'forwarded_from' => $deleted ? null : self::forwardedFrom($message),
             'system_event' => $deleted ? null : $message->system_event,
             'edited_at' => $message->edited_at?->toIso8601String(),
             'edit_count' => (int) $message->edit_count,
@@ -64,6 +65,27 @@ class MessageSerializer
                 ? $message->mentions->pluck('id')->values()->all()
                 : []),
             'attachments' => $deleted ? [] : $this->serializeAttachments($message),
+        ];
+    }
+
+    /**
+     * FR-MSG-011 — the only slice of `metadata` clients ever see (DEC-083).
+     *
+     * @return array{sender_id: ?string, display_name: ?string, message_id: ?string, room_id: ?string, created_at: ?string}|null
+     */
+    private static function forwardedFrom(Message $message): ?array
+    {
+        $forward = $message->metadata['forward'] ?? null;
+        if (! is_array($forward)) {
+            return null;
+        }
+
+        return [
+            'sender_id' => $forward['sender_id'] ?? null,
+            'display_name' => $forward['display_name'] ?? null,
+            'message_id' => $forward['message_id'] ?? null,
+            'room_id' => $forward['room_id'] ?? null,
+            'created_at' => $forward['created_at'] ?? null,
         ];
     }
 

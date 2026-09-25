@@ -1,5 +1,5 @@
 import { expect, type Page, type WebSocketRoute } from '@playwright/test';
-import type { Message, RoomListItem } from '@banana-chat/shared';
+import type { ForwardMessagesResponse, Message, RoomListItem } from '@banana-chat/shared';
 
 export const me = { id: 'ui-me', username: 'ui-tester', display_name: 'Alex Morgan', avatar_attachment_id: null };
 const peer = { id: 'ui-peer', username: 'ui-peer', display_name: 'มินตรา Chen', avatar_attachment_id: null };
@@ -21,12 +21,41 @@ const rooms: RoomListItem[] = [
   { room: { ...room, id: 'ui-product', name: 'Product team / ทีมพัฒนาผลิตภัณฑ์ที่มีชื่อยาว' }, my_role: 'member', other_user: null, last_message: { ...allMessages[37], body: 'https://example.test/' + 'long-path-'.repeat(20) }, unread_count: 125, muted: false },
 ];
 
+export interface ForwardRequest {
+  client_forward_id: string;
+  source_room_id: string;
+  message_ids: string[];
+  room_ids: string[];
+}
+export type ForwardFailure = { status: 422; reason: string } | { status: 403 | 404 | 429 };
+const originalAuthor = { sender_id: 'ui-original', display_name: 'Original Author', message_id: 'original-message', room_id: 'original-room', created_at: '2026-09-01T10:00:00Z' };
+const forwardedMessages: Message[] = allMessages.map(item => {
+  if (item.seq === 33) return { ...item, type: 'system', body: null, system_event: { event: 'room.created' }, forwarded_from: originalAuthor };
+  if (item.seq === 34) return { ...item, id: 'optimistic-forward-fixture', body: 'Still sending' };
+  if (item.seq === 35 || item.seq === 36) return { ...item, body: 'An original idea worth sharing', forwarded_from: originalAuthor };
+  if (item.seq === 37) return { ...item, body: null, forwarded_from: originalAuthor, deleted_at: '2026-09-19T10:00:00Z' };
+  if (item.seq === 38) return { ...item, forwarded_from: { ...originalAuthor, display_name: null } };
+  return item;
+});
+
 const aiConversation = { id: 'ui-ai', title: 'AI composer layout', title_source: 'auto' as const, message_count: 0, last_message_at: null, archived_at: null, generating: false };
 
 // aiConsented defaults to true so the 19 pre-existing tests are untouched; TC-UI-013
 // flips it to assert the composer's consent-required label, which is the only way to
 // catch a regression back to a FIXED aria-label (a fixed one is still non-empty).
-export async function installChatFixture(page: Page, opts: { aiConsented?: boolean; aiConfigured?: boolean; aiAllowedInWorkspace?: boolean; systemAdmin?: boolean; aiStatusDelayMs?: number } = {}) {
+export async function installChatFixture(page: Page, opts: { aiConsented?: boolean; aiConfigured?: boolean; aiAllowedInWorkspace?: boolean; systemAdmin?: boolean; aiStatusDelayMs?: number; forwarding?: boolean; roomRole?: RoomListItem['my_role'] } = {}) {
+  // Forward fixtures are opt-in: established layout/read tests rely on 3 rooms and seq 39/40.
+  const fixtureRooms: RoomListItem[] = opts.forwarding ? [...rooms,
+    { ...rooms[0], room: { ...room, id: 'ui-secret', name: 'Secret project', is_secret: true, secret_expires_at: '2099-01-01T00:00:00Z' }, unread_count: 0 },
+    ...Array.from({ length: 8 }, (_, index) => ({ ...rooms[0], room: { ...room, id: `ui-extra-${index + 1}`, name: `Forward room ${index + 1}` }, unread_count: 0 })),
+  ] : rooms;
+  const fixtureMessages = opts.forwarding ? forwardedMessages : allMessages;
+  const forwardRequests: ForwardRequest[] = [];
+  const forwardedCopies = new Map<string, Message>();
+  let forwardFailure: ForwardFailure | null = null;
+  let failedForwardRooms: string[] = [];
+  let loseForwardResponse = false;
+  let roomRequests = 0;
   let roomsFail = false;
   let olderRequests = 0;
   const reads: Array<{ roomId: string; seq: number }> = [];
@@ -58,10 +87,11 @@ export async function installChatFixture(page: Page, opts: { aiConsented?: boole
     if (path === '/me') return respond({ user: { ...me, locale: 'th', is_system_admin: opts.systemAdmin ?? false }, settings: { locale: 'th', timezone: 'Asia/Bangkok', notification: null } });
     if (path === '/me/workspaces') return respond([{ workspace: { id: 'ui-workspace', slug: 'ui-studio', name: 'Banana Studio', status: 'active' }, role: 'member', unread_rooms_count: 2, total_unread: 128 }]);
     if (path === '/rooms') {
+      roomRequests++;
       if (roomsFail) return route.fulfill({ status: 503, json: { error: { code: 'UNAVAILABLE', message: 'Synthetic offline response' } } });
-      return respond(url.searchParams.get('filter') === 'unread' ? rooms.filter(r => r.unread_count > 0) : rooms);
+      return respond(url.searchParams.get('filter') === 'unread' ? fixtureRooms.filter(r => r.unread_count > 0) : fixtureRooms);
     }
-    if (/^\/rooms\/[^/]+$/.test(path)) { const match = rooms.find(r => r.room.id === path.split('/')[2]) ?? rooms[0]; return respond({ ...match, members: [me, peer] }); }
+    if (/^\/rooms\/[^/]+$/.test(path)) { const match = fixtureRooms.find(r => r.room.id === path.split('/')[2]) ?? rooms[0]; return respond({ ...match, my_role: opts.roomRole ?? match.my_role, members: [me, peer] }); }
     // AI (DEC-078) — declared BEFORE the generic /messages handlers below, which
     // would otherwise answer /ai/conversations/:id/messages with room messages.
     if (path === '/ai/status') {
@@ -86,6 +116,40 @@ export async function installChatFixture(page: Page, opts: { aiConsented?: boole
     if (/^\/ai\/conversations\/[^/]+\/messages$/.test(path) && request.method() === 'GET') {
       return respond({ messages: [], has_more_before: false, oldest_seq: null, summary_up_to_seq: 0 });
     }
+    // API-047 must precede the unmatched mutation catch-all. Persist synthetic copies
+    // by idempotency key so retries prove the request cannot duplicate destinations.
+    if (path === '/messages/forward' && request.method() === 'POST') {
+      const input = request.postDataJSON() as ForwardRequest;
+      forwardRequests.push(input);
+      if (forwardFailure) {
+        const failure = forwardFailure;
+        return route.fulfill({ status: failure.status, json: { error: {
+          code: failure.status === 422 ? 'MSG_FORWARD_INVALID' : failure.status === 403 ? 'ROOM_NOT_MEMBER' : failure.status === 429 ? 'RATE_LIMITED' : 'NOT_FOUND',
+          message: 'Synthetic forwarding error', ...('reason' in failure ? { details: { reason: failure.reason } } : {}),
+        } } });
+      }
+      let created = false;
+      const response: ForwardMessagesResponse = { results: [], failed_room_ids: input.room_ids.filter(id => failedForwardRooms.includes(id)) };
+      for (const roomId of input.room_ids) {
+        if (response.failed_room_ids.includes(roomId)) continue;
+        const copies = input.message_ids.map(messageId => {
+          const key = `${input.client_forward_id}:${messageId}:${roomId}`;
+          const existing = forwardedCopies.get(key);
+          if (existing) return existing;
+          const source = fixtureMessages.find(item => item.id === messageId)!;
+          const copy: Message = { ...source, id: `forwarded-${forwardedCopies.size + 1}`, room_id: roomId, seq: 41 + [...forwardedCopies.values()].filter(item => item.room_id === roomId).length,
+            sender: me, sender_id: me.id, reply_to: null, client_message_id: key, created_at: new Date().toISOString(),
+            forwarded_from: source.forwarded_from ?? { sender_id: source.sender_id, display_name: source.sender?.display_name ?? null, message_id: source.id, room_id: source.room_id, created_at: source.created_at } };
+          forwardedCopies.set(key, copy);
+          created = true;
+          return copy;
+        });
+        response.results.push({ room_id: roomId, messages: copies });
+      }
+      // A lost response is ambiguous: the server may have committed all copies.
+      if (loseForwardResponse) return route.abort('failed');
+      return route.fulfill({ status: created ? 201 : 200, json: { data: response } });
+    }
     if (path.endsWith('/messages') && request.method() === 'POST') {
       const input = request.postDataJSON();
       return respond({ message: { ...message(41, input.body), room_id: path.split('/')[2], sender_id: me.id, sender: me, client_message_id: input.client_message_id } });
@@ -94,7 +158,8 @@ export async function installChatFixture(page: Page, opts: { aiConsented?: boole
       const before = Number(url.searchParams.get('before_seq') ?? 0);
       const after = Number(url.searchParams.get('after_seq') ?? 0);
       if (before) { olderRequests++; if (olderGate) await olderGate; }
-      const messages = before ? allMessages.filter(m => m.seq < before) : after ? allMessages.filter(m => m.seq > after) : allMessages.slice(20);
+      const roomMessages = [...fixtureMessages, ...[...forwardedCopies.values()].filter(item => item.room_id === path.split('/')[2])];
+      const messages = before ? roomMessages.filter(m => m.seq < before) : after ? roomMessages.filter(m => m.seq > after) : roomMessages.slice(20);
       return respond({ messages: messages.map(m => ({ ...m, room_id: path.split('/')[2] })), has_more_before: !before, has_more_after: false });
     }
     if (path.endsWith('/members') || path === '/members') return respond([me, peer]);
@@ -106,6 +171,12 @@ export async function installChatFixture(page: Page, opts: { aiConsented?: boole
     return respond([]);
   });
   return {
+    forwardRequests,
+    forwardedCopies,
+    roomRequests: () => roomRequests,
+    failForwardRooms: (ids: string[]) => { failedForwardRooms = ids; },
+    failForward: (failure: ForwardFailure | null) => { forwardFailure = failure; },
+    loseForwardResponse: (lose: boolean) => { loseForwardResponse = lose; },
     failRooms: () => { roomsFail = true; },
     olderRequests: () => olderRequests,
     reads,

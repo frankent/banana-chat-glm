@@ -8,7 +8,7 @@ import { useChatText } from '../lib/use-chat-text';
 import { Avatar, Icon } from './Visual';
 import { NewRoomDialog } from './NewRoomDialog';
 
-function roomTitle(item: RoomListItem) {
+export function roomTitle(item: RoomListItem) {
   return item.room.type === 'dm' ? item.other_user?.display_name ?? 'Direct message' : item.room.name ?? 'Room';
 }
 function RoomRow({ item, myUserId }: { item: RoomListItem; myUserId: string }) {

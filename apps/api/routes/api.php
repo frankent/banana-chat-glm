@@ -275,6 +275,7 @@ Route::prefix('v1')->group(function (): void {
         // API-042/043 — edit/delete (FR-MSG-005/006); params resolve in-controller
         Route::patch('/messages/{message}', [MessageController::class, 'update'])->whereUlid('message');
         Route::delete('/messages/{message}', [MessageController::class, 'destroy'])->whereUlid('message');
+        Route::post('/messages/forward', [MessageController::class, 'forward'])->middleware('throttle:message-forward'); // API-047 (FR-MSG-011)
 
         // API-060/061/062 — media (FR-MEDIA-001/004). Params resolve in-controller.
         Route::post('/uploads', [UploadController::class, 'store']);

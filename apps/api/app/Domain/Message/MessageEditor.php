@@ -149,7 +149,8 @@ class MessageEditor
 
     private function assertEditableBy(Message $message, User $actor): void
     {
-        if ($message->type === MessageType::System || $message->deleted_at !== null) {
+        // DEC-083 — editing under "Forwarded from X" would attribute new text to X
+        if ($message->type === MessageType::System || $message->deleted_at !== null || isset($message->metadata['forward'])) {
             throw ApiException::msgNotEditable();
         }
 

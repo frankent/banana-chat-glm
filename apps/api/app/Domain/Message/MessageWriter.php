@@ -40,9 +40,12 @@ class MessageWriter
      *                        placeholder and streams into it, and a push that fired on
      *                        the placeholder would read "AI Assistant: …". The caller
      *                        dispatches NotifyMessage once the body is final.
+     * @param  array<string, mixed>|null  $metadata  written in the INSERT so EVT-010 already
+     *                                               carries it (DEC-083); a `forward` key also
+     *                                               suppresses mention parsing (FR-MSG-011)
      * @return array{0: Message, 1: bool} [message, created]
      */
-    public function write(Room $room, User $sender, ?string $body, ?string $clientMessageId, ?string $replyToMessageId = null, array $attachmentIds = [], bool $notify = true): array
+    public function write(Room $room, User $sender, ?string $body, ?string $clientMessageId, ?string $replyToMessageId = null, array $attachmentIds = [], bool $notify = true, ?array $metadata = null): array
     {
         $body = $body !== null ? trim($body) : null;
         $body = $body === '' ? null : $body; // whitespace-only counts as empty (FR-MSG-001 edge)
@@ -71,7 +74,7 @@ class MessageWriter
             }
         }
 
-        [$message, $created] = DB::transaction(function () use ($room, $sender, $body, $clientMessageId, $replyToMessageId, $attachmentIds): array {
+        [$message, $created] = DB::transaction(function () use ($room, $sender, $body, $clientMessageId, $replyToMessageId, $attachmentIds, $metadata): array {
             /** @var Room $locked */
             $locked = Room::query()
                 ->whereKey($room->id)
@@ -106,14 +109,18 @@ class MessageWriter
                 'body' => $body,
                 'client_message_id' => $clientMessageId,
                 'reply_to_message_id' => $replyToMessageId,
+                'metadata' => $metadata,
             ]);
 
             foreach ($attachments as $position => $attachment) {
                 $message->attachments()->attach($attachment->id, ['position' => $position + 1]);
             }
 
-            // FR-MSG-008 — parse @mentions under the room lock
-            $this->mentions->sync($message, $locked, $sender);
+            // FR-MSG-008 — parse @mentions under the room lock; a forwarded copy
+            // re-announces someone else's words and must not ping (FR-MSG-011)
+            if (! isset($metadata['forward'])) {
+                $this->mentions->sync($message, $locked, $sender);
+            }
 
             $locked->forceFill([
                 'last_seq' => $seq,

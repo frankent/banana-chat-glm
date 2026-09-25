@@ -299,3 +299,30 @@
 #root .bc-chat-shell .bc-reply-quote { height: auto; min-height: 44px; align-items: stretch; justify-content: center; padding: 6px 9px; margin-bottom: 6px; border: 0; border-left: 3px solid #9cac93; border-radius: 5px; background: #f0f4f2; box-shadow: none; }
 #root .bc-chat-shell [data-mine=true] .bc-reply-quote { background: #f3e8b7; border-left-color: #b5a25e; }
 .bc-chat-shell .bc-reply-quote strong { font-size: 12px; }
+
+/* FR-MSG-011 / DEC-083 — attribution and a room picker using DEC-078 dialogs. */
+.bc-chat-shell .bc-forwarded-header { margin: 0 0 5px; color: #4d6457; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.bc-forward-status { margin: 0; padding: 9px 20px; color: #355240; background: #eef5ed; font-size: 13px; }
+.bc-forward-dialog { inset: 50% auto auto 50%; transform: translate(-50%, -50%); width: 420px; padding: 12px; display: flex; flex-direction: column; overflow: hidden; }
+.bc-forward-dialog .bc-message-menu-heading { flex-shrink: 0; }
+.bc-forward-dialog .bc-message-menu-heading strong { color: var(--chat-ink); font-size: 16px; font-weight: 600; }
+.bc-forward-preview { flex-shrink: 0; margin: 8px 10px 14px; padding-left: 10px; border-left: 2px solid #a39764; color: #526170; font-size: 13px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+.bc-forward-dialog .bc-chat-search { margin: 0 0 8px; flex-shrink: 0; }
+.bc-forward-hint { margin: 8px 10px; font-size: 12px; color: #526170; }
+.bc-forward-rooms { min-height: 0; max-height: 42dvh; overflow-y: auto; overscroll-behavior: contain; }
+.bc-forward-room { display: flex; align-items: center; gap: 12px; padding: 10px; min-height: 56px; border-radius: 10px; cursor: pointer; }
+.bc-forward-room:hover { background: #f2f5f4; }
+.bc-forward-room:has(input:checked) { background: #fff4ce; }
+.bc-forward-room input { width: 18px; height: 18px; flex-shrink: 0; accent-color: #526744; }
+.bc-forward-room .bc-avatar { width: 36px; height: 36px; flex-shrink: 0; }
+.bc-forward-room-name { min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
+.bc-forward-room-name small { display: block; color: #a13530; }
+.bc-forward-room[data-failed=true] { box-shadow: inset 3px 0 #a13530; }
+.bc-forward-room:has(input:disabled):not(:has(input:checked)) { opacity: .55; cursor: default; }
+.bc-forward-error { color: #a13530; }
+.bc-forward-dialog .bc-forward-submit { flex-shrink: 0; margin-top: 10px; justify-content: center; font-weight: 600; background: var(--chat-accent); color: var(--chat-ink); }
+.bc-forward-dialog .bc-forward-submit:disabled { opacity: .55; cursor: default; }
+.bc-forward-dialog input:focus-visible { outline: 2px solid #376fb0; outline-offset: 3px; }
+@media (max-width: 767px) {
+  .bc-forward-dialog { inset: auto 0 0; transform: none; width: 100%; padding: 12px 12px max(14px, env(safe-area-inset-bottom)); }
+}
