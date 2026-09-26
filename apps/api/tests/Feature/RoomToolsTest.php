@@ -258,9 +258,62 @@ it('a busy room reaches the model as background, so only the mention is asked of
         return $roles === ['system', 'user']
             && $request['messages'][1]['content'] === 'Tony: check credit'
             && str_contains($system, 'Do NOT reply to them')
-            && str_contains($system, 'Tony: เรื่องอื่น 1') && str_contains($system, 'Tony: เรื่องอื่น 12')
+            && str_contains($system, "Tony: เรื่องอื่น 3\n") && str_contains($system, 'Tony: เรื่องอื่น 12')
+            && ! str_contains($system, "Tony: เรื่องอื่น 2\n") // default cap is 10 (DEC-084)
             && ! str_contains($system, 'check credit');
     });
+});
+
+it('a bot notice is not fed back to the bot as something it said (DEC-084)', function () {
+    Http::fake(['*/chat/completions' => Http::response(botSse(['ok']), 200, ['Content-Type' => 'text/event-stream'])]);
+    $this->author->forceFill(['ai_consented_at' => now(), 'display_name' => 'Tony'])->save();
+    botProvider();
+    $url = '/api/v1/rooms/'.$this->roomId.'/messages';
+    $peerHeaders = ['Authorization' => 'Bearer '.$this->peerToken, 'X-Workspace-Id' => 'tools'];
+
+    // the peer never consented, so the bot posts the consent notice — tagged
+    $this->postJson($url, ['body' => '@ai สวัสดี', 'client_message_id' => (string) Str::uuid()], $peerHeaders)->assertCreated();
+    $notice = Message::where('body', GenerateRoomBotReply::NOTICE_CONSENT)->firstOrFail();
+    expect($notice->metadata['bot_notice'] ?? null)->toBeTrue();
+    // …and one posted before tagging existed is caught by its text alone
+    $legacy = $this->postJson($url, ['body' => '@ai อีกที', 'client_message_id' => (string) Str::uuid()], $peerHeaders)->assertCreated()->json('data.message.id');
+    Message::where('reply_to_message_id', $legacy)->update(['metadata' => null]);
+    expect(Message::where('body', GenerateRoomBotReply::NOTICE_CONSENT)->whereNull('metadata')->count())->toBe(1);
+
+    $this->postJson($url, ['body' => '@ai ยอดวันนี้', 'client_message_id' => (string) Str::uuid()], $this->headers)->assertCreated();
+
+    Http::assertSent(function ($request) {
+        $sent = json_encode($request['messages'], JSON_UNESCAPED_UNICODE);
+
+        return str_contains($sent, 'ยอดวันนี้') && ! str_contains($sent, 'consent');
+    });
+});
+
+it('an answer that was cut short keeps its words but not the bracketed note (DEC-084)', function () {
+    Http::fake(['*/chat/completions' => Http::response(botSse(['ok']), 200, ['Content-Type' => 'text/event-stream'])]);
+    $this->author->forceFill(['ai_consented_at' => now(), 'display_name' => 'Tony'])->save();
+    botProvider();
+    $url = '/api/v1/rooms/'.$this->roomId.'/messages';
+
+    $first = $this->postJson($url, ['body' => '@ai ขอยอด', 'client_message_id' => (string) Str::uuid()], $this->headers)->assertCreated()->json('data.message.id');
+    Message::where('reply_to_message_id', $first)->update([
+        'body' => "ยอดรวม 500\n\n[".GenerateRoomBotReply::NOTICE_FAILED.']',
+    ]);
+    $this->postJson($url, ['body' => '@ai ต่อเลย', 'client_message_id' => (string) Str::uuid()], $this->headers)->assertCreated();
+
+    Http::assertSent(function ($request) {
+        $system = $request['messages'][0]['content'];
+
+        return str_ends_with($system, 'You (AI): ยอดรวม 500') && ! str_contains($system, 'could not complete');
+    });
+});
+
+it('stripNotes removes only trailing bot notes', function () {
+    expect(GenerateRoomBotReply::stripNotes("a\n\n".GenerateRoomBotReply::TRUNCATED))->toBe('a')
+        ->and(GenerateRoomBotReply::stripNotes("a\n\n".GenerateRoomBotReply::TRUNCATED."\n\n[".GenerateRoomBotReply::NOTICE_FAILED.']'))->toBe('a')
+        ->and(GenerateRoomBotReply::stripNotes('[Answer truncated to message limit] is what it says'))->toBe('[Answer truncated to message limit] is what it says')
+        ->and(GenerateRoomBotReply::isNotice(sprintf(GenerateRoomBotReply::NOTICE_UNAVAILABLE, 'AI_DISABLED')))->toBeTrue()
+        ->and(GenerateRoomBotReply::isNotice('AI is unavailable, sorry'))->toBeFalse();
 });
 
 it('the bot sees its own earlier answer as its own, not as somebody speaking', function () {

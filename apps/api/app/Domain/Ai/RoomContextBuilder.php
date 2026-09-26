@@ -2,6 +2,7 @@
 
 namespace App\Domain\Ai;
 
+use App\Jobs\GenerateRoomBotReply;
 use App\Models\AiProvider;
 use App\Models\Message;
 use App\Models\Room;
@@ -56,6 +57,7 @@ class RoomContextBuilder
             ->whereNull('deleted_at')
             ->where('type', '!=', 'system')
             ->whereNotNull('body')
+            ->whereNull('metadata->bot_notice')
             ->orderByDesc('seq')
             ->limit($limit)
             ->get();
@@ -89,7 +91,9 @@ class RoomContextBuilder
     private function text(Message $message, bool $isBot): string
     {
         if ($isBot) {
-            $body = trim((string) $message->body);
+            // a notice ("accept consent", "limit reached") is not something the bot said about the topic
+            $body = (string) $message->body;
+            $body = GenerateRoomBotReply::isNotice($body) ? '' : GenerateRoomBotReply::stripNotes($body);
 
             return $body === '' ? '' : self::SELF.': '.$body;
         }
