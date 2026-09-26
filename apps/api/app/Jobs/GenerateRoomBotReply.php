@@ -183,7 +183,10 @@ class GenerateRoomBotReply implements ShouldBeUnique, ShouldQueue
             .'Answer that person and that question alone; do not respond to anything else that was said in the room. '
             .'Recent room messages are given below as background; attachments are not included, so do not pretend to have seen them. '
             .($provider->system_prompt ?? '');
-        $messages = app(RoomContextBuilder::class)->build($room, $source, $provider, $this->bot()->id, $system);
+        $sentAt = now()->toIso8601String();
+        $builder = app(RoomContextBuilder::class);
+        $messages = $builder->build($room, $source, $provider, $this->bot()->id, $system);
+        $seen = $builder->seen();
 
         $content = '';
         $truncated = false;
@@ -244,6 +247,12 @@ class GenerateRoomBotReply implements ShouldBeUnique, ShouldQueue
             return; // room or mention went away mid-answer; leave whatever was posted
         }
         $this->publish($writer, $room, $body, $replyKey, $source, final: true, max: $max, notice: $notice);
+
+        // DEC-085: a full window rolls its oldest half into the room summary
+        $limit = $settings->int('ai.room_bot.history_messages');
+        if ($failure === null && $limit >= 4 && count($seen) >= $limit) {
+            CompactRoomContext::dispatch($room->id, $user->id, $seen[0], $seen[intdiv(count($seen), 2) - 1], $sentAt);
+        }
     }
 
     /**

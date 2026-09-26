@@ -1,13 +1,17 @@
 <?php
 
+use App\Domain\Ai\TokenEstimator;
 use App\Events\MessageStreamed;
 use App\Events\MessageUpdated;
 use App\Events\RoomActivity;
+use App\Jobs\CompactRoomContext;
 use App\Jobs\GenerateRoomBotReply;
 use App\Jobs\NotifyMessage;
 use App\Models\AiProvider;
+use App\Models\AiRoomSummary;
 use App\Models\Attachment;
 use App\Models\Message;
+use App\Models\Room;
 use App\Models\RoomNote;
 use App\Models\User;
 use App\Models\Workspace;
@@ -381,4 +385,184 @@ it('a deleted message is not quietly resurrected into the AI context', function 
 
         return ! str_contains($sent, 'hunter2') && ! str_contains($sent, '4455');
     });
+});
+
+// ---- DEC-085 room summary ----
+
+/** streamed answers speak SSE; the summary call is a plain chat completion */
+function botFakeWithSummary(string $summary = 'สรุปเก่า: Tony ถามยอด'): void
+{
+    Http::fake(['*/chat/completions' => function ($request) use ($summary) {
+        if (($request['stream'] ?? false) === true) {
+            return Http::response(botSse(['ok']), 200, ['Content-Type' => 'text/event-stream']);
+        }
+
+        return Http::response(['choices' => [['message' => ['content' => $summary]]]], 200);
+    }]);
+}
+
+/** four lines, then a mention: the window (cap 4) is full, so its oldest half rolls up */
+function fillWindowAndMention($test): array
+{
+    $test->author->forceFill(['ai_consented_at' => now(), 'display_name' => 'Tony'])->save();
+    botProvider();
+    app(SettingsService::class)->set('ai.room_bot.history_messages', 4);
+    $url = '/api/v1/rooms/'.$test->roomId.'/messages';
+    $ids = [];
+    foreach (['line-a', 'line-b', 'line-c', 'line-d', 'line-e', 'line-f'] as $body) {
+        $ids[$body] = $test->postJson($url, ['body' => $body, 'client_message_id' => (string) Str::uuid()], $test->headers)->assertCreated()->json('data.message.id');
+    }
+    $test->postJson($url, ['body' => '@ai first', 'client_message_id' => (string) Str::uuid()], $test->headers)->assertCreated();
+
+    return $ids;
+}
+
+it('a full window rolls only lines the bot was already sent into the room summary (DEC-085)', function () {
+    botFakeWithSummary();
+    fillWindowAndMention($this);
+
+    $summary = AiRoomSummary::query()->findOrFail($this->roomId);
+    expect($summary->summary)->toBe('สรุปเก่า: Tony ถามยอด');
+
+    // the summariser saw the oldest half of that mention's window — c, d — and nothing older
+    Http::assertSent(function ($request) {
+        if (($request['stream'] ?? false) === true) {
+            return false;
+        }
+        $sent = $request['messages'][1]['content'];
+
+        return str_contains($sent, 'Tony: line-c') && str_contains($sent, 'Tony: line-d')
+            && ! str_contains($sent, 'line-a') && ! str_contains($sent, 'line-b') && ! str_contains($sent, 'line-e');
+    });
+
+    $this->postJson('/api/v1/rooms/'.$this->roomId.'/messages', ['body' => '@ai second', 'client_message_id' => (string) Str::uuid()], $this->headers)->assertCreated();
+
+    Http::assertSent(function ($request) {
+        if (($request['stream'] ?? false) !== true || $request['messages'][1]['content'] !== 'Tony: second') {
+            return false;
+        }
+        $system = $request['messages'][0]['content'];
+
+        // summary rides above the raw lines, and what it covers is not repeated raw
+        return str_contains($system, "summary, background only\nA summary")
+            && str_contains($system, 'สรุปเก่า: Tony ถามยอด')
+            && strpos($system, 'สรุปเก่า') < strpos($system, '## Recent room messages')
+            && str_contains($system, 'Tony: line-e') && ! str_contains($system, 'Tony: line-d');
+    });
+});
+
+it('a secret room never gets a summary (DEC-085)', function () {
+    botFakeWithSummary();
+    Room::withoutGlobalScopes()->whereKey($this->roomId)->update(['is_secret' => true, 'secret_expires_at' => now()->addDay()]);
+    fillWindowAndMention($this);
+
+    expect(AiRoomSummary::query()->count())->toBe(0);
+    Http::assertNotSent(fn ($request) => ($request['stream'] ?? false) !== true);
+});
+
+it('deleting or editing a covered message drops the summary (DEC-085)', function (string $action) {
+    botFakeWithSummary();
+    $ids = fillWindowAndMention($this);
+    expect(AiRoomSummary::query()->count())->toBe(1);
+
+    $url = '/api/v1/messages/'.$ids['line-c'];
+    $action === 'delete'
+        ? $this->deleteJson($url, [], $this->headers)->assertNoContent()
+        : $this->patchJson($url, ['body' => 'line-c edited'], $this->headers)->assertOk();
+
+    expect(AiRoomSummary::query()->count())->toBe(0);
+})->with(['delete', 'edit']);
+
+it('a change that skipped the model hook still keeps the summary out of the prompt (DEC-085)', function () {
+    botFakeWithSummary();
+    $ids = fillWindowAndMention($this);
+    // a mass update fires no model events — the builder must catch it itself
+    Message::withoutGlobalScopes()->whereKey($ids['line-d'])->update(['deleted_at' => now()->addSecond()]);
+
+    $this->postJson('/api/v1/rooms/'.$this->roomId.'/messages', ['body' => '@ai second', 'client_message_id' => (string) Str::uuid()], $this->headers)->assertCreated();
+
+    Http::assertSent(fn ($request) => ($request['stream'] ?? false) === true
+        && $request['messages'][1]['content'] === 'Tony: second'
+        && ! str_contains($request['messages'][0]['content'], 'สรุปเก่า'));
+    // …and the stale row is gone, not just skipped (a new window may already have rolled a fresh one)
+    expect(AiRoomSummary::query()->where('from_seq', '<=', Message::withoutGlobalScopes()->find($ids['line-d'])->seq)->count())->toBe(0);
+});
+
+it('a moderated room keeps no summary (DEC-085)', function () {
+    botFakeWithSummary();
+    fillWindowAndMention($this);
+    Room::withoutGlobalScopes()->findOrFail($this->roomId)->forceFill(['deleted_at' => now()])->save();
+
+    expect(AiRoomSummary::query()->count())->toBe(0);
+});
+
+it('lines the summary covers are not sent again raw (DEC-085)', function () {
+    botFakeWithSummary();
+    $ids = fillWindowAndMention($this);
+    $seq = fn (string $body) => Message::withoutGlobalScopes()->find($ids[$body])->seq;
+    AiRoomSummary::query()->updateOrCreate(['room_id' => $this->roomId], [
+        'summary' => 'ครอบถึง f', 'from_seq' => $seq('line-a'), 'up_to_seq' => $seq('line-f'),
+        'summary_tokens' => 5, 'source_read_at' => now(),
+    ]);
+    app(SettingsService::class)->set('ai.room_bot.history_messages', 10);
+
+    $this->postJson('/api/v1/rooms/'.$this->roomId.'/messages', ['body' => '@ai second', 'client_message_id' => (string) Str::uuid()], $this->headers)->assertCreated();
+
+    Http::assertSent(function ($request) {
+        $system = $request['messages'][0]['content'];
+
+        return ($request['stream'] ?? false) === true && $request['messages'][1]['content'] === 'Tony: second'
+            && str_contains($system, 'ครอบถึง f') && str_contains($system, 'Tony: first')
+            && ! str_contains($system, 'line-');
+    });
+});
+
+it('a line edited after the bot was sent it is left out of the summary (DEC-085)', function () {
+    botFakeWithSummary();
+    $ids = fillWindowAndMention($this);
+    AiRoomSummary::query()->delete();
+    $seq = fn (string $body) => Message::withoutGlobalScopes()->find($ids[$body])->seq;
+    $sentAt = now()->subMinutes(5)->toIso8601String();
+    $this->patchJson('/api/v1/messages/'.$ids['line-d'], ['body' => 'ความลับใหม่'], $this->headers)->assertOk();
+
+    CompactRoomContext::dispatchSync($this->roomId, $this->author->id, $seq('line-c'), $seq('line-d'), $sentAt);
+
+    Http::assertSent(fn ($request) => ($request['stream'] ?? false) !== true
+        && str_contains($request['messages'][1]['content'], 'Tony: line-c'));
+    Http::assertNotSent(fn ($request) => str_contains(json_encode($request->data(), JSON_UNESCAPED_UNICODE), 'ความลับใหม่'));
+});
+
+it('the summariser passes the same AI gate as the mention (DEC-085)', function () {
+    botFakeWithSummary();
+    $ids = fillWindowAndMention($this);
+    AiRoomSummary::query()->delete();
+    $seq = fn (string $body) => Message::withoutGlobalScopes()->find($ids[$body])->seq;
+    app(SettingsService::class)->set('ai.enabled', false);
+    $before = count(Http::recorded());
+
+    CompactRoomContext::dispatchSync($this->roomId, $this->author->id, $seq('line-c'), $seq('line-d'), now()->toIso8601String());
+
+    expect(count(Http::recorded()))->toBe($before)
+        ->and(AiRoomSummary::query()->count())->toBe(0);
+});
+
+it('history 0 still sends the mention alone, summary or not (DEC-085)', function () {
+    botFakeWithSummary();
+    fillWindowAndMention($this);
+    expect(AiRoomSummary::query()->count())->toBe(1);
+    app(SettingsService::class)->set('ai.room_bot.history_messages', 0);
+
+    $this->postJson('/api/v1/rooms/'.$this->roomId.'/messages', ['body' => '@ai second', 'client_message_id' => (string) Str::uuid()], $this->headers)->assertCreated();
+
+    Http::assertSent(fn ($request) => ($request['stream'] ?? false) === true
+        && $request['messages'][1]['content'] === 'Tony: second'
+        && ! str_contains($request['messages'][0]['content'], 'สรุปเก่า'));
+});
+
+it('the summary clip holds for Thai text (DEC-085)', function () {
+    $estimator = new TokenEstimator;
+    $clipped = CompactRoomContext::clip(str_repeat('สรุปยอดเครดิต ', 800), 300, $estimator);
+
+    expect($estimator->estimate($clipped))->toBeLessThanOrEqual(300)
+        ->and(mb_strlen($clipped))->toBeGreaterThan(50);
 });

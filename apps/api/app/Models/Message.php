@@ -20,6 +20,13 @@ class Message extends Model
     protected static function booted(): void
     {
         static::addGlobalScope(WorkspaceScope::class);
+
+        // DEC-085: an edit or delete must not survive inside the room bot's summary
+        static::updated(function (Message $message): void {
+            if ($message->wasChanged('deleted_at') || $message->wasChanged('edited_at')) {
+                AiRoomSummary::forgetCovering($message->room_id, (int) $message->seq);
+            }
+        });
     }
 
     protected $fillable = [

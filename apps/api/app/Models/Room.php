@@ -20,6 +20,13 @@ class Room extends Model
     protected static function booted(): void
     {
         static::addGlobalScope(WorkspaceScope::class);
+
+        // DEC-085: a moderated (soft-deleted) room keeps no bot summary
+        static::updated(function (Room $room): void {
+            if ($room->wasChanged('deleted_at') && $room->deleted_at !== null) {
+                AiRoomSummary::query()->whereKey($room->id)->delete();
+            }
+        });
     }
 
     protected $fillable = [
