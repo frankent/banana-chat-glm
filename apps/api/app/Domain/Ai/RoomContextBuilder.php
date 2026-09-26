@@ -15,7 +15,14 @@ use App\Services\SettingsService;
  * It now reads back from the mention: newest first until either the message cap
  * or the provider's input budget runs out, then oldest-first for the provider.
  *
- * Every turn carries its sender's name because a group chat has more than two
+ * DEC-084: that history is a transcript inside the system prompt, not a run of
+ * chat turns. Sent as turns, a busy room reached the model as ~20 unanswered
+ * `user` messages with at most a couple of bot answers between them, and the
+ * model answered every one of them — the actual question got buried in replies
+ * to small talk. The mention is the only `user` turn, so it is the only thing
+ * the model is asked to answer.
+ *
+ * Every line carries its sender's name because a group chat has more than two
  * voices, and the bot is expected to answer one of them. Attachments and
  * private AI memories stay out — the room sees text, so the bot sees text.
  */
@@ -28,51 +35,75 @@ class RoomContextBuilder
     ) {}
 
     /**
-     * @return list<array{role: string, content: string}> oldest → newest, ending on $mention
+     * @return list<array{role: string, content: string}> [system (+ transcript), user (the mention)]
      */
     public function build(Room $room, Message $mention, AiProvider $provider, string $botId, string $system): array
     {
-        $limit = $this->settings->int('ai.room_bot.history_messages');
-        $budget = $this->context->budgetIn($provider) - $this->estimator->estimate($system) - 64;
+        $question = $this->text($mention, false);
+        if ($question === '') {
+            // a mention with nothing but "@ai" in it still deserves an answer
+            $question = trim((string) $mention->body);
+        }
 
-        $rows = Message::withoutGlobalScopes()
+        $limit = $this->settings->int('ai.room_bot.history_messages');
+        $budget = $this->context->budgetIn($provider) - $this->estimator->estimate($system)
+            - $this->estimator->estimate($question) - 64 - $this->estimator->estimate(self::HEADER);
+
+        $rows = $limit < 1 ? collect() : Message::withoutGlobalScopes()
             ->with('sender:id,display_name')
             ->where('room_id', $room->id)
-            ->where('seq', '<=', $mention->seq)
+            ->where('seq', '<', $mention->seq)
             ->whereNull('deleted_at')
             ->where('type', '!=', 'system')
             ->whereNotNull('body')
             ->orderByDesc('seq')
-            ->limit(max(1, $limit + 1)) // + the mention itself
+            ->limit($limit)
             ->get();
 
         $used = 0;
-        $turns = [];
+        $lines = [];
         foreach ($rows as $row) {
-            $isBot = $row->sender_id === $botId;
-            $text = $this->text($row, $isBot);
+            $text = $this->text($row, $row->sender_id === $botId);
             if ($text === '') {
                 continue;
             }
-            $cost = $this->estimator->estimate($text) + 4; // + role overhead
-            if ($used + $cost > $budget && $turns !== []) {
-                break; // never drop the mention itself — it is the question
+            $cost = $this->estimator->estimate($text) + 1;
+            if ($used + $cost > $budget) {
+                break;
             }
             $used += $cost;
-            $turns[] = ['role' => $isBot ? 'assistant' : 'user', 'content' => $text];
+            $lines[] = $text;
         }
 
-        return array_reverse($turns);
+        if ($lines !== []) {
+            $system .= "\n\n".self::HEADER."\n".implode("\n", array_reverse($lines));
+        }
+
+        return [
+            ['role' => 'system', 'content' => $system],
+            ['role' => 'user', 'content' => $question],
+        ];
     }
 
     /** The bot speaks as itself; everyone else is introduced by name. */
     private function text(Message $message, bool $isBot): string
     {
+        if ($isBot) {
+            $body = trim((string) $message->body);
+
+            return $body === '' ? '' : self::SELF.': '.$body;
+        }
         $body = trim((string) preg_replace('/(?:^|\s)@ai(?=\s|[,:!?]|$)/iu', ' ', (string) $message->body));
-        if ($body === '' || $isBot) {
-            return $isBot ? trim((string) $message->body) : '';
+        if ($body === '') {
+            return '';
         }
 
         return trim(($message->sender?->display_name ?? 'Someone').': '.$body);
     }
+
+    public const SELF = 'You (AI)';
+
+    private const HEADER = "## Recent room messages — background only\n"
+        .'These were said before you were called and are already handled. Do NOT reply to them, summarise them or comment on them. '
+        .'Use a line only when the question you are answering refers to it. Lines marked "'.self::SELF.'" are your own earlier replies.';
 }

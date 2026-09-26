@@ -147,13 +147,12 @@ class GenerateRoomBotReply implements ShouldBeUnique, ShouldQueue
         $budget = $max - 40; // room for the truncation note
         $flushMs = $settings->int('ai.stream.flush_interval_ms');
         $flushChars = 80; // a long burst should land without waiting out the timer
-        $prompt = trim((string) preg_replace('/(?:^|\s)@ai(?=\s|[,:!?]|$)/iu', ' ', (string) $source->body));
-        $system = 'You are the AI assistant in a workspace group chat. The recent messages of this room are given as context, each one prefixed with the name of who said it; your own replies appear without a prefix. Attachments are not included, so do not pretend to have seen them. Answer the last message, which addressed you. '.($provider->system_prompt ?? '');
-        $history = app(RoomContextBuilder::class)->build($room, $source, $provider, $this->bot()->id, $system);
-        if ($history === []) {
-            // a mention with nothing but "@ai" in it still deserves an answer
-            $history = [['role' => 'user', 'content' => $prompt !== '' ? $prompt : (string) $source->body]];
-        }
+        $system = 'You are the AI assistant in a workspace group chat. Several people talk here about many unrelated things at once. '
+            .'Reply ONLY to the one message in the user turn — it is the message that just addressed you, prefixed with who sent it. '
+            .'Answer that person and that question alone; do not respond to anything else that was said in the room. '
+            .'Recent room messages are given below as background; attachments are not included, so do not pretend to have seen them. '
+            .($provider->system_prompt ?? '');
+        $messages = app(RoomContextBuilder::class)->build($room, $source, $provider, $this->bot()->id, $system);
 
         $content = '';
         $truncated = false;
@@ -163,10 +162,7 @@ class GenerateRoomBotReply implements ShouldBeUnique, ShouldQueue
         $this->typing($room, true);
 
         try {
-            foreach (OpenAiCompatibleProvider::make($provider)->chatStream([
-                ['role' => 'system', 'content' => $system],
-                ...$history,
-            ]) as $chunk) {
+            foreach (OpenAiCompatibleProvider::make($provider)->chatStream($messages) as $chunk) {
                 if (($chunk['type'] ?? '') !== 'delta') {
                     continue;
                 }
@@ -206,7 +202,7 @@ class GenerateRoomBotReply implements ShouldBeUnique, ShouldQueue
         }
         if ($failure === null) {
             $estimator = new TokenEstimator;
-            $sent = $system.implode("\n", array_column($history, 'content'));
+            $sent = implode("\n", array_column($messages, 'content'));
             AiUsageDaily::bump($user->id, $room->workspace_id, tokensIn: $estimator->estimate($sent), tokensOut: $estimator->estimate($body));
         }
 

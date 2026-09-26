@@ -230,9 +230,36 @@ it('the bot reads the room back to itself, in order and with names', function ()
     $this->postJson($url, ['body' => '@ai สรุปให้หน่อย', 'client_message_id' => (string) Str::uuid()], $this->headers)->assertCreated();
 
     Http::assertSent(function ($request) {
-        $sent = collect($request['messages'])->where('role', '!=', 'system')->pluck('content')->values()->all();
+        $system = $request['messages'][0]['content'];
+        $turns = collect($request['messages'])->where('role', '!=', 'system')->values();
 
-        return $sent === ['Tony: งวดนี้ยอดตกเยอะ', 'Somchai: site B ปิดไป 2 วัน', 'Tony: สรุปให้หน่อย'];
+        // DEC-084: the room is background in the system prompt; only the mention is a turn
+        return str_contains($system, "Tony: งวดนี้ยอดตกเยอะ\nSomchai: site B ปิดไป 2 วัน")
+            && $turns->count() === 1
+            && $turns[0] === ['role' => 'user', 'content' => 'Tony: สรุปให้หน่อย'];
+    });
+});
+
+it('a busy room reaches the model as background, so only the mention is asked of it (DEC-084)', function () {
+    Http::fake(['*/chat/completions' => Http::response(botSse(['ok']), 200, ['Content-Type' => 'text/event-stream'])]);
+    $this->author->forceFill(['ai_consented_at' => now(), 'display_name' => 'Tony'])->save();
+    botProvider();
+    $url = '/api/v1/rooms/'.$this->roomId.'/messages';
+
+    foreach (range(1, 12) as $i) {
+        $this->postJson($url, ['body' => 'เรื่องอื่น '.$i, 'client_message_id' => (string) Str::uuid()], $this->headers)->assertCreated();
+    }
+    $this->postJson($url, ['body' => '@ai check credit', 'client_message_id' => (string) Str::uuid()], $this->headers)->assertCreated();
+
+    Http::assertSent(function ($request) {
+        $roles = array_column($request['messages'], 'role');
+        $system = $request['messages'][0]['content'];
+
+        return $roles === ['system', 'user']
+            && $request['messages'][1]['content'] === 'Tony: check credit'
+            && str_contains($system, 'Do NOT reply to them')
+            && str_contains($system, 'Tony: เรื่องอื่น 1') && str_contains($system, 'Tony: เรื่องอื่น 12')
+            && ! str_contains($system, 'check credit');
     });
 });
 
@@ -246,13 +273,13 @@ it('the bot sees its own earlier answer as its own, not as somebody speaking', f
     $this->postJson($url, ['body' => '@ai ขอ data ดิบไม่ต้องย่อ', 'client_message_id' => (string) Str::uuid()], $this->headers)->assertCreated();
 
     Http::assertSent(function ($request) {
+        $system = $request['messages'][0]['content'];
         $turns = collect($request['messages'])->where('role', '!=', 'system')->values();
 
         // …user asks, bot answers, user follows up — the follow-up now has something to follow
-        return $turns->count() === 3
-            && $turns[0]['role'] === 'user'
-            && $turns[1]['role'] === 'assistant' && $turns[1]['content'] === 'ส่งเต็มได้ค่ะ'
-            && $turns[2]['content'] === 'Tony: ขอ data ดิบไม่ต้องย่อ';
+        return str_contains($system, "Tony: ขอยอดหน่อย\nYou (AI): ส่งเต็มได้ค่ะ")
+            && $turns->count() === 1
+            && $turns[0]['content'] === 'Tony: ขอ data ดิบไม่ต้องย่อ';
     });
 });
 
@@ -269,9 +296,11 @@ it('history stays inside the configured message cap', function () {
     $this->postJson($url, ['body' => '@ai เอาอันล่าสุด', 'client_message_id' => (string) Str::uuid()], $this->headers)->assertCreated();
 
     Http::assertSent(function ($request) {
-        $sent = collect($request['messages'])->where('role', '!=', 'system')->pluck('content')->values()->all();
+        $system = $request['messages'][0]['content'];
 
-        return $sent === ['Tony: บรรทัดที่ 5', 'Tony: บรรทัดที่ 6', 'Tony: เอาอันล่าสุด'];
+        return str_contains($system, "Tony: บรรทัดที่ 5\nTony: บรรทัดที่ 6")
+            && ! str_contains($system, 'บรรทัดที่ 4')
+            && $request['messages'][1]['content'] === 'Tony: เอาอันล่าสุด';
     });
 });
 
