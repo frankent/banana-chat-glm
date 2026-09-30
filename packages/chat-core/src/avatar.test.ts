@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Message, UserStub } from '@banana-chat/shared';
 import {
   AVATAR_MAX_BYTES, AVATAR_MAX_ZOOM, avatarSource, checkAvatarFile, clampCrop, cropOutputSize,
-  cropSourceRect, panCrop, zoomCrop,
+  cropSourceRect, panCrop, parseParticipantAvatar, zoomCrop,
 } from './avatar.js';
 import { MessageStore } from './message-store.js';
 
@@ -106,5 +106,34 @@ describe('FR-PROF-006 / EVT-087 sender refresh', () => {
     store.updateSenders([{ ...alice, avatar_attachment_id: 'att', avatar: { ...photo } }, null]);
     expect(store.getState()).toBe(before);
     expect(emitted).toEqual([3]);
+  });
+});
+
+describe('FR-PROF-007 / DEC-089 call participant metadata', () => {
+  const still = { sm: 'https://cdn.test/a-sm.webp?e=1', md: 'https://cdn.test/a-md.webp?e=1', animated: null };
+  const meta = (value: unknown) => JSON.stringify(value);
+
+  it('TC-CORE-AVATAR-010 reads the avatar object from LiveKit participant metadata', () => {
+    expect(parseParticipantAvatar(meta({ avatar: still }))).toEqual(still);
+    const gif = { ...still, animated: 'http://127.0.0.1:5180/a.gif' };
+    expect(parseParticipantAvatar(meta({ avatar: gif }))).toEqual(gif);
+    // Extra keys are ignored, missing `animated` normalises to null.
+    expect(parseParticipantAvatar(meta({ avatar: { sm: still.sm, md: still.md, extra: 1 }, other: true }))).toEqual(still);
+  });
+
+  it('TC-CORE-AVATAR-011 guests, missing and malformed metadata give null and never throw', () => {
+    for (const bad of [undefined, null, '', '{', 'null', '[]', '"x"', '42', meta({}), meta({ avatar: null }), meta({ avatar: [] }),
+      meta({ avatar: 'https://cdn.test/a.webp' }), meta({ avatar: { sm: still.sm } }), meta({ avatar: { sm: 1, md: 2 } })]) {
+      expect(parseParticipantAvatar(bad as string | undefined)).toBeNull();
+    }
+  });
+
+  it('TC-CORE-AVATAR-012 only absolute http(s) URLs are accepted', () => {
+    for (const url of ['javascript:alert(1)', 'data:image/png;base64,AAAA', '/relative.webp', 'ftp://cdn.test/a.webp', 'not a url', 'x'.repeat(5000)]) {
+      expect(parseParticipantAvatar(meta({ avatar: { ...still, sm: url } }))).toBeNull();
+      expect(parseParticipantAvatar(meta({ avatar: { ...still, md: url } }))).toBeNull();
+    }
+    // A bad animated URL drops only the animation, the still still renders.
+    expect(parseParticipantAvatar(meta({ avatar: { ...still, animated: 'javascript:alert(1)' } }))).toEqual(still);
   });
 });

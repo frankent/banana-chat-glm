@@ -54,6 +54,39 @@ export function avatarSource(avatar: UserAvatar | null | undefined, options: { l
 }
 
 /**
+ * FR-PROF-007 / DEC-089 — the avatar a call/meeting participant carries in its
+ * LiveKit `metadata` (a JSON string `{"avatar": {sm, md, animated|null} | null}`
+ * minted into the join token). Metadata is peer-visible and could be anything,
+ * so this never throws and only accepts absolute http(s) URLs: a malformed,
+ * foreign or `javascript:`/`data:` value renders initials instead.
+ */
+export function parseParticipantAvatar(metadata: string | null | undefined): UserAvatar | null {
+  if (typeof metadata !== 'string' || metadata === '') return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(metadata);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null;
+  const avatar = (parsed as { avatar?: unknown }).avatar;
+  if (typeof avatar !== 'object' || avatar === null || Array.isArray(avatar)) return null;
+  const { sm, md, animated } = avatar as { sm?: unknown; md?: unknown; animated?: unknown };
+  if (!isHttpUrl(sm) || !isHttpUrl(md)) return null;
+  return { sm, md, animated: isHttpUrl(animated) ? animated : null };
+}
+
+function isHttpUrl(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length > 4096) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Crop state for a square viewport of `box` CSS px. `x`/`y` are how far the
  * image centre sits from the viewport centre, in viewport px (positive = the
  * image moved right/down, revealing more of its left/top).

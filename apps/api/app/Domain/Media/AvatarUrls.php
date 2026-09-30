@@ -4,6 +4,7 @@ namespace App\Domain\Media;
 
 use App\Enums\AttachmentStatus;
 use App\Models\Attachment;
+use DateTimeInterface;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -39,9 +40,25 @@ class AvatarUrls
     }
 
     /**
+     * DEC-089 / FR-PROF-007 — expiry for the avatar URLs embedded in a call
+     * or meeting join token: those URLs must OUTLIVE the token itself (whose
+     * exp is now + calls.token_ttl), so the same hour rounding as expiresAt()
+     * plus the token ttl and a 2h cushion. Still hour-aligned, so DEC-088's
+     * byte-stability holds for every token minted inside the same hour.
+     */
+    public static function expiresAtForCallToken(): Carbon
+    {
+        return now()->startOfHour()->addSeconds((int) config('calls.token_ttl'))->addHours(2);
+    }
+
+    /**
+     * DEC-089: join tokens pass expiresAtForCallToken() for $expiresAt so
+     * the signed URLs outlive the token; null keeps the standard list
+     * expiry (DEC-088).
+     *
      * @return array{sm: string, md: string, animated: string|null}|null
      */
-    public static function for(?Attachment $attachment): ?array
+    public static function for(?Attachment $attachment, ?DateTimeInterface $expiresAt = null): ?array
     {
         if ($attachment === null || $attachment->status !== AttachmentStatus::Ready) {
             return null;
@@ -52,7 +69,7 @@ class AvatarUrls
         /** @var FilesystemAdapter $disk */
         $disk = Storage::disk(config('filesystems.default'));
 
-        $expiresAt = self::expiresAt();
+        $expiresAt ??= self::expiresAt();
         $derived = $attachment->derived ?? [];
 
         // A ready avatar normally always has both thumbs; the original key is

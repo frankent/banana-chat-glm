@@ -2,6 +2,7 @@
 
 namespace App\Domain\Calls;
 
+use App\Domain\Media\AvatarUrls;
 use App\Models\Meeting;
 use App\Models\MeetingParticipant;
 use App\Models\User;
@@ -76,9 +77,14 @@ class MeetingService
 
             // FR-CALL-009 / DEC-086: meeting join tokens share calls.token_ttl
             // with private calls so backgrounded rejoins pass /_call_auth.
+            // FR-PROF-007 / DEC-089: the same LiveKit `metadata` claim as
+            // private calls — members carry their avatar object, guests
+            // (user_id null) and members without one an explicit null.
+            $avatar = AvatarUrls::for($user?->avatarAttachment, AvatarUrls::expiresAtForCallToken());
+
             return ['meeting' => $this->summary($m), 'participant_token' => $secret, 'participant_id' => $p->id, 'can_end' => $user?->id === $m->created_by,
                 'workspace_slug' => $user?->id === $m->created_by ? DB::table('workspaces')->where('id', $m->workspace_id)->value('slug') : null,
-                'url' => config('calls.url'), 'token' => $this->media->token(['sub' => $p->id, 'name' => $p->name.($p->user_id ? '' : ' (Guest)'),
+                'url' => config('calls.url'), 'token' => $this->media->token(['sub' => $p->id, 'name' => $p->name.($p->user_id ? '' : ' (Guest)'), 'metadata' => json_encode(['avatar' => $avatar]),
                     'video' => ['roomJoin' => true, 'room' => $remote, 'canSubscribe' => true, 'canPublish' => true, 'canPublishData' => false, 'canPublishSources' => ['microphone', 'camera', 'screen_share', 'screen_share_audio']]], (int) config('calls.token_ttl'))];
         });
     }

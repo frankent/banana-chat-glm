@@ -2,6 +2,7 @@
 
 use App\Domain\Calls\CallService;
 use App\Domain\Calls\MediaServer;
+use App\Domain\Media\MediaUrls;
 use App\Events\CallChanged;
 use App\Events\NotificationAlert;
 use App\Jobs\ReconcileCalls;
@@ -16,6 +17,7 @@ use Firebase\JWT\JWT;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 
 beforeEach(function () {
     Event::fake([CallChanged::class, NotificationAlert::class]);
@@ -230,4 +232,159 @@ test('TC-CALL-041 authorizeMedia accepts an in-ttl stale token, rejects past-ttl
     // Membership revocation still denies even a brand-new unexpired token.
     $p->update(['left_at' => now()]);
     $this->getJson('/api/v1/calls/authorize-media', ['Authorization' => 'Bearer '.$mint(0, 21600)])->assertForbidden();
+});
+
+/*
+ * FR-PROF-007 / DEC-089 fixtures — deliberately unique names (AvatarTest
+ * owns avatarPng/avatarGif/uploadAvatar) so single-file pest runs work too.
+ */
+function callAvatarPng(): string
+{
+    $img = imagecreatetruecolor(8, 8);
+    ob_start();
+    imagepng($img);
+    $bytes = (string) ob_get_clean();
+    imagedestroy($img);
+
+    return $bytes;
+}
+
+function callAvatarGif(): string
+{
+    $img = imagecreatetruecolor(8, 8);
+    ob_start();
+    imagegif($img);
+    $bytes = (string) ob_get_clean();
+    imagedestroy($img);
+
+    return $bytes;
+}
+
+/** Pin the local disk + signed-route callbacks exactly like AvatarTest. */
+function callAvatarDisk(): void
+{
+    config()->set('filesystems.default', 'local');
+    Storage::fake('local');
+    MediaUrls::registerLocalCallbacks(Storage::disk('local'));
+}
+
+/** Upload → PUT → complete an avatar in the `calls` workspace; returns the attachment id. */
+function callUploadAvatar($test, string $token, string $filename, string $mime, string $bytes): string
+{
+    $created = $test->postJson('/api/v1/uploads', [
+        'kind' => 'avatar',
+        'filename' => $filename,
+        'mime_type' => $mime,
+        'size_bytes' => strlen($bytes),
+    ], wsHeaders($token, 'calls'))->assertStatus(201)->json('data');
+
+    $test->call('PUT', $created['put_url'], [], [], [], ['CONTENT_TYPE' => 'application/octet-stream'], $bytes)
+        ->assertOk();
+
+    $test->postJson("/api/v1/uploads/{$created['attachment_id']}/complete", [], wsHeaders($token, 'calls'))
+        ->assertOk();
+
+    return $created['attachment_id'];
+}
+
+// FR-PROF-007 / DEC-089: the join token carries the standard LiveKit
+// `metadata` claim — the joiner's avatar object or an explicit null, and
+// nothing else (no user id, no email). The signed URLs inside must outlive
+// the token so a client never holds a valid token with dead image links.
+test('TC-CALL-043 join token metadata carries the avatar object, null without one, urls outlive the token', function () {
+    callAvatarDisk();
+    $callerToken = substr($this->headers['Authorization'], 7);
+    $gid = callUploadAvatar($this, $callerToken, 'caller.gif', 'image/gif', callAvatarGif());
+    $this->patchJson('/api/v1/me', ['avatar_attachment_id' => $gid], authHeaders($callerToken))->assertOk();
+
+    $c = $this->postJson('/api/v1/rooms/'.$this->room->id.'/calls', ['kind' => 'video'], $this->headers)->json('data');
+
+    // member WITH an avatar — full object, animated non-null for a gif
+    $join = $this->postJson('/api/v1/calls/'.$c['id'].'/join', [], $this->headers)->assertOk()->json('data');
+    $claims = app(MediaServer::class)->decode($join['token']);
+    $meta = json_decode($claims->metadata, true);
+    expect($meta)->toBeArray()->and(array_keys($meta))->toBe(['avatar']);
+    expect(array_keys($meta['avatar']))->toBe(['sm', 'md', 'animated']);
+    expect($meta['avatar']['sm'])->toStartWith('http')
+        ->and($meta['avatar']['md'])->toStartWith('http')
+        ->and($meta['avatar']['animated'])->toStartWith('http');
+    $expiryOf = function (string $url): int {
+        parse_str((string) parse_url($url, PHP_URL_QUERY), $q);
+
+        return (int) ($q['expires'] ?? 0);
+    };
+    foreach ($meta['avatar'] as $url) {
+        expect($expiryOf($url))->toBeGreaterThanOrEqual($claims->exp);
+    }
+
+    // member WITHOUT an avatar — explicit null, still only the avatar key
+    $bare = $this->postJson('/api/v1/calls/'.$c['id'].'/join', [], $this->calleeHeaders)->assertOk()->json('data');
+    expect(json_decode(app(MediaServer::class)->decode($bare['token'])->metadata, true))->toBe(['avatar' => null]);
+});
+
+// FR-PROF-007 / DEC-089: the list/ringing call object gains caller_avatar
+// (the starter) and — DM rooms only — peer_avatar from the viewer's side.
+test('TC-CALL-044 serialize adds caller_avatar and dm peer_avatar, null peer in groups', function () {
+    callAvatarDisk();
+    $callerToken = substr($this->headers['Authorization'], 7);
+    $pid = callUploadAvatar($this, $callerToken, 'caller.png', 'image/png', callAvatarPng());
+    $this->patchJson('/api/v1/me', ['avatar_attachment_id' => $pid], authHeaders($callerToken))->assertOk();
+
+    $c = $this->postJson('/api/v1/rooms/'.$this->room->id.'/calls', ['kind' => 'video'], $this->headers)->json('data');
+
+    // callee's ringing view: the photo'd caller started it AND is the dm peer
+    $row = $this->getJson('/api/v1/calls', $this->calleeHeaders)->assertOk()->json('data.calls.0');
+    expect($row['caller_avatar']['sm'])->toStartWith('http')
+        ->and($row['caller_avatar']['md'])->toStartWith('http')
+        ->and($row['caller_avatar']['animated'])->toBeNull()
+        ->and($row['peer_avatar']['sm'])->toStartWith('http');
+
+    // caller's own view: same caller_avatar, avatar-less dm peer
+    $mine = $this->getJson('/api/v1/calls', $this->headers)->assertOk()->json('data.calls.0');
+    expect($mine['caller_avatar'])->not->toBeNull()->and($mine['peer_avatar'])->toBeNull();
+
+    $this->postJson('/api/v1/calls/'.$c['id'].'/end', [], $this->headers)->assertNoContent();
+
+    // group rooms: peer_avatar stays null; an avatar-less starter serializes caller_avatar null
+    $this->room->update(['type' => 'group']);
+    $g = $this->postJson('/api/v1/rooms/'.$this->room->id.'/calls', ['kind' => 'video'], $this->calleeHeaders)->json('data');
+    $grow = collect($this->getJson('/api/v1/calls', $this->headers)->assertOk()->json('data.calls'))->first(fn ($r) => $r['id'] === $g['id']);
+    expect($grow['caller_avatar'])->toBeNull()->and($grow['peer_avatar'])->toBeNull();
+});
+
+// FR-PROF-007 / DEC-089: GET /calls batches the avatar lookups — the
+// attachments query count must not grow with the number of ringing calls.
+test('TC-CALL-045 calls list batches avatar lookups across rows (no N+1)', function () {
+    callAvatarDisk();
+    $callerToken = substr($this->headers['Authorization'], 7);
+    $pid = callUploadAvatar($this, $callerToken, 'caller.png', 'image/png', callAvatarPng());
+    $this->patchJson('/api/v1/me', ['avatar_attachment_id' => $pid], authHeaders($callerToken))->assertOk();
+
+    $openCalls = function (int $n): void {
+        for ($i = 0; $i < $n; $i++) {
+            $peer = User::factory()->create();
+            $this->ws->members()->attach($peer->id, ['role' => 'member']);
+            $room = Room::create(['workspace_id' => $this->ws->id, 'type' => 'dm', 'created_by' => $this->caller->id, 'member_count' => 2]);
+            foreach ([$this->caller, $peer] as $u) {
+                $room->members()->attach($u->id, ['workspace_id' => $this->ws->id, 'role' => 'member']);
+            }
+            $this->postJson('/api/v1/rooms/'.$room->id.'/calls', ['kind' => 'video'], $this->headers)->assertSuccessful();
+        }
+    };
+
+    $attachmentQueries = function (int $expectedCalls): int {
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $this->getJson('/api/v1/calls', $this->headers)->assertOk()->assertJsonCount($expectedCalls, 'data.calls');
+        DB::disableQueryLog();
+
+        return collect(DB::getQueryLog())->filter(fn ($q) => str_contains($q['query'], 'attachments'))->count();
+    };
+
+    $openCalls(2);
+    $withTwo = $attachmentQueries(2);
+    $openCalls(2);
+    $withFour = $attachmentQueries(4);
+
+    expect($withTwo)->toBe(1)->and($withFour)->toBe(1);
 });

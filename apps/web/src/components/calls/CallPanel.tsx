@@ -17,6 +17,8 @@ export default function CallPanel({
       id={active.call.id}
       kind={active.call.kind}
       title={active.call.room_name || active.call.caller_name || "Call"}
+      // FR-PROF-007: a DM call shows who you are talking to; group calls keep the plain title.
+      headerAvatar={active.call.room_type === "dm" ? (active.call.peer_avatar ?? null) : undefined}
       url={active.url}
       token={active.token}
       canEnd={active.call.started_by === me?.id}

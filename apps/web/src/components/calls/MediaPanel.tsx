@@ -33,10 +33,14 @@ import {
   reconnectDelayMs,
   shouldGiveUpReconnect,
 } from "@banana-chat/chat-core";
+import type { UserAvatar } from "@banana-chat/shared";
+import { Avatar } from "../Visual";
 import { createCallAudioBoost } from "./audio-boost";
+import { CallTileBody } from "./CallTile";
 import { startCallKeepalive } from "./background-keepalive";
 
-function Tiles() {
+/** Exported for the FR-PROF-007 tile harness (e2e/ui); MediaPanel is its only app caller. */
+export function Tiles() {
   const tracks = useTracks(
     [
       { source: Track.Source.Camera, withPlaceholder: true },
@@ -99,17 +103,19 @@ function Tiles() {
       {fullscreenError && <small role="status">{fullscreenError}</small>}
       {stage.focus ? <>
         <div ref={stageEl} className="bc-call-focus" data-focus-source={stage.focus.ref.source}>
-          <FocusLayout trackRef={stage.focus.ref} />
+          <FocusLayout trackRef={stage.focus.ref}><CallTileBody /></FocusLayout>
           <button className="bc-call-exit-fullscreen" onClick={() => void document.exitFullscreen?.()}>Exit full screen</button>
         </div>
         <div className="bc-call-thumbnails">
           {options.map((t) => <div key={t.id}>
-            <ParticipantTile trackRef={t.ref} onParticipantClick={() => setSelected(t.id)} />
+            <ParticipantTile trackRef={t.ref} onParticipantClick={() => setSelected(t.id)}><CallTileBody /></ParticipantTile>
             <button onClick={() => setSelected(t.id)}>Show {t.ref.participant.name || "participant"}{t.screen ? " screen" : ""}</button>
           </div>)}
         </div>
       </> : <GridLayout tracks={tracks}>
-        <ParticipantTile onParticipantClick={(event) => setSelected(callTrackId(event.participant.identity, event.track?.source ?? Track.Source.Camera))} />
+        <ParticipantTile onParticipantClick={(event) => setSelected(callTrackId(event.participant.identity, event.track?.source ?? Track.Source.Camera))}>
+          <CallTileBody />
+        </ParticipantTile>
       </GridLayout>}
     </>
   );
@@ -167,6 +173,7 @@ export default function MediaPanel({
   checkActive,
   refreshCredentials,
   canMinimize = true,
+  headerAvatar,
 }: {
   id: string;
   kind: "video" | "voice";
@@ -179,6 +186,8 @@ export default function MediaPanel({
   checkActive: () => Promise<boolean>;
   refreshCredentials?: () => Promise<{ url: string; token: string }>;
   canMinimize?: boolean;
+  /** FR-PROF-007 — DM calls show the peer's photo beside the title (undefined = no photo). */
+  headerAvatar?: UserAvatar | null;
 }) {
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
   const [gain, setGain] = useState(DEFAULT_CALL_GAIN);
@@ -516,6 +525,8 @@ export default function MediaPanel({
       <header>
         <div>
           <span className="bc-call-live" />
+          {/* FR-PROF-007: presentation only — like `title`, never a join-effect dependency. */}
+          {headerAvatar !== undefined && <Avatar name={title} avatar={headerAvatar} className="bc-call-header-avatar" />}
           <strong>{title}</strong>
           <small>
             {/* FR-CALL-009 / DEC-086: a dropped connection is survivable — show

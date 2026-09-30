@@ -118,10 +118,6 @@
 .bc-call-incoming .bc-call-decline {
   background: #923c49;
 }
-.bc-call-pulse {
-  font-size: 28px;
-  color: #6fe8be;
-}
 .bc-call-alert,
 .bc-call-loading {
   position: fixed;
@@ -182,21 +178,26 @@
     gap: 8px;
     padding: 14px;
   }
-  .bc-call-pulse {
-    display: none;
+  /* Photo + caller on the first row, the actions share the second row. */
+  .bc-call-incoming {
+    flex-wrap: wrap;
+    width: calc(100vw - 24px);
+    box-sizing: border-box;
+  }
+  .bc-call-incoming > div {
+    flex: 1 0 calc(100% - 64px);
+  }
+  .bc-call-incoming button {
+    flex: 1 1 auto;
+  }
+  .bc-call-caller {
+    --caller-size: 44px;
   }
 }
 .bc-call-stage.is-voice:not(.is-minimized) {
   inset: 20vh auto auto max(12px, calc((100vw - 680px) / 2));
   width: min(680px, calc(100vw - 24px));
   height: 460px;
-}
-.bc-call-stage.is-voice .lk-participant-placeholder svg {
-  width: 90px;
-  height: 90px;
-}
-.bc-call-stage.is-voice .lk-participant-placeholder {
-  background: #202e40;
 }
 .bc-call-stage.is-voice .lk-participant-tile {
   border-radius: 16px;
@@ -206,10 +207,6 @@
     height: 430px;
     inset: 15vh 12px auto;
     width: calc(100vw - 24px);
-  }
-  .bc-call-stage.is-voice .lk-participant-placeholder svg {
-    width: 60px;
-    height: 60px;
   }
 }
 /* FR-CALL-007: full stage focus with concurrent screen-share selection. */
@@ -233,3 +230,151 @@
 .bc-call-grid .lk-grid-layout { flex:1; min-height:0; height:auto; }
 .bc-call-focus { flex:1; min-height:120px; height:auto; }
 .bc-call-thumbnails { flex-shrink:0; }
+
+/* FR-PROF-007 / DEC-089 — camera-off tiles: a large centred circular photo
+   (initials for guests / broken images), name underneath, speaking ring on the
+   photo. The placeholder is absolutely inset by LiveKit, so it is a definite
+   size container: every measurement below is relative to the TILE (cqh/cqw),
+   which keeps the photo a centred circle inside a 1280px stage, a 360px phone
+   grid cell and an 85px thumbnail alike. LiveKit still decides visibility
+   ([data-lk-video-muted=true][data-lk-source=camera]); camera-on tiles are
+   untouched video. */
+.bc-call-stage .bc-call-placeholder {
+  container-type: size;
+  container-name: bc-tile;
+  background: radial-gradient(120% 95% at 50% 38%, #243449 0%, #182232 58%, #131a26 100%);
+  overflow: hidden;
+}
+.bc-call-person {
+  --photo: clamp(24px, min(54cqh, 44cqw), 184px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(4px, 4cqh, 14px);
+  width: 100%;
+  max-height: 100%;
+  padding: 0 10px;
+  box-sizing: border-box;
+  /* Nudge up a little so the name clears LiveKit's bottom mic/quality bar. */
+  transform: translateY(-3cqh);
+}
+.bc-call-photo {
+  position: relative;
+  flex: 0 0 auto;
+  width: var(--photo);
+  height: var(--photo);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px #ffffff1f, 0 10px 30px #0006;
+  transition: box-shadow .18s ease;
+}
+.bc-call-photo .bc-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  font-size: calc(var(--photo) * .36);
+  font-weight: 650;
+  letter-spacing: .02em;
+}
+.bc-call-stage .bc-call-photo > svg {
+  width: 100%;
+  height: 100%;
+  padding: 18%;
+  box-sizing: border-box;
+  border-radius: 50%;
+  background: #2a3a52;
+}
+.bc-call-person-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: clamp(11px, 7cqh, 17px);
+  font-weight: 600;
+  line-height: 1.2;
+  color: #eef3f9;
+  text-shadow: 0 1px 2px #0008;
+}
+/* Speaking: a mint ring hugging the photo instead of LiveKit's tile edge. */
+.bc-call-stage .lk-participant-tile[data-lk-video-muted="true"][data-lk-source="camera"] {
+  --lk-speaking-indicator-width: 0px;
+}
+.bc-call-stage .lk-participant-tile[data-lk-speaking="true"] .bc-call-photo {
+  box-shadow: 0 0 0 clamp(2px, .9cqmin, 4px) #121824, 0 0 0 clamp(4px, 1.8cqmin, 7px) #42d8a5, 0 0 24px 4px #42d8a566;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .bc-call-stage .lk-participant-tile[data-lk-speaking="true"] .bc-call-photo::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    box-shadow: 0 0 0 0 #42d8a588;
+    animation: bc-call-speak 1.4s ease-out infinite;
+    pointer-events: none;
+  }
+}
+@keyframes bc-call-speak {
+  from { box-shadow: 0 0 0 2px #42d8a588; }
+  to { box-shadow: 0 0 0 clamp(8px, 4cqmin, 16px) #42d8a500; }
+}
+/* The name already sits under the photo; keep only the mic/lock icons below. */
+.bc-call-stage .lk-participant-tile[data-lk-video-muted="true"][data-lk-source="camera"] .lk-participant-metadata .lk-participant-name {
+  display: none;
+}
+/* Tiny tiles (thumbnail strip, minimised phone grid): photo only — the
+   "Show …" button under each thumbnail carries the name. */
+@container bc-tile (max-height: 96px) {
+  .bc-call-person-name { display: none; }
+  .bc-call-person { --photo: clamp(24px, min(66cqh, 44cqw), 184px); transform: none; }
+}
+.bc-call-stage .bc-call-header-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 12px;
+}
+/* Incoming call banner: caller photo with the call kind as a small badge. */
+.bc-call-caller {
+  --caller-size: 52px;
+  position: relative;
+  flex: 0 0 auto;
+  width: var(--caller-size);
+  height: var(--caller-size);
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px #162238, 0 0 0 4px #6fe8be;
+}
+.bc-call-caller .bc-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  font-size: calc(var(--caller-size) * .34);
+}
+.bc-call-kind-badge {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #21a575;
+  color: #fff;
+  box-shadow: 0 0 0 2px #162238;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .bc-call-caller::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    animation: bc-call-ring 1.6s ease-out infinite;
+    pointer-events: none;
+  }
+}
+@keyframes bc-call-ring {
+  from { box-shadow: 0 0 0 4px #6fe8be99; }
+  to { box-shadow: 0 0 0 16px #6fe8be00; }
+}
+.bc-call-incoming > div { min-width: 0; }
+.bc-call-incoming strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

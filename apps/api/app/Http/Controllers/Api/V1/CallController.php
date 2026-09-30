@@ -39,9 +39,12 @@ class CallController extends Controller
         }
         $calls = RoomCall::where('workspace_id', $this->context->id())->whereNull('ended_at')
             ->whereIn('room_id', fn ($q) => $q->select('room_id')->from('room_members')->where('user_id', $r->user()->id)->whereNull('left_at'))->get()
-            ->filter(fn ($c) => $this->calls->allowed($r->user()->id, $c->room_id))->map(fn ($c) => $this->calls->serialize($c, $r->user()->id))->values();
+            ->filter(fn ($c) => $this->calls->allowed($r->user()->id, $c->room_id));
+        // FR-PROF-007 / DEC-089: one batched avatar map for the whole list —
+        // serialize() spends no per-row avatar queries.
+        $avatars = $this->calls->avatarsFor($calls);
 
-        return response()->json(['data' => ['enabled' => true, 'calls' => $calls]]);
+        return response()->json(['data' => ['enabled' => true, 'calls' => $calls->map(fn ($c) => $this->calls->serialize($c, $r->user()->id, $avatars))->values()]]);
     }
 
     public function start(Request $r, string $id)

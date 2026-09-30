@@ -127,6 +127,7 @@ export {
   cropOutputSize,
   cropSourceRect,
   panCrop,
+  parseParticipantAvatar,
   zoomCrop,
 } from './avatar.js';
 export type { AvatarCrop, AvatarFileCheck, AvatarImageSize, AvatarMimeType } from './avatar.js';

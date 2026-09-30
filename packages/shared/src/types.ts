@@ -498,6 +498,10 @@ export interface RoomCall {
   id: string; room_id: string; workspace_id: string; kind: 'voice' | 'video';
   started_by: string; caller_name: string; room_name: string | null; room_type: 'dm' | 'group';
   participants: string[]; created_at: string; connected_at: string | null; ended_at: string | null;
+  /** FR-PROF-007 / DEC-089 — photo of `started_by`; optional so older servers still type-check. */
+  caller_avatar?: UserAvatar | null;
+  /** FR-PROF-007 — DM only: the other member's photo from the viewer's side; null for group rooms. */
+  peer_avatar?: UserAvatar | null;
 }
 export interface CallJoin { call: RoomCall; token: string; url: string }
 

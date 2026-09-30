@@ -1,5 +1,5 @@
 import { useChatText } from '../../lib/use-chat-text';
-import { Icon } from "../Visual";
+import { Avatar, Icon } from "../Visual";
 import {
   createContext,
   useContext,
@@ -165,8 +165,12 @@ export function CallProvider({ children }: { children: ReactNode }) {
             aria-label="Incoming call"
             key={c.id}
           >
-            <span className="bc-call-pulse">
-              <Icon name={c.kind === "voice" ? "phone" : "video"} size={28} />
+            {/* FR-PROF-007: the caller's photo (initials fallback) with the call kind as a badge. */}
+            <span className="bc-call-caller" data-testid="incoming-caller">
+              <Avatar name={c.caller_name} avatar={c.caller_avatar ?? null} large />
+              <span className="bc-call-kind-badge">
+                <Icon name={c.kind === "voice" ? "phone" : "video"} size={13} />
+              </span>
             </span>
             <div>
               <strong>{c.caller_name}</strong>

@@ -347,8 +347,18 @@ components:
         kind: {type: string, enum: [voice,video]}
         started_by: {type: string}
         caller_name: {type: string}
+        caller_avatar:
+          description: 'FR-PROF-007 / DEC-089: the starter''s avatar, null without one.'
+          oneOf:
+            - {type: 'null'}
+            - {$ref: '#/components/schemas/Avatar'}
         room_name: {type: [string, 'null']}
         room_type: {type: string, enum: [dm,group]}
+        peer_avatar:
+          description: 'FR-PROF-007 / DEC-089: the other DM member''s avatar from the viewer''s perspective; null in group rooms.'
+          oneOf:
+            - {type: 'null'}
+            - {$ref: '#/components/schemas/Avatar'}
         participants: {type: array, items: {type: string}}
         created_at: {type: string, format: date-time}
         connected_at: {type: [string, 'null'], format: date-time}

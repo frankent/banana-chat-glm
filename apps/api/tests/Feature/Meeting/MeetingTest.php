@@ -2,6 +2,7 @@
 
 use App\Domain\Calls\MediaServer;
 use App\Domain\Calls\MeetingService;
+use App\Domain\Media\MediaUrls;
 use App\Jobs\ReconcileMeetings;
 use App\Models\Meeting;
 use App\Models\MeetingParticipant;
@@ -10,6 +11,7 @@ use App\Models\Workspace;
 use Illuminate\Http\Client\Factory;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 
 function fakeMeetingMedia($callback): void
 {
@@ -195,4 +197,88 @@ test('TC-MEET-011 meeting join tokens use calls.token_ttl and resume rejoins reu
     expect(MeetingParticipant::where('meeting_id', $m['id'])->count())->toBe(1);
     $againClaims = json_decode(base64_decode(strtr(explode('.', $again['token'])[1], '-_', '+/')), true);
     expect($againClaims['exp'] - $againClaims['nbf'])->toBeGreaterThanOrEqual(7200);
+});
+
+/*
+ * FR-PROF-007 / DEC-089 fixtures — unique names (AvatarTest owns
+ * avatarGif) so single-file pest runs work too.
+ */
+function meetingAvatarGif(): string
+{
+    $img = imagecreatetruecolor(8, 8);
+    ob_start();
+    imagegif($img);
+    $bytes = (string) ob_get_clean();
+    imagedestroy($img);
+
+    return $bytes;
+}
+
+/** Pin the local disk + signed-route callbacks exactly like AvatarTest. */
+function meetingAvatarDisk(): void
+{
+    config()->set('filesystems.default', 'local');
+    Storage::fake('local');
+    MediaUrls::registerLocalCallbacks(Storage::disk('local'));
+}
+
+/** Upload → PUT → complete an avatar in the `meetings` workspace; returns the attachment id. */
+function meetingUploadAvatar($test, string $token, string $filename, string $mime, string $bytes): string
+{
+    $created = $test->postJson('/api/v1/uploads', [
+        'kind' => 'avatar',
+        'filename' => $filename,
+        'mime_type' => $mime,
+        'size_bytes' => strlen($bytes),
+    ], wsHeaders($token, 'meetings'))->assertStatus(201)->json('data');
+
+    $test->call('PUT', $created['put_url'], [], [], [], ['CONTENT_TYPE' => 'application/octet-stream'], $bytes)
+        ->assertOk();
+
+    $test->postJson("/api/v1/uploads/{$created['attachment_id']}/complete", [], wsHeaders($token, 'meetings'))
+        ->assertOk();
+
+    return $created['attachment_id'];
+}
+
+// FR-PROF-007 / DEC-089: meeting join tokens carry the same LiveKit
+// `metadata` claim as private calls — a member's avatar object, an explicit
+// null for members without one and for public-meeting GUESTS (user_id null),
+// with signed urls that outlive the token. No user id, no email — the claim
+// must hold nothing but the avatar.
+test('TC-MEET-012 meeting join token metadata carries member avatars and null for guests', function () {
+    meetingAvatarDisk();
+    $m = meetingFixture($this);
+    $url = '/api/v1/public-meetings/'.$m['code'].'/join';
+
+    // public-meeting GUEST (user_id null) — explicit null avatar
+    $guest = $this->postJson($url, ['name' => 'Visitor'])->assertOk()->json('data');
+    expect(json_decode(app(MediaServer::class)->decode($guest['token'])->metadata, true))->toBe(['avatar' => null]);
+
+    // member WITHOUT an avatar — null as well
+    $visitor = User::factory()->create();
+    [, $visitorToken] = loginAs($visitor);
+    $bare = $this->postJson($url, ['name' => 'No Photo'], authHeaders($visitorToken))->assertOk()->json('data');
+    expect(json_decode(app(MediaServer::class)->decode($bare['token'])->metadata, true))->toBe(['avatar' => null]);
+
+    // member WITH a gif avatar — object with the animated original, urls outlive the token
+    $hostToken = substr($this->headers['Authorization'], 7);
+    $gid = meetingUploadAvatar($this, $hostToken, 'host.gif', 'image/gif', meetingAvatarGif());
+    $this->patchJson('/api/v1/me', ['avatar_attachment_id' => $gid], authHeaders($hostToken))->assertOk();
+    $join = $this->postJson($url, [], $this->headers)->assertOk()->json('data');
+    $claims = app(MediaServer::class)->decode($join['token']);
+    $meta = json_decode($claims->metadata, true);
+    expect(array_keys($meta))->toBe(['avatar']);
+    expect(array_keys($meta['avatar']))->toBe(['sm', 'md', 'animated']);
+    expect($meta['avatar']['sm'])->toStartWith('http')
+        ->and($meta['avatar']['md'])->toStartWith('http')
+        ->and($meta['avatar']['animated'])->toStartWith('http');
+    $expiryOf = function (string $url): int {
+        parse_str((string) parse_url($url, PHP_URL_QUERY), $q);
+
+        return (int) ($q['expires'] ?? 0);
+    };
+    foreach ($meta['avatar'] as $avatarUrl) {
+        expect($expiryOf($avatarUrl))->toBeGreaterThanOrEqual($claims->exp);
+    }
 });
