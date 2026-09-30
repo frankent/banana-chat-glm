@@ -12,6 +12,7 @@ use App\Models\Room;
 use App\Models\RoomMember;
 use App\Models\RoomNotificationSetting;
 use App\Models\User;
+use App\Models\UserNotificationSetting;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -65,6 +66,15 @@ class NotifyMessage implements ShouldQueue
         // FR-NOTI-006 — in-app center rows for mentioned users (independent
         // of push mute rules: the feed is a pointer, not a delivery channel)
         if (count($mentioned) > 0) {
+            // FR-NOTI-008 — recipients with privacy mode on get no message text
+            // in their notification data either: the feed row is a pointer, the
+            // snippet is a convenience copy that a client toast could render.
+            $privacyOn = UserNotificationSetting::query()
+                ->whereIn('user_id', $mentioned)
+                ->where('privacy_mode', true)
+                ->pluck('user_id')
+                ->all();
+
             foreach ($mentioned as $mentionedId) {
                 if ($mentionedId === $senderUser->id) {
                     continue;
@@ -75,11 +85,13 @@ class NotifyMessage implements ShouldQueue
                     'type' => 'mention',
                     'room_id' => $room->id,
                     'actor_id' => $senderUser->id,
-                    'data' => [
+                    'data' => array_filter([
                         'message_id' => $message->id,
                         'seq' => (int) $message->seq,
-                        'snippet' => mb_substr((string) $message->body, 0, 120),
-                    ],
+                        'snippet' => in_array($mentionedId, $privacyOn, true)
+                            ? null
+                            : mb_substr((string) $message->body, 0, 120),
+                    ], static fn ($v) => $v !== null),
                 ]);
             }
         }
@@ -107,8 +119,12 @@ class NotifyMessage implements ShouldQueue
             // the preference travels in the payload rather than suppressing the
             // broadcast -- this event is also what renders the OS popup, so gating it
             // here made "notification sound: off" mean "no notifications at all".
+            // The kind is the same mapping the masked push body uses, so a
+            // privacy-mode popup says "New photo"/"You were mentioned" instead of
+            // "New message" (TC-NOTI-051).
             broadcast(new NotificationAlert(
-                $recipient->id, $message->id, $room->id, $room->workspace_id, 'message',
+                $recipient->id, $message->id, $room->id, $room->workspace_id,
+                $decision->kind($message, $recipient, $mentioned),
                 $recipient->notificationSetting?->sound ?? true,
             ));
 
@@ -138,7 +154,9 @@ class NotifyMessage implements ShouldQueue
                 Redis::connection()->expire($sentKey, 86_400);
 
                 try {
-                    $sender->send($device, $decision->payload($message, $room, $senderUser, $badge, $recipient));
+                    // FR-NOTI-008: $mentioned lets payload() mask mention
+                    // notifications with the "you were mentioned" line.
+                    $sender->send($device, $decision->payload($message, $room, $senderUser, $badge, $recipient, $mentioned));
                 } catch (Throwable $e) {
                     // drop this device from the set so the retry re-attempts it
                     Redis::connection()->srem($sentKey, $device->id);

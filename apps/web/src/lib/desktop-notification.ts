@@ -1,3 +1,5 @@
+import { privacyLock } from './privacy';
+import { useSession } from '../state/session';
 /**
  * FR-NOTI-003 / FR-NOTI-007 — native OS notification popups while the tab is open.
  *
@@ -82,8 +84,8 @@ export function showDesktopNotification(
   }
 
   try {
-    const notification = new Notification(input.roomName?.trim() || 'Banana Chat', {
-      body: desktopNotificationBody(input.kind),
+    const notification = new Notification(privacyLock.enabled ? 'Banana Chat' : input.roomName?.trim() || 'Banana Chat', {
+      body: desktopNotificationBody(input.kind, { privacyMode: privacyLock.enabled, locale: useSession.getState().me?.locale === 'en' ? 'en' : 'th' }),
       // Collapse repeats from the same room into one popup, matching the
       // collapse_key/tag the push payload uses (§10).
       tag: input.href,

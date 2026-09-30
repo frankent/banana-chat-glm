@@ -1,3 +1,4 @@
+import { applyPrivacySettings, clearPrivacySession, privacySettingsVersion, resetPrivacySettingsRequests } from '../lib/privacy';
 import { create } from 'zustand';
 import type { UserStub, WorkspaceSummary } from '@banana-chat/shared';
 import type { LoginResponse } from '@banana-chat/api-client';
@@ -30,6 +31,7 @@ interface SessionState {
   switchWorkspace: (slug: string) => void;
 }
 
+let sessionEpoch = 0;
 const LAST_WS_KEY = 'orgchat.lastWorkspace';
 
 export const useSession = create<SessionState>((set, get) => ({
@@ -39,22 +41,31 @@ export const useSession = create<SessionState>((set, get) => ({
   currentWorkspace: null,
 
   async bootstrap() {
+    const version = privacySettingsVersion();
+    const epoch = sessionEpoch;
     if (!tokenManager.isLoggedIn()) {
+      clearPrivacySession();
       set({ status: 'anonymous', me: null, workspaces: [], currentWorkspace: null });
       return;
     }
     try {
       const [meRes, workspaces] = await Promise.all([endpoints.me(), endpoints.myWorkspaces()]);
+      if (epoch !== sessionEpoch) return;
+      applyPrivacySettings(meRes.settings.notification?.privacy_mode ?? false, version);
       const me = meRes.user as Me;
       const lastSlug = window.localStorage.getItem(LAST_WS_KEY);
       const current = workspaces.find((w) => w.workspace.slug === lastSlug) ?? workspaces[0] ?? null;
       set({ status: 'authenticated', me, workspaces, currentWorkspace: current });
     } catch {
+      if (epoch !== sessionEpoch) return;
       set({ status: 'anonymous', me: null, workspaces: [], currentWorkspace: null });
     }
   },
 
   async login(username, password) {
+    sessionEpoch++;
+    resetPrivacySettingsRequests();
+    clearPrivacySession();
     tokenManager.clear();
     await resetSessionResources();
     const res = await endpoints.login(username, password, {
@@ -65,17 +76,24 @@ export const useSession = create<SessionState>((set, get) => ({
   },
 
   installSession(res) {
+    sessionEpoch++;
+    resetPrivacySettingsRequests();
     tokenManager.setTokens(res.access_token, res.refresh_token);
     set({
-      status: 'authenticated',
+      status: 'loading',
       me: res.user,
       workspaces: res.workspaces,
       currentWorkspace: res.workspaces[0] ?? null,
     });
+    // Login responses need not carry notification settings; /me is authoritative.
+    void get().bootstrap();
     return res.user.must_change_password ? 'must_change_password' : 'ok';
   },
 
   async logout() {
+    sessionEpoch++;
+    resetPrivacySettingsRequests();
+    clearPrivacySession();
     const revoke = endpoints.logout().catch(() => undefined);
     tokenManager.clear();
     set({ status: 'loading', me: null, workspaces: [], currentWorkspace: null });

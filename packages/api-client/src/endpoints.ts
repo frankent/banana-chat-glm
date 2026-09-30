@@ -22,6 +22,7 @@ import type {
   Message,
   MessagePage,
   MessageSearchResult,
+  NotificationSettings,
   ReadStatusEntry,
   PublicChatListQuery,
   PublicChatPublicMessage,
@@ -215,7 +216,22 @@ export class Endpoints {
   }
 
   me() {
-    return this.api.request<{ user: UserStub & { locale: string }; settings: { locale: string; timezone: string; notification: {sound?: boolean} | null } }>('/api/v1/me');
+    return this.api.request<{
+      user: UserStub & { locale: string };
+      settings: { locale: string; timezone: string; notification: NotificationSettings | null };
+    }>('/api/v1/me');
+  }
+
+  /**
+   * API-236 / FR-NOTI-009 (app lock, DEC-087) — re-check the account password
+   * for the current session. 204 on match; 422 INVALID_PASSWORD otherwise;
+   * 429 past the 8/min verify-password limiter. Never touches tokens.
+   */
+  verifyPassword(password: string) {
+    return this.api.request<void>('/api/v1/me/verify-password', {
+      method: 'POST',
+      body: { password },
+    });
   }
 
   myWorkspaces() {
@@ -392,9 +408,9 @@ export class Endpoints {
     });
   }
 
-  /** API-072 — user notification settings (DND, sound, preview). */
-  notificationSettings(slug: string, input: { dnd_start?: string | null; dnd_end?: string | null; dnd_days?: number[]; sound?: boolean; preview_in_push?: boolean }) {
-    return this.api.request<{ settings: unknown }>('/api/v1/me/notification-settings', {
+  /** API-072 — user notification settings (DND, sound, preview, privacy mode). */
+  notificationSettings(slug: string, input: NotificationSettings) {
+    return this.api.request<{ settings: NotificationSettings }>('/api/v1/me/notification-settings', {
       method: 'PUT',
       body: input,
       workspaceSlug: slug,

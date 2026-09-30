@@ -46,6 +46,17 @@ Route::prefix('v1')->group(function (): void {
         });
     });
 
+    // API-236 / FR-NOTI-009 / DEC-087 — password re-check for the app lock.
+    // Deliberately OUTSIDE `password.fresh` (this endpoint IS the password
+    // confirmation that password.fresh-style gates would ask for) and outside
+    // `workspace.context` (the lock fires before any workspace is chosen).
+    // Route middleware runs after the group's auth:api, so the limiter can key
+    // on the resolved user.
+    Route::middleware(['auth:api', 'account.active'])->group(function (): void {
+        Route::post('/me/verify-password', [MeController::class, 'verifyPassword'])
+            ->middleware('throttle:verify-password');
+    });
+
     Route::middleware(['auth:api', 'account.active', 'password.fresh'])->group(function (): void {
         Route::get('/me', [MeController::class, 'show']);
         Route::patch('/me', [MeController::class, 'update']);

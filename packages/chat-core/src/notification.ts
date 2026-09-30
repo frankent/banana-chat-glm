@@ -56,7 +56,20 @@ export class DesktopNotificationGate {
  * a generic line also means a desktop popup can never leak message content onto a
  * shared screen, the same guarantee `preview_in_push=false` gives on mobile.
  */
-export function desktopNotificationBody(kind: AlertKind): string {
+export function desktopNotificationBody(kind: AlertKind, options: { privacyMode?: boolean; locale?: 'th' | 'en' } = {}): string {
+  // FR-NOTI-008 / DEC-087: exact shared push vocabulary; never interpolate untrusted alert data.
+  if (options.privacyMode) {
+    const english = options.locale === 'en';
+    switch (kind) {
+      case 'mention': return english ? 'You were mentioned' : 'มีการกล่าวถึงคุณ';
+      case 'photo':
+      case 'image': return english ? 'New photo' : 'รูปภาพใหม่';
+      case 'video': return english ? 'New video' : 'วิดีโอใหม่';
+      case 'file': return english ? 'New file' : 'ไฟล์ใหม่';
+      case 'call': return english ? 'Incoming call' : 'สายเรียกเข้า';
+      default: return english ? 'New message' : 'ข้อความใหม่';
+    }
+  }
   switch (kind) {
     case 'mention':
       return 'มีคนกล่าวถึงคุณ';

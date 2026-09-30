@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Events\UserSettingsUpdated;
 use App\Http\Controllers\Controller;
 use App\Models\Device;
 use App\Models\InAppNotification;
@@ -142,6 +143,7 @@ class NotificationController extends Controller
             'dnd_days.*' => ['integer', 'min:1', 'max:7'],
             'sound' => ['sometimes', 'boolean'],
             'preview_in_push' => ['sometimes', 'boolean'],
+            'privacy_mode' => ['sometimes', 'boolean'], // FR-NOTI-008/009 / DEC-087
         ]);
 
         if ((isset($data['dnd_start']) !== isset($data['dnd_end']))
@@ -154,10 +156,23 @@ class NotificationController extends Controller
         /** @var User $user */
         $user = $request->user();
 
+        $privacyBefore = (bool) UserNotificationSetting::query()
+            ->where('user_id', $user->id)
+            ->value('privacy_mode');
+
         $settings = UserNotificationSetting::query()->updateOrCreate(
             ['user_id' => $user->id],
             $data,
         );
+
+        // FR-NOTI-009: a privacy toggle must reach the user's OTHER open
+        // clients (tabs/devices) — they hold a cached privacy_mode and, until
+        // they refetch, keep rendering real-content desktop popups. The event
+        // is a content-free nudge on the private user channel: the client
+        // re-fetches /me (TC-NOTI-052).
+        if (array_key_exists('privacy_mode', $data) && (bool) $data['privacy_mode'] !== $privacyBefore) {
+            broadcast(new UserSettingsUpdated($user->id));
+        }
 
         return response()->json(['data' => ['settings' => $settings]]);
     }

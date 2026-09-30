@@ -1,3 +1,4 @@
+import { suspendPrivacyLock } from '../lib/privacy';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { TypingPublisher } from '@banana-chat/chat-core';
@@ -209,7 +210,7 @@ export function Composer({ roomId, workspaceId, slug, senderId, members = [], re
           }}
         />
         <button
-          onClick={() => fileInputRef.current?.click()}
+          onClick={(event) => { suspendPrivacyLock(60_000, event); fileInputRef.current?.click(); }}
           aria-label="attach files"
           data-testid="attach-button"
           className="rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-100"

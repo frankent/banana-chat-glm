@@ -3,6 +3,7 @@
 namespace App\Domain\PublicChat;
 
 use App\Domain\Notification\FcmPushSender;
+use App\Domain\Notification\PrivacyMasker;
 use App\Domain\Notification\PushDecisionService;
 use App\Enums\PublicChatMessageType;
 use App\Enums\PublicChatSenderKind;
@@ -164,11 +165,42 @@ class NotifyPublicChatMessage implements ShouldQueue
      * the sanitised value is what travels into this payload — the only defence
      * that survives into a push notification, an export or an email template.
      *
+     * FR-NOTI-008 / DEC-087 — with the RECIPIENT (the assigned agent)'s
+     * privacy_mode on, customer_name and message text never leave the server:
+     * generic title/body by kind in the agent's locale. public_chat_room_id /
+     * message_id / seq stay — opaque ids for deep-link routing.
+     *
      * @return array{title: string, body: string, data: array<string, mixed>, collapse_key: string, badge: int}
      */
     private function payload(PublicChatMessage $message, PublicChatRoom $room, User $recipient): array
     {
-        $preview = $recipient->notificationSetting?->preview_in_push ?? true;
+        $masker = new PrivacyMasker;
+        $setting = $recipient->notificationSetting;
+
+        if ($setting?->privacy_mode === true) {
+            $kind = match (true) {
+                $message->type === PublicChatMessageType::Image => 'photo',
+                $message->type === PublicChatMessageType::Video => 'video',
+                $message->body === null || $message->body === '' => 'file',
+                default => 'message',
+            };
+
+            return [
+                'title' => $masker->title(),
+                'body' => $masker->body($kind, $recipient->locale),
+                'data' => [
+                    'public_chat_room_id' => $room->id,
+                    'workspace_id' => $room->workspace_id,
+                    'message_id' => $message->id,
+                    'seq' => (int) $message->seq,
+                    'kind' => 'public_chat',
+                ],
+                'collapse_key' => 'pchat:'.$room->id,
+                'badge' => 0,
+            ];
+        }
+
+        $preview = $setting?->preview_in_push ?? true;
 
         if (! $preview) {
             $body = 'ข้อความใหม่';

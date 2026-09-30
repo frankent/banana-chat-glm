@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\InAppNotification;
 use App\Models\KanbanTicket;
+use App\Models\UserNotificationSetting;
 use App\Models\Workspace;
 use App\Models\WorkspaceMember;
 use Illuminate\Bus\Queueable;
@@ -35,7 +36,24 @@ class NotifyDueTickets implements ShouldQueue
                     if (! $membership) {
                         return;
                     }
-                    InAppNotification::create(['user_id' => $ticket->assignee_id, 'workspace_id' => $ticket->workspace_id, 'type' => 'ticket_due', 'data' => ['ticket_id' => $ticket->id, 'number' => $ticket->number, 'title' => $ticket->title, 'due_at' => $ticket->due_at->toIso8601String()]]);
+                    // FR-NOTI-008 — no ticket title in the data when the
+                    // assignee runs privacy mode: the row is a pointer
+                    // (ticket_id/number), a toast must not read the title.
+                    $privacyOn = UserNotificationSetting::query()
+                        ->where('user_id', $ticket->assignee_id)
+                        ->value('privacy_mode') === true;
+
+                    InAppNotification::create([
+                        'user_id' => $ticket->assignee_id,
+                        'workspace_id' => $ticket->workspace_id,
+                        'type' => 'ticket_due',
+                        'data' => array_filter([
+                            'ticket_id' => $ticket->id,
+                            'number' => $ticket->number,
+                            'title' => $privacyOn ? null : $ticket->title,
+                            'due_at' => $ticket->due_at->toIso8601String(),
+                        ], static fn ($v) => $v !== null),
+                    ]);
                     $ticket->update(['due_notified_at' => now()]);
                 });
             }

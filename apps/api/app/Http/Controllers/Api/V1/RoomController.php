@@ -359,13 +359,17 @@ class RoomController extends Controller
                 if ($addedUser->id === $user->id) {
                     continue; // self-add (join) is not a notification
                 }
+                // FR-NOTI-008 — the room name is withheld when the added user
+                // runs privacy mode (the feed row stays a pointer via room_id).
                 InAppNotification::query()->create([
                     'user_id' => $addedUser->id,
                     'workspace_id' => $room->workspace_id,
                     'type' => 'added_to_room',
                     'room_id' => $room->id,
                     'actor_id' => $user->id,
-                    'data' => ['room_name' => $room->name],
+                    'data' => $addedUser->notificationSetting?->privacy_mode
+                        ? []
+                        : ['room_name' => $room->name],
                 ]);
             }
 

@@ -55,6 +55,20 @@ describe('DesktopNotificationGate (FR-NOTI-003)', () => {
 });
 
 describe('desktopNotificationBody', () => {
+  it.each([
+    ['message', 'ข้อความใหม่', 'New message'],
+    ['photo', 'รูปภาพใหม่', 'New photo'],
+    ['image', 'รูปภาพใหม่', 'New photo'],
+    ['video', 'วิดีโอใหม่', 'New video'],
+    ['file', 'ไฟล์ใหม่', 'New file'],
+    ['call', 'สายเรียกเข้า', 'Incoming call'],
+    ['mention', 'มีการกล่าวถึงคุณ', 'You were mentioned'],
+    ['private room/sender/content', 'ข้อความใหม่', 'New message'],
+  ])('TC-NOTI-040 FR-NOTI-008 exact privacy text for %s in both locales', (kind, th, en) => {
+    expect(desktopNotificationBody(kind, { privacyMode: true, locale: 'th' })).toBe(th);
+    expect(desktopNotificationBody(kind, { privacyMode: true })).toBe(th);
+    expect(desktopNotificationBody(kind, { privacyMode: true, locale: 'en' })).toBe(en);
+  });
   it('maps each alert kind, never leaking message content', () => {
     expect(desktopNotificationBody('mention')).toBe('มีคนกล่าวถึงคุณ');
     expect(desktopNotificationBody('call')).toBe('สายเรียกเข้า');

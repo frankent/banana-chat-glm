@@ -60,6 +60,15 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(30)->by('ip:'.$request->ip());
         });
 
+        // FR-NOTI-009 / DEC-087 (API-236) — app-lock password re-check. 8/min
+        // per user id + IP: the caller is authenticated, so this bounds password
+        // guessing by someone holding an unlocked device profile, without giving
+        // one busy shared-IP office a single joint budget (a pure IP key would).
+        RateLimiter::for('verify-password', function (Request $request) {
+            return Limit::perMinute(8)
+                ->by('verify-password:'.($request->user()?->id ?: $request->ip()).':'.$request->ip());
+        });
+
         RateLimiter::for('api', function (Request $request) {
             return Limit::perMinute(300)->by($request->user()?->id ?: $request->ip());
         });

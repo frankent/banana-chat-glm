@@ -1,3 +1,4 @@
+import { applyPrivacySettings, privacySettingsVersion } from '../lib/privacy';
 import { NotificationGate } from '@banana-chat/chat-core';
 import { showDesktopNotification } from '../lib/desktop-notification';
 import { ensureWebPushRegistered, isWebPushReady, registerPushServiceWorker, reportFocus } from '../lib/web-push';
@@ -142,6 +143,15 @@ export function EchoProvider({ children }: { children: ReactNode }) {
       return;
     }
     const channel = instance.private(`user.${me.id}`);
+    const refreshPrivacy = () => {
+      const version = privacySettingsVersion();
+      void endpoints.me().then(result => {
+        // DEC-087: a remote enable protects future returns without interrupting typing.
+        applyPrivacySettings(result.settings.notification?.privacy_mode ?? false, version, false);
+        void queryClient.invalidateQueries({ queryKey: ['notification-settings'] });
+      }).catch(() => undefined);
+    };
+    channel.listen('.user.updated', refreshPrivacy);
     const notifications = new NotificationGate();
     channel.listen('.notification.alert', (envelope: EventEnvelope<{id: string; room_id: string | null; kind: string; sound?: boolean}>) => {
       void queryClient.invalidateQueries({queryKey: ['notifications']});
@@ -221,9 +231,10 @@ export function EchoProvider({ children }: { children: ReactNode }) {
       // EVT-025/TC-AUTH-008 — the event targets ONE session (e.g. LRU cap
       // eviction). This page may be a different, still-alive session of the
       // same user: verify with the API before killing the session locally.
+      const privacyVersion = privacySettingsVersion();
       void endpoints
         .me()
-        .then(() => undefined)
+        .then(result => applyPrivacySettings(result.settings.notification?.privacy_mode ?? false, privacyVersion))
         .catch(() => {
           window.alert('Your session was revoked. Please sign in again.');
           void logout();
@@ -301,6 +312,7 @@ export function EchoProvider({ children }: { children: ReactNode }) {
         clearTimeout(timer);
       }
       channel.stopListening('.notification.alert');
+      channel.stopListening('.user.updated');
       channel.stopListening('.session.revoked');
       for (const name of aiEvents) {
         channel.stopListening(`.${name}`);
@@ -322,6 +334,7 @@ export function EchoProvider({ children }: { children: ReactNode }) {
     }
     const channel = instance.private(`workspace.${currentWorkspace.workspace.id}`);
     const refreshPeople = () => {
+      void queryClient.invalidateQueries({ queryKey: ['notification-settings'] });
       void queryClient.invalidateQueries({ queryKey: ['directory'] });
       void queryClient.invalidateQueries({ queryKey: ['room-members'] });
     };

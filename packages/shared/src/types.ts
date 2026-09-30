@@ -189,6 +189,21 @@ export interface SearchPage<T> {
 
 export type InAppNotificationType = 'mention' | 'added_to_room' | 'session_revoked' | 'ticket_due';
 
+/**
+ * FR-NOTI-008/009 / DEC-087 — user notification settings (API-072 response
+ * shape, also embedded in GET /me under settings.notification). `privacy_mode`
+ * masks every notification surface (generic title/body by kind, app lock) and
+ * is a superset of `preview_in_push`.
+ */
+export interface NotificationSettings {
+  dnd_start?: string | null;
+  dnd_end?: string | null;
+  dnd_days?: number[] | null;
+  sound?: boolean;
+  preview_in_push?: boolean;
+  privacy_mode?: boolean;
+}
+
 export interface InAppNotification {
   id: string;
   type: InAppNotificationType;

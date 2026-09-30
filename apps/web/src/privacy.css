@@ -1,0 +1,55 @@
+/* FR-NOTI-009 / DEC-087: solid cover must never expose chat through translucency. */
+.bc-privacy-lock {
+  --privacy-bg: #f6f7f1; --privacy-card: #fff; --privacy-ink: #29372f;
+  --privacy-muted: #65705f; --privacy-line: #dce3d5; --privacy-field: #fff;
+  position: fixed; inset: 0; z-index: 2147483647; background: var(--privacy-bg);
+  color: var(--privacy-ink); overflow: auto; overscroll-behavior: contain;
+  display: flex; align-items: center; padding: 24px; box-sizing: border-box;
+  min-height: 100%; height: 100dvh; isolation: isolate;
+}
+.bc-privacy-card { width: 100%; max-width: 430px; margin: auto; padding: 36px; border: 1px solid var(--privacy-line); border-radius: 24px; background: var(--privacy-card); box-shadow: 0 18px 64px #29372f0c; }
+.bc-privacy-brand { display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 17px; font-weight: 750; letter-spacing: -.4px; }
+.bc-privacy-brand > span { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 13px; background: #f4d35a; color: #39452e; }
+.bc-privacy-emblem { margin: 32px auto 16px; display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; background: #fcf5d7; color: #6e5b17; }
+.bc-privacy-eyebrow { text-align: center; font-size: 12px; font-weight: 650; color: var(--privacy-muted); margin: 0 0 9px; }
+.bc-privacy-card h1 { font-size: 25px; line-height: 1.45; text-align: center; font-weight: 750; letter-spacing: -.6px; margin: 0; }
+.bc-privacy-hint { text-align: center; font-size: 14px; line-height: 1.7; color: var(--privacy-muted); margin: 12px 0 26px; }
+.bc-privacy-card label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+.bc-privacy-field { display: flex; align-items: center; border: 1px solid var(--privacy-line); border-radius: 12px; background: var(--privacy-field); }
+.bc-privacy-field:focus-within { outline: 2px solid #ab8c23; outline-offset: 2px; }
+.bc-privacy-field input { width: 100%; min-width: 0; background: transparent; color: var(--privacy-ink); border: 0; padding: 13px 14px; font-size: 16px; outline: none; }
+.bc-privacy-lock button { min-height: 44px; border-radius: 10px; font-family: inherit; font-size: 14px; line-height: 1.5; }
+.bc-privacy-lock .bc-privacy-eye { flex: 0 0 44px; width: 44px; padding: 0; display: grid; place-items: center; color: var(--privacy-muted); background: transparent; border: 0; }
+.bc-privacy-lock .bc-privacy-submit { width: 100%; display: flex; gap: 12px; align-items: center; justify-content: center; margin-top: 20px; padding: 13px 16px; color: #29372f; background: #f4d35a; border: 1px solid #e3c048; font-weight: 700; }
+.bc-privacy-lock .bc-privacy-submit:hover { background: #f8df7b; }
+.bc-privacy-lock button:disabled { opacity: .65; }
+.bc-privacy-lock .bc-privacy-logout { display: block; width: 100%; margin: 12px 0 0; background: transparent; color: var(--privacy-ink); border: 0; text-decoration: underline; text-underline-offset: 4px; }
+.bc-privacy-footnote { text-align: center; font-size: 12px; line-height: 1.7; color: var(--privacy-muted); margin: 12px 0 0; }
+.bc-privacy-error { color: #b42318; background: #fff0ee; padding: 10px 12px; border-radius: 8px; font-size: 13px; line-height: 1.6; margin: 12px 0 0; }
+.bc-privacy-settings { padding: 10px 8px 14px; border-bottom: 1px solid #dce3d5; margin-bottom: 8px; }
+.bc-privacy-setting-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.bc-privacy-setting-row strong { font-size: 14px; font-weight: 650; }
+.bc-privacy-settings p { font-size: 12px; line-height: 1.65; margin-top: 4px; }
+#root .bc-privacy-settings .bc-privacy-switch { display: flex; align-items: center; justify-content: flex-start; gap: 0; flex: 0 0 48px; width: 48px; height: 44px; min-height: 44px; padding: 8px 0; border: 0; border-radius: 20px; background: transparent; position: relative; }
+.bc-privacy-switch::before { content: ''; position: absolute; inset: 8px 0; border-radius: 20px; background: #86937d; }
+.bc-privacy-switch[aria-checked='true']::before { background: #f4d35a; }
+.bc-privacy-switch span { z-index: 1; width: 20px; height: 20px; margin-left: 4px; background: #fff; border-radius: 50%; box-shadow: 0 1px 3px #0003; }
+.bc-privacy-switch[aria-checked='true'] span { transform: translateX(20px); background: #344431; }
+@media (max-width: 480px) { .bc-privacy-lock { padding: 16px; } .bc-privacy-card { padding: 26px 22px; border-radius: 20px; } .bc-privacy-card h1 { font-size: 23px; } }
+@media (max-height: 560px) { .bc-privacy-lock { align-items: flex-start; } .bc-privacy-card { margin: 0 auto; padding-top: 20px; padding-bottom: 20px; } .bc-privacy-emblem { margin-top: 16px; } }
+@media (prefers-color-scheme: dark) {
+  .bc-privacy-lock { --privacy-bg: #19221d; --privacy-card: #253129; --privacy-ink: #f1f3ec; --privacy-muted: #bbc5b5; --privacy-line: #4b5848; --privacy-field: #1e2922; color-scheme: dark; }
+  .bc-privacy-emblem { background: #49442b; color: #f4d35a; }
+  .bc-privacy-lock .bc-privacy-error { color: #ffc1b9; background: #522d2b; }
+}
+
+/* FR-NOTI-009: the native top-layer dialog also covers existing modal dialogs. */
+.bc-private-app { height: 100%; }
+html.bc-privacy-covered body { background: #f6f7f1; }
+html.bc-privacy-covered body > :not(.bc-privacy-boundary),
+html.bc-privacy-covered body > :not(.bc-privacy-boundary) * { visibility: hidden !important; }
+.bc-privacy-boundary { position: fixed; inset: 0; width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; border: 0; padding: 0; background: #f6f7f1; z-index: 2147483647; }
+.bc-privacy-boundary::backdrop { background: #f6f7f1; }
+@media (prefers-color-scheme: dark) { html.bc-privacy-covered body, .bc-privacy-boundary, .bc-privacy-boundary::backdrop { background: #19221d; } }
+
+html.bc-privacy-covered body > :not(.bc-privacy-boundary)::backdrop { visibility: hidden !important; }

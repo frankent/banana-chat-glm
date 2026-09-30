@@ -1,3 +1,5 @@
+import { PrivacyBoundary } from "./components/PrivacyBoundary";
+import { usePrivacy } from "./lib/privacy";
 import { MeetingsPage } from "./pages/MeetingsPage";
 import { PublicMeetingPage } from "./pages/PublicMeetingPage";
 import { PublicChatVisitorPage } from "./pages/PublicChatVisitorPage";
@@ -26,12 +28,13 @@ import { queryClient } from "./lib/query-client";
 
 function SessionGate({ children }: { children: React.ReactNode }) {
   const { bootstrap, workspaces, status, currentWorkspace } = useSession();
+  const { enabled, covered } = usePrivacy();
   useEffect(() => {
-    document.title = unreadTitle(
+    document.title = enabled || covered ? "Banana Chat" : unreadTitle(
       status === "authenticated" ? workspaces : [],
       status === "authenticated" ? currentWorkspace?.workspace.name : null,
     );
-  }, [workspaces, status, currentWorkspace]);
+  }, [workspaces, status, currentWorkspace, enabled, covered]);
   useEffect(() => {
     const unlock = (event: Event) => {
       if (event.isTrusted) unlockNotificationAudio();
@@ -54,6 +57,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <SessionGate>
+          <PrivacyBoundary>
           <Routes>
             <Route path="/meet/:code" element={<PublicMeetingPage />} />
             {/*
@@ -118,6 +122,7 @@ export default function App() {
               }
             />
           </Routes>
+        </PrivacyBoundary>
         </SessionGate>
       </BrowserRouter>
     </QueryClientProvider>

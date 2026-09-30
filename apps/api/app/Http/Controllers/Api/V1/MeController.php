@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Message\MessageSerializer;
 use App\Domain\Workspace\WorkspaceSummaryBuilder;
+use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
 use App\Models\Message;
@@ -11,6 +12,8 @@ use App\Models\User;
 use App\Support\WorkspaceContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Hash;
 
 /**
  * API-008/009/010/044 — /me, /me/workspaces, /me/mentions.
@@ -28,7 +31,7 @@ class MeController extends Controller
                 'settings' => [
                     'locale' => $user->locale,
                     'timezone' => $user->timezone,
-                    'notification' => $user->notificationSetting?->only(['dnd_start', 'dnd_end', 'dnd_days', 'sound', 'preview_in_push']),
+                    'notification' => $user->notificationSetting?->only(['dnd_start', 'dnd_end', 'dnd_days', 'sound', 'preview_in_push', 'privacy_mode']),
                 ],
             ],
         ]);
@@ -48,6 +51,31 @@ class MeController extends Controller
         $user->fill($data)->save();
 
         return response()->json(['data' => ['user' => new UserResource($user->refresh())]]);
+    }
+
+    /**
+     * API-236 / FR-NOTI-009 (app lock) / DEC-087 — re-check the account
+     * password for an already-authenticated session. It ONLY compares the
+     * hash: no token is issued, refreshed, rotated or revoked, no LoginAction
+     * (login bulk-revokes the user's other sessions), no audit row naming the
+     * password, and the password value is never logged. This is what the
+     * client calls when privacy mode re-locks the app on open/visible; the
+     * dedicated `verify-password` limiter (8/min per user+IP) bounds guessing.
+     */
+    public function verifyPassword(Request $request): Response
+    {
+        $data = $request->validate([
+            'password' => ['required', 'string', 'max:256'],
+        ]);
+
+        /** @var User $user */
+        $user = $request->user();
+
+        if (! Hash::check($data['password'], $user->password_hash)) {
+            throw new ApiException('INVALID_PASSWORD', 'รหัสผ่านไม่ถูกต้อง', 422);
+        }
+
+        return response()->noContent();
     }
 
     public function workspaces(Request $request, WorkspaceSummaryBuilder $builder): JsonResponse

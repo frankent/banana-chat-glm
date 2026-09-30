@@ -24,6 +24,7 @@ class PushDecisionService
 {
     public function __construct(
         private readonly SettingsService $settings,
+        private readonly PrivacyMasker $masker = new PrivacyMasker,
     ) {}
 
     /**
@@ -99,10 +100,18 @@ class PushDecisionService
      * "sender: body"; body clipped at 120; preview_in_push=false →
      * "ข้อความใหม่"; media-only → emoji badge (TC-NOTI-012..015).
      *
+     * FR-NOTI-008 / DEC-087: when the RECIPIENT has privacy_mode on, the
+     * payload carries no room name, sender name or message text — title is the
+     * product name and the body is the generic line for the message kind in
+     * the recipient's locale. `data` (room_id/message_id/seq) stays: those are
+     * opaque ULIDs the client needs for deep-link routing, and collapse_key
+     * (room id) stays so masked pushes still group per room.
+     *
+     * @param  list<string>  $mentionedUserIds
      * @param  array{unread_rooms_count?: int, total_unread?: int}  $badge
      * @return array{title: string, body: string, data: array<string, mixed>, collapse_key: string, badge: int}
      */
-    public function payload(Message $message, Room $room, User $sender, int $badge, ?User $recipient = null): array
+    public function payload(Message $message, Room $room, User $sender, int $badge, ?User $recipient = null, array $mentionedUserIds = []): array
     {
         // preview_in_push is the RECIPIENT's privacy control -- "do not put message
         // text on my lock screen". Reading it off $sender inverted it: your own
@@ -112,9 +121,23 @@ class PushDecisionService
         // existing call signature keeps working, but callers that send a push MUST
         // pass it -- falling back to $sender would silently restore the inversion,
         // so the fallback is "show the preview", the safe default when unknown.
-        $previewInPush = $recipient !== null
-            ? ($recipient->notificationSetting?->preview_in_push ?? true)
-            : true;
+        $recipientSetting = $recipient?->notificationSetting;
+        $previewInPush = $recipientSetting?->preview_in_push ?? true;
+
+        if ($this->masker->enabled($recipientSetting?->privacy_mode)) {
+            return [
+                'title' => $this->masker->title(),
+                'body' => $this->masker->body($this->kind($message, $recipient, $mentionedUserIds), $recipient?->locale),
+                'data' => [
+                    'room_id' => $room->id,
+                    'workspace_id' => $room->workspace_id,
+                    'message_id' => $message->id,
+                    'seq' => (int) $message->seq,
+                ],
+                'collapse_key' => $room->id,
+                'badge' => $badge,
+            ];
+        }
 
         $title = $room->type === RoomType::Dm
             ? $sender->display_name
@@ -144,6 +167,35 @@ class PushDecisionService
             'collapse_key' => $room->id,
             'badge' => $badge, // TC-NOTI-023: caller computes unread minus muted
         ];
+    }
+
+    /**
+     * FR-NOTI-008 kind mapping for the message: text → message, Image →
+     * photo, Video → video, other attachment → file, mention → mention (a
+     * message that mentions the recipient says "you were mentioned" — the
+     * fact of the mention is the signal, the surrounding text stays hidden).
+     * One implementation shared by the masked push body and the
+     * NotificationAlert kind, so the two surfaces cannot drift.
+     *
+     * @param  list<string>  $mentionedUserIds
+     */
+    public function kind(Message $message, ?User $recipient, array $mentionedUserIds): string
+    {
+        if ($recipient !== null
+            && (in_array($recipient->id, $mentionedUserIds, true)
+                || ($message->relationLoaded('mentions') && $message->mentions->contains('id', $recipient->id)))) {
+            return 'mention';
+        }
+
+        if ($message->body !== null && $message->body !== '') {
+            return 'message';
+        }
+
+        return match ($message->type) {
+            MessageType::Image => 'photo',
+            MessageType::Video => 'video',
+            default => 'file',
+        };
     }
 
     /**

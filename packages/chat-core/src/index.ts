@@ -34,6 +34,7 @@ export { roomListTime, roomPreviewText } from './room-list-presentation.js';
 export type { RoomListTime } from './room-list-presentation.js';
 export { NotificationGate, DesktopNotificationGate, desktopNotificationBody, unreadTitle } from './notification.js';
 export type { AlertKind } from './notification.js';
+export { PrivacyLock, PRIVACY_MODE_STORAGE_KEY, MAX_PRIVACY_SUSPENSION_MS, parsePrivacyModeMirror, privacyModeMirrorValue } from './privacy-lock.js';
 export { ticketKey, deadlineState } from './kanban.js';
 export { CallAttempt, canRingCall } from './call.js';
 // FR-CALL-009 / DEC-086: background survival + automatic rejoin decisions.

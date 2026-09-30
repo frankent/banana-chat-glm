@@ -1,3 +1,6 @@
+import { PrivacySettings } from './PrivacySettings';
+import { useChatText } from '../lib/use-chat-text';
+import { applyPrivacySettings, privacySettingsVersion, beginPrivacySave, finishPrivacySave, usePrivacy } from '../lib/privacy';
 import { useEffect, useRef, useState } from 'react';
 import { desktopNotificationPermission } from '../lib/desktop-notification';
 import { enableNotifications } from '../lib/enable-notifications';
@@ -15,6 +18,8 @@ import { useSession } from '../state/session';
  * pointers, not messages: mention / added to room / session revoked.
  */
 export function NotificationCenter() {
+  const { enabled: privacyEnabled } = usePrivacy();
+  const { locale } = useChatText();
   const [open, setOpen] = useState(false);
   const { currentWorkspace, me } = useSession();
   const [savingSound, setSavingSound] = useState(false);
@@ -32,7 +37,16 @@ export function NotificationCenter() {
     refetchInterval: 30_000,
   });
 
-  const settings = useQuery({queryKey: ['notification-settings', me?.id], queryFn: () => endpoints.me(), enabled: me !== null});
+  const settings = useQuery({
+    queryKey: ['notification-settings', me?.id],
+    queryFn: async () => {
+      const version = privacySettingsVersion();
+      const result = await endpoints.me();
+      applyPrivacySettings(result.settings.notification?.privacy_mode ?? false, version);
+      return result;
+    },
+    enabled: me !== null,
+  });
   // TC-WEB-030 — the browser prompt must follow an explicit press, never page load,
   // so this is deliberately a button and not an effect.
   const [desktopPermission, setDesktopPermission] = useState<NotificationPermission | 'unsupported'>(
@@ -79,6 +93,21 @@ export function NotificationCenter() {
       if (!sound) playNotificationAudio();
     } catch { setSoundError(true); }
     finally { setSavingSound(false); }
+  };
+
+  const togglePrivacy = async (enabled: boolean) => {
+    if (!slug) return;
+    const previous = privacyEnabled;
+    const version = beginPrivacySave(enabled);
+    await queryClient.cancelQueries({ queryKey: ['notification-settings'] });
+    try {
+      const result = await endpoints.notificationSettings(slug, { privacy_mode: enabled });
+      finishPrivacySave(result.settings.privacy_mode ?? enabled, version);
+      void settings.refetch();
+    } catch (error) {
+      finishPrivacySave(previous, version);
+      throw error;
+    }
   };
 
   const notifications = query.data?.notifications ?? [];
@@ -152,7 +181,7 @@ export function NotificationCenter() {
         <div
           role="dialog"
           aria-label="Notification center"
-          className="absolute left-0 top-full z-30 mt-2 max-h-96 w-80 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg"
+          className="absolute right-0 top-full z-30 mt-2 max-h-96 w-80 max-w-[calc(100vw-24px)] overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-lg"
           data-testid="notification-panel"
         >
           <div className="flex items-center justify-between px-2 pb-1">
@@ -164,6 +193,7 @@ export function NotificationCenter() {
             )}
           </div>
 
+          <PrivacySettings enabled={privacyEnabled} onChange={togglePrivacy} locale={locale === 'en' ? 'en' : 'th'} />
           <label className="flex items-center gap-2 px-2 py-2 text-sm"><input type="checkbox" checked={sound} disabled={savingSound || !settings.data} onChange={() => void toggleSound()} />Notification sound</label>
           {/* Offered whenever this device is not actually receiving push, not only
               while permission is `default`. Permission granted + no FCM token is the

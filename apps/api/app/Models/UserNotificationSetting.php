@@ -20,6 +20,7 @@ class UserNotificationSetting extends Model
         'dnd_days',
         'sound',
         'preview_in_push',
+        'privacy_mode', // FR-NOTI-008/009 / DEC-087
     ];
 
     protected function casts(): array
@@ -28,6 +29,7 @@ class UserNotificationSetting extends Model
             'dnd_days' => 'array',
             'sound' => 'boolean',
             'preview_in_push' => 'boolean',
+            'privacy_mode' => 'boolean',
         ];
     }
 
