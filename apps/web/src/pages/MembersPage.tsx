@@ -23,7 +23,7 @@ export function MembersPage() {
       try { const result = await endpoints.createDm(member.id, slug); navigate(`/rooms/${result.room.id}`); }
       catch(e) { setError(e instanceof Error ? e.message : 'Unable to start conversation'); }
       finally {setBusy(null);}
-    }}><Avatar name={member.display_name} /><span><strong>{member.display_name}{member.id === me?.id ? ' (you)' : ''}</strong><small>@{member.username}</small></span><Icon name="chat" /></button>)}</div>
+    }}><Avatar name={member.display_name} avatar={member.avatar} /><span><strong>{member.display_name}{member.id === me?.id ? ' (you)' : ''}</strong><small>@{member.username}</small></span><Icon name="chat" /></button>)}</div>
     {!query.isLoading && query.data?.pages[0]?.members.length === 0 && <p>No members found.</p>}
     {query.hasNextPage && <button className="bc-primary" disabled={query.isFetchingNextPage} onClick={() => void query.fetchNextPage()}>Load more members</button>}
   </section>;

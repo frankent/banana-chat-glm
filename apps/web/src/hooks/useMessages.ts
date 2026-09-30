@@ -23,6 +23,9 @@ export function useMessagePage(roomId: string | undefined, slug: string | undefi
         return page;
       }
       store!.mergePage(page.messages);
+      // FR-PROF-006 / EVT-087 — carry fresh sender stubs (new photo/name) to
+      // every older loaded row by the same people, not just this page's rows.
+      store!.updateSenders(page.messages.map(m => m.sender));
       if (scope) await roomCache(scope).saveMessages(roomId!, store!.getState().messages);
       return page;
     },

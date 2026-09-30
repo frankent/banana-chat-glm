@@ -3,6 +3,7 @@
 namespace App\Domain\Message;
 
 use App\Domain\Media\AttachmentSerializer;
+use App\Domain\Media\AvatarUrls;
 use App\Models\Message;
 
 /**
@@ -41,6 +42,10 @@ class MessageSerializer
             'username' => $message->sender->username,
             'display_name' => $message->sender->display_name,
             'avatar_attachment_id' => $message->sender->avatar_attachment_id,
+            // FR-PROF-006 — {sm, md, animated}|null. avatarAttachment is on
+            // every sender eager-load (see forEvent and the list controllers)
+            // so this never lazy-loads per message.
+            'avatar' => AvatarUrls::for($message->sender->avatarAttachment),
         ] : null;
 
         return [
@@ -98,6 +103,7 @@ class MessageSerializer
     {
         $message->loadMissing([
             'sender:id,username,display_name,avatar_attachment_id',
+            'sender.avatarAttachment',
             'replyTo:id,room_id,seq,sender_id,body,deleted_at',
             'attachments',
             'mentions:id',

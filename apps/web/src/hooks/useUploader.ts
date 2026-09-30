@@ -253,3 +253,65 @@ export function optimisticAttachment(staged: StagedUpload): Attachment {
     urls_expire_at: new Date(Date.now() + 60 * 60_000).toISOString(),
   };
 }
+
+/**
+ * FR-PROF-006 — one PUT with real byte progress. `fetch` cannot report upload
+ * progress, so this is the XHR twin of the composer's fetch PUT above; the
+ * ticket/multipart choreography stays in chat-core's uploadTicket.
+ */
+function putWithProgress(url: string, headers: Record<string, string>, body: Blob, onLoaded: (bytes: number) => void, signal?: AbortSignal): Promise<string | null> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('PUT', url);
+    for (const [name, value] of Object.entries(headers)) xhr.setRequestHeader(name, value);
+    xhr.upload.onprogress = (event) => onLoaded(event.loaded);
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) { onLoaded(body.size); resolve(xhr.getResponseHeader('ETag')); }
+      else reject(new AvatarUploadError('network'));
+    };
+    xhr.onerror = () => reject(new AvatarUploadError('network'));
+    xhr.onabort = () => reject(new AvatarUploadError('aborted'));
+    signal?.addEventListener('abort', () => xhr.abort(), { once: true });
+    xhr.send(body);
+  });
+}
+
+export class AvatarUploadError extends Error {
+  constructor(readonly reason: 'network' | 'processing' | 'aborted') {
+    super(reason);
+    this.name = 'AvatarUploadError';
+  }
+}
+
+/**
+ * FR-PROF-006 / DEC-088 — upload a profile photo through the SAME API-060
+ * ticket → PUT → complete flow as message attachments, as kind `avatar`.
+ *
+ * Unlike the composer (which may send a still-processing attachment), PATCH
+ * /me only accepts a READY avatar, so this keeps polling until the worker has
+ * made the thumbs, and says so if it never does. Resolves the attachment id.
+ * `blob` is what is actually uploaded: the cropped webp for a still, the
+ * untouched original for a GIF — the declared mime/size describe THAT blob.
+ */
+export async function uploadAvatar(
+  slug: string,
+  blob: Blob,
+  filename: string,
+  options: { onProgress?: (fraction: number) => void; signal?: AbortSignal; pollMs?: number; maxPolls?: number } = {},
+): Promise<string> {
+  const { onProgress, signal, pollMs = 1000, maxPolls = 30 } = options;
+  const ticket = await endpoints.createUpload(slug, { kind: 'avatar', filename, mime_type: blob.type, size_bytes: blob.size });
+  if (signal?.aborted) throw new AvatarUploadError('aborted');
+  const total = Math.max(1, blob.size);
+  const parts = await uploadTicket(ticket, blob.size, (url, headers, start, end) =>
+    putWithProgress(url, headers, blob.slice(start, end, blob.type), (loaded) => onProgress?.(Math.min(1, (start + loaded) / total)), signal));
+  const { attachment } = await endpoints.completeUpload(ticket.attachment_id, slug, parts);
+  let status = attachment.status;
+  for (let i = 0; status !== 'ready'; i++) {
+    if (status === 'failed' || i >= maxPolls) throw new AvatarUploadError('processing');
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+    if (signal?.aborted) throw new AvatarUploadError('aborted');
+    status = (await endpoints.attachment(ticket.attachment_id, slug)).attachment.status;
+  }
+  return ticket.attachment_id;
+}

@@ -4,6 +4,7 @@ use App\Jobs\ExpireSecretRooms;
 use App\Jobs\NotifyDueTickets;
 use App\Jobs\PurgeDeletedAiConversations;
 use App\Jobs\PurgeExpiredUploads;
+use App\Jobs\PurgeOrphanAttachments;
 use App\Jobs\PurgeRotatedRefreshTokens;
 use App\Jobs\ReconcileCalls;
 use App\Jobs\ReconcileMeetings;
@@ -30,6 +31,13 @@ Schedule::job(new RollupAiUsage)->dailyAt('00:10')->onOneServer();
 // a separate schedule entry would be one more thing to forget to register. The
 // grace period, not the tick rate, is what bounds how long an orphan lives.
 Schedule::job(new PurgeExpiredUploads)->hourly()->onOneServer();
+
+// FR-PROF-006 — replaced/removed avatars (users.avatar_attachment_id moved
+// on) older than PurgeOrphanAttachments::AVATAR_ORPHAN_GRACE_HOURS. Rides its
+// own entry rather than PurgeExpiredUploads because the reference it checks
+// is the users table, not an upload ticket: a different sweep, a different
+// docblock to read before touching it.
+Schedule::job(new PurgeOrphanAttachments)->hourly()->onOneServer();
 
 // R6 (REVIEW.md 2026-09-19) — bounded cleanup for the refresh-token reuse
 // lineage; a row only needs to outlive replays within the token's own TTL.

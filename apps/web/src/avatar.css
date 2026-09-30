@@ -1,0 +1,157 @@
+/* FR-PROF-006 — profile photo editor. Portaled to <body>, so none of the
+   #root button geometry in buttons.css reaches it; every control here states
+   its own box. Tokens are scoped to the dialog (the shell has no dark theme;
+   this follows .bc-privacy-lock's precedent). */
+.bc-avatar-editor {
+  --ae-bg: #ffffff; --ae-ink: #202b36; --ae-muted: #607080; --ae-line: #e4e9e1;
+  --ae-surface: #f4f6f1; --ae-surface-hover: #eaeee6; --ae-stage: #1d2622; --ae-stage-glow: #2c3a33;
+  --ae-accent: #f2cf55; --ae-accent-hover: #f6da76; --ae-accent-ink: #29372f;
+  --ae-danger: #b2403c; --ae-danger-bg: #fdf1ef; --ae-focus: #376fb0; --ae-ring: #f2cf55;
+  --ae-shadow: 0 24px 80px #1b29333a;
+  box-sizing: border-box;
+  width: min(440px, calc(100vw - 32px)); max-width: none;
+  max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain;
+  margin: auto; padding: 22px 22px 20px; border: 1px solid var(--ae-line); border-radius: 22px;
+  background: var(--ae-bg); color: var(--ae-ink); box-shadow: var(--ae-shadow);
+  font-family: 'Banana Thai', 'DM Sans', 'Noto Sans Thai', system-ui, sans-serif;
+  color-scheme: light;
+}
+.bc-avatar-editor[open] { display: flex; flex-direction: column; gap: 16px; animation: bc-ae-in .22s cubic-bezier(.2, .8, .2, 1); }
+.bc-avatar-editor::backdrop { background: #16232d59; backdrop-filter: blur(2px); }
+.bc-avatar-editor *, .bc-avatar-editor *::before, .bc-avatar-editor *::after { box-sizing: border-box; }
+@keyframes bc-ae-in { from { opacity: 0; transform: translateY(8px) scale(.985); } }
+
+.bc-ae-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.bc-ae-header h2 { margin: 0; font-size: 18px; line-height: 26px; font-weight: 700; letter-spacing: -.2px; }
+.bc-ae-header p { margin: 2px 0 0; font-size: 13px; line-height: 20px; color: var(--ae-muted); }
+
+/* Buttons: explicit box on every variant (no inherited justify/size rules). */
+.bc-avatar-editor button { font: inherit; cursor: pointer; }
+.bc-avatar-editor button:disabled { cursor: not-allowed; opacity: .5; }
+.bc-avatar-editor :is(button, input, [tabindex]):focus-visible { outline: 2px solid var(--ae-focus); outline-offset: 2px; }
+.bc-ae-icon-button {
+  display: inline-flex; align-items: center; justify-content: center; flex: 0 0 44px;
+  width: 44px; height: 44px; margin: -6px -8px 0 0; padding: 0; border: 0; border-radius: 12px;
+  background: transparent; color: var(--ae-muted);
+}
+.bc-ae-icon-button:not(:disabled):hover { background: var(--ae-surface); color: var(--ae-ink); }
+.bc-ae-button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; min-width: 44px; padding: 0 18px; border: 1px solid transparent; border-radius: 12px;
+  font-size: 14px; font-weight: 600; line-height: 20px; white-space: nowrap;
+  transition: background-color .15s ease, border-color .15s ease;
+}
+.bc-ae-button.is-primary { background: var(--ae-accent); color: var(--ae-accent-ink); border-color: #e3c048; min-width: 96px; }
+.bc-ae-button.is-primary:not(:disabled):hover { background: var(--ae-accent-hover); }
+.bc-avatar-editor .bc-ae-button.is-primary:disabled { opacity: 1; background: var(--ae-surface); border-color: var(--ae-line); color: var(--ae-muted); }
+.bc-ae-button.is-secondary { background: var(--ae-surface); color: var(--ae-ink); border-color: var(--ae-line); }
+.bc-ae-button.is-secondary:not(:disabled):hover { background: var(--ae-surface-hover); }
+.bc-ae-button.is-danger { background: var(--ae-danger); color: #fff; }
+.bc-ae-button.is-quiet-danger { background: transparent; color: var(--ae-danger); padding: 0 12px; margin-right: auto; margin-left: -12px; }
+.bc-ae-button.is-quiet-danger:not(:disabled):hover { background: var(--ae-danger-bg); }
+.bc-ae-link {
+  align-self: center; min-height: 44px; padding: 0 12px; border: 0; background: transparent;
+  color: var(--ae-ink); font-size: 14px; font-weight: 600; text-decoration: underline; text-underline-offset: 4px;
+}
+
+/* The stage: a square that always shows the crop circle; outside the circle
+   the image is dimmed, so the result is visible before saving. */
+.bc-ae-stage {
+  position: relative; align-self: center; width: min(280px, 100%); aspect-ratio: 1; flex-shrink: 0;
+  overflow: hidden; border-radius: 20px; background: radial-gradient(circle at 50% 42%, var(--ae-stage-glow), var(--ae-stage) 70%);
+  touch-action: none; user-select: none; -webkit-user-select: none;
+}
+.bc-ae-stage.is-current { background: var(--ae-surface); }
+.bc-ae-stage.is-still { cursor: grab; }
+.bc-ae-stage.is-still:active { cursor: grabbing; }
+.bc-ae-crop-image { position: absolute; left: 50%; top: 50%; max-width: none; pointer-events: none; will-change: transform; }
+.bc-ae-circle {
+  position: absolute; left: 50%; top: 50%; width: var(--ae-circle); height: var(--ae-circle);
+  transform: translate(-50%, -50%); border-radius: 50%; overflow: hidden; pointer-events: none;
+}
+.bc-ae-stage.is-still .bc-ae-circle { overflow: visible; box-shadow: 0 0 0 999px #0e1512a6, inset 0 0 0 2px #ffffffe6; }
+.bc-ae-stage.is-gif .bc-ae-circle { box-shadow: 0 0 0 2px #ffffffe6, 0 10px 40px #0000004d; }
+.bc-ae-stage.is-current .bc-ae-circle { box-shadow: 0 0 0 6px var(--ae-bg), 0 12px 36px #1b29331f; }
+.bc-ae-gif { display: block; width: 100%; height: 100%; object-fit: cover; }
+.bc-ae-circle .bc-ae-current { width: 100%; height: 100%; border-radius: 50%; font-size: calc(var(--ae-circle) * .3); font-weight: 650; letter-spacing: 1px; }
+.bc-ae-caption { margin: -4px 0 -6px; font-size: 12px; line-height: 18px; color: var(--ae-muted); text-align: center; }
+.bc-ae-badge {
+  display: inline-block; margin-right: 8px; padding: 1px 8px; border-radius: 999px; vertical-align: 1px;
+  background: var(--ae-accent); color: var(--ae-accent-ink); font-size: 11px; line-height: 18px; font-weight: 700; white-space: nowrap;
+}
+.bc-ae-ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); pointer-events: none; }
+.bc-ae-ring circle { fill: none; stroke: var(--ae-ring); stroke-width: 4; stroke-linecap: round; transition: stroke-dashoffset .2s linear; }
+.bc-ae-ring circle.is-pulsing { animation: bc-ae-pulse 1.1s ease-in-out infinite; }
+@keyframes bc-ae-pulse { 50% { opacity: .35; } }
+
+.bc-ae-panel { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.bc-ae-drop {
+  display: flex; align-items: center; gap: 12px; padding: 12px 12px 12px 14px;
+  border: 1.5px dashed #cbd4c4; border-radius: 16px; background: var(--ae-bg);
+  transition: border-color .15s ease, background-color .15s ease;
+}
+.bc-ae-drop.is-active, .bc-avatar-editor.is-drag-over .bc-ae-drop { border-color: #c9a82f; background: #fffaea; }
+.bc-ae-drop-icon { display: grid; place-items: center; flex: 0 0 40px; height: 40px; border-radius: 12px; background: var(--ae-surface); color: var(--ae-muted); }
+.bc-ae-drop-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.bc-ae-drop-copy strong { font-size: 14px; line-height: 20px; font-weight: 600; }
+.bc-ae-drop-copy span { font-size: 12px; line-height: 18px; color: var(--ae-muted); }
+.bc-ae-note { margin: 0; font-size: 13px; line-height: 20px; color: var(--ae-muted); text-align: center; }
+.bc-ae-note.is-gif { padding: 10px 12px; border-radius: 12px; background: var(--ae-surface); color: var(--ae-ink); text-align: left; }
+
+.bc-ae-zoom { display: flex; align-items: center; gap: 6px; }
+.bc-ae-zoom .bc-ae-icon-button { margin: 0; color: var(--ae-ink); }
+.bc-ae-zoom input[type=range] {
+  flex: 1; min-width: 0; height: 44px; margin: 0; background: transparent; cursor: pointer;
+  -webkit-appearance: none; appearance: none;
+}
+.bc-ae-zoom input[type=range]::-webkit-slider-runnable-track {
+  height: 6px; border-radius: 999px;
+  background: linear-gradient(to right, var(--ae-ink) var(--ae-fill, 0%), var(--ae-line) var(--ae-fill, 0%));
+}
+.bc-ae-zoom input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 22px; height: 22px; margin-top: -8px; border-radius: 50%;
+  background: var(--ae-bg); border: 2px solid var(--ae-ink); box-shadow: 0 2px 6px #1b293333;
+}
+.bc-ae-zoom input[type=range]::-moz-range-track { height: 6px; border-radius: 999px; background: var(--ae-line); }
+.bc-ae-zoom input[type=range]::-moz-range-progress { height: 6px; border-radius: 999px; background: var(--ae-ink); }
+.bc-ae-zoom input[type=range]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: var(--ae-bg); border: 2px solid var(--ae-ink); }
+
+.bc-ae-status { margin: 0; min-height: 0; font-size: 13px; line-height: 20px; color: var(--ae-muted); text-align: center; }
+.bc-ae-status:empty { display: none; }
+.bc-ae-error { margin: 0; padding: 10px 12px; border-radius: 12px; background: var(--ae-danger-bg); color: var(--ae-danger); font-size: 13px; line-height: 20px; }
+
+.bc-ae-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.bc-ae-confirm { display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: 16px; background: var(--ae-danger-bg); }
+.bc-ae-confirm p { margin: 0; font-size: 14px; line-height: 22px; }
+
+/* Phones: a bottom sheet, thumb-reachable actions, stage sized to the screen. */
+@media (max-width: 520px) {
+  .bc-avatar-editor {
+    width: 100%; max-width: 100%; max-height: calc(100dvh - 24px); margin: auto 0 0;
+    padding: 18px 16px max(16px, env(safe-area-inset-bottom)); border-radius: 22px 22px 0 0; border-width: 1px 0 0;
+  }
+  .bc-avatar-editor[open] { animation-name: bc-ae-sheet; }
+  .bc-ae-stage { width: min(260px, 100%); }
+  .bc-ae-actions .bc-ae-button.is-primary, .bc-ae-actions .bc-ae-button.is-secondary { flex: 1; }
+  .bc-ae-confirm .bc-ae-button { flex: 1; }
+}
+@keyframes bc-ae-sheet { from { transform: translateY(24px); opacity: 0; } }
+
+@media (prefers-color-scheme: dark) {
+  .bc-avatar-editor {
+    --ae-bg: #1b2320; --ae-ink: #eef1ea; --ae-muted: #a7b2a2; --ae-line: #34413a;
+    --ae-surface: #242f2a; --ae-surface-hover: #2d3a33; --ae-stage: #0e1411; --ae-stage-glow: #1e2a24;
+    --ae-accent: #f2cf55; --ae-accent-hover: #f6da76; --ae-accent-ink: #1f2a22;
+    --ae-danger: #f0877d; --ae-danger-bg: #3a2522; --ae-focus: #8db6ea;
+    --ae-shadow: 0 24px 80px #0000008c;
+    color-scheme: dark;
+  }
+  .bc-avatar-editor::backdrop { background: #000000a1; }
+  .bc-ae-drop { border-color: #4a5850; }
+  .bc-ae-drop.is-active, .bc-avatar-editor.is-drag-over .bc-ae-drop { border-color: #c9a82f; background: #2c2a1c; }
+  .bc-ae-button.is-danger { color: #1b2320; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bc-avatar-editor[open], .bc-ae-ring circle.is-pulsing { animation: none; }
+  .bc-ae-ring circle, .bc-ae-button, .bc-ae-drop { transition: none; }
+}

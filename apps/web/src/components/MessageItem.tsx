@@ -217,7 +217,7 @@ export function MessageItem({ message, mine, canModerate = false, grouped = fals
 
   return (
     <div className={`bc-message group flex ${mine ? 'justify-end' : 'justify-start'}`} data-testid="message" data-mine={mine} data-grouped={grouped}>
-      {!mine && showSender && <Avatar name={message.sender?.display_name ?? 'Member'} className="bc-message-avatar" />}
+      {!mine && showSender && <Avatar name={message.sender?.display_name ?? 'Member'} avatar={message.sender?.avatar} className="bc-message-avatar" />}
       <div ref={bubbleRef} data-compact={compactText} className={`bc-message-bubble ${pending ? 'is-pending' : ''}`}>
         {!mine && showSender && message.sender !== null && (
           <p className="text-xs font-semibold text-slate-600">{message.sender.display_name}</p>

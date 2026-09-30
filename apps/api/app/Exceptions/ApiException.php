@@ -221,6 +221,17 @@ class ApiException extends RuntimeException
         return new self('MEDIA_FORBIDDEN', 'คุณไม่มีสิทธิ์เข้าถึงไฟล์นี้', 403);
     }
 
+    /**
+     * FR-PROF-006 / API-009 — PATCH /me {avatar_attachment_id} that is not
+     * the caller's OWN READY kind=avatar upload. One opaque answer for every
+     * failure (unknown id, someone else's attachment, wrong kind, still
+     * pending): no enumeration of which ids exist or who owns them.
+     */
+    public static function avatarInvalid(): self
+    {
+        return new self('AVATAR_INVALID', 'รูปโปรไฟล์ไม่ถูกต้อง (ไม่พบ, ไม่ใช่ของคุณ, หรือยังไม่พร้อม)', 422);
+    }
+
     // ---- Public Chat: partner HMAC surface (FR-PCHAT-031, §7.1) ----
     //
     // These are thrown by VerifyPublicChatSignature. They exist as ApiExceptions

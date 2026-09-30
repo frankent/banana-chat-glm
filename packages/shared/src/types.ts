@@ -10,11 +10,25 @@ export type RoomType = 'dm' | 'group' | 'channel';
 export type MessageType = 'text' | 'system' | 'image' | 'video' | 'file';
 export type UserStatus = 'active' | 'suspended' | 'deactivated';
 
+/**
+ * FR-PROF-006 / DEC-088 — the serialized profile photo carried by every user
+ * payload. `sm`/`md` are static webp thumbs (the FIRST frame for a GIF);
+ * `animated` is the untouched GIF original, null for every still type.
+ * Signed with an hour-rounded expiry so refetches return identical strings.
+ */
+export interface UserAvatar {
+  sm: string;
+  md: string;
+  animated: string | null;
+}
+
 export interface UserStub {
   id: string;
   username: string;
   display_name: string;
   avatar_attachment_id: string | null;
+  /** Optional: rows cached before FR-PROF-006 (and old fixtures) lack it. */
+  avatar?: UserAvatar | null;
 }
 
 export interface WorkspaceSummary {
@@ -220,6 +234,7 @@ export interface ReadStatusEntry {
   username: string;
   display_name: string;
   avatar_attachment_id: string | null;
+  avatar?: UserAvatar | null;
   last_read_seq: number;
   last_read_at: string | null;
 }
@@ -331,6 +346,9 @@ export const ERROR_CODES = {
   INVITE_ALREADY_USED: 409,
   AUTH_USERNAME_TAKEN: 422,
   AUTH_PASSWORD_WEAK: 422,
+  // FR-PROF-006 (DEC-088) — PATCH /me avatar id not an own, ready kind=avatar upload.
+  AVATAR_INVALID: 422,
+  MEDIA_TOO_LARGE: 422,
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_CODES;

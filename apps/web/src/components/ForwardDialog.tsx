@@ -94,7 +94,7 @@ export function ForwardDialog({ slug, message, returnFocus, onClose, onDone }: {
           const didFail = failed.includes(item.room.id);
           return <label className="bc-forward-room" key={item.room.id} data-failed={didFail}>
             <input type="checkbox" checked={checked} disabled={submitted !== null || (!checked && selected.length >= 10)} onChange={() => setSelected(current => checked ? current.filter(id => id !== item.room.id) : current.length < 10 ? [...current, item.room.id] : current)} />
-            <Avatar name={roomTitle(item)} />
+            <Avatar name={roomTitle(item)} avatar={item.room.type === 'dm' ? item.other_user?.avatar : null} />
             <span className="bc-forward-room-name">{item.room.is_secret && <span aria-label={text('room.secret.label')}>🔒 </span>}{roomTitle(item)}{didFail && <small>{text('chat.forwardFailed')}</small>}</span>
           </label>;
         })}

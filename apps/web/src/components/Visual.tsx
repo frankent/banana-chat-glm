@@ -1,4 +1,7 @@
+import { useState, useSyncExternalStore } from 'react';
 import type { CSSProperties } from 'react';
+import type { UserAvatar } from '@banana-chat/shared';
+import { avatarSource } from '@banana-chat/chat-core';
 
 /** Presentation primitives adapted from the sibling banana-chat design. */
 export function Banana({ size = 30 }: { size?: number }) {
@@ -42,12 +45,66 @@ const paths = {
   qr: <><rect x="3" y="3" width="7" height="7" rx="1.2" /><rect x="14" y="3" width="7" height="7" rx="1.2" /><rect x="3" y="14" width="7" height="7" rx="1.2" /><path d="M15 15h2v2h-2zM19 15h2v2h-2zM15 19h2v2h-2zM19 19h2v2h-2z" /></>,
   // FR-AUTH-008 — password visibility toggle on the public join form.
   eye: <><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></>,
+  // FR-PROF-006 — profile photo editor: menu entry, drop zone, zoom controls.
+  camera: <><path d="M4 8h3l2-3h6l2 3h3v11H4V8Z" /><circle cx="12" cy="13" r="3.5" /></>,
+  image: <><rect x="3" y="4" width="18" height="16" rx="3" /><circle cx="9" cy="10" r="1.8" /><path d="m4 18 5-5 4 4 3-3 4 4" /></>,
+  plus: <path d="M12 5v14M5 12h14" />,
+  minus: <path d="M5 12h14" />,
   eyeOff: <><path d="M2 12s3.5-7 10-7c1.9 0 3.5.5 4.9 1.2M22 12s-3.5 7-10 7c-1.9 0-3.5-.5-4.9-1.2M9.9 9.9a3 3 0 0 0 4.2 4.2" /><path d="m3 3 18 18" /></>,
 };
 export function Icon({ name, size = 20 }: { name: keyof typeof paths; size?: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{paths[name]}</svg>;
 }
-export function Avatar({ name, className = '' }: { name: string; className?: string }) {
+const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
+function subscribeReducedMotion(onChange: () => void) {
+  if (typeof window === 'undefined' || !window.matchMedia) return () => {};
+  const query = window.matchMedia(REDUCED_MOTION);
+  query.addEventListener('change', onChange);
+  return () => query.removeEventListener('change', onChange);
+}
+/** FR-PROF-006 — an animated avatar honours the OS "reduce motion" switch live. */
+export function usePrefersReducedMotion(): boolean {
+  return useSyncExternalStore(subscribeReducedMotion, () => typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia(REDUCED_MOTION).matches, () => false);
+}
+
+/**
+ * The ONE avatar primitive (FR-PROF-006 / DEC-088). Initials are always
+ * rendered underneath, so a slow, missing or broken photo never changes the
+ * box size (no layout shift) and never leaves a hole: the photo fades in over
+ * the initials once decoded and is dropped on error. Callers pass the
+ * serialized `avatar` object straight through; which URL to show (sm/md/GIF)
+ * is decided here, not per call site.
+ */
+export function Avatar({ name, avatar, large = false, className = '', label }: { name: string; avatar?: UserAvatar | null; large?: boolean; className?: string; label?: string }) {
   const color = [...name].reduce((sum, c) => sum + c.charCodeAt(0), 0) % 6;
-  return <span className={`bc-avatar ${className}`} style={{ '--avatar-bg': ['#dce8d9','#eddfd1','#e4e0ee','#f7e8b9','#dce8ed','#efdcdd'][color], '--avatar-ink': ['#537448','#946f4f','#847292','#9b873e','#618a99','#a26c71'][color] } as CSSProperties} aria-hidden="true">{name.split(/\s+/).slice(0, 2).map(word => [...word][0]).join('').toUpperCase()}</span>;
+  const reducedMotion = usePrefersReducedMotion();
+  const src = avatarSource(avatar, { large, reducedMotion });
+  const [failed, setFailed] = useState<string | null>(null);
+  // A boolean, not keyed on the URL: when an hour-rounded signed URL rolls
+  // over (DEC-088) the live <img> keeps painting the old bitmap until the new
+  // one decodes, so photos never blink back to initials.
+  const [loaded, setLoaded] = useState(false);
+  const showImage = src !== null && failed !== src;
+  return (
+    <span
+      className={`bc-avatar ${showImage ? 'has-photo' : ''} ${className}`}
+      style={{ '--avatar-bg': ['#dce8d9','#eddfd1','#e4e0ee','#f7e8b9','#dce8ed','#efdcdd'][color], '--avatar-ink': ['#537448','#946f4f','#847292','#9b873e','#618a99','#a26c71'][color] } as CSSProperties}
+      {...(label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true })}
+    >
+      {name.split(/\s+/).slice(0, 2).map(word => [...word][0]).join('').toUpperCase()}
+      {showImage && (
+        <img
+          className={`bc-avatar-photo ${loaded ? 'is-loaded' : ''}`}
+          src={src}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          draggable={false}
+          data-testid="avatar-photo"
+          onLoad={() => setLoaded(true)}
+          onError={() => { setLoaded(false); setFailed(src); }}
+        />
+      )}
+    </span>
+  );
 }

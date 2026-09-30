@@ -6,7 +6,7 @@ import { endpoints } from '../lib/api';
 import type { Message } from '@banana-chat/shared';
 import { DEFAULT_SETTINGS } from '@banana-chat/shared';
 import type { UserStub } from '@banana-chat/shared';
-import { Icon } from './Visual';
+import { Avatar, Icon } from './Visual';
 import { sessionOutbox } from '../lib/outbox';
 import { useChatText } from '../lib/use-chat-text';
 import { useUploader } from '../hooks/useUploader';
@@ -251,9 +251,10 @@ export function Composer({ roomId, workspaceId, slug, senderId, members = [], re
                 e.preventDefault(); // keep textarea focus/caret
                 applyMention(m);
               }}
-              className={`block w-full px-3 py-1.5 text-left text-sm ${i === mentionIndex ? 'bg-yellow-100' : 'hover:bg-slate-50'}`}
+              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm ${i === mentionIndex ? 'bg-yellow-100' : 'hover:bg-slate-50'}`}
               data-testid="mention-option"
             >
+              <Avatar name={m.display_name} avatar={m.avatar} className="bc-mention-avatar" />
               <span className="font-medium">@{m.username}</span>
               <span className="ml-2 text-xs text-slate-400">{m.display_name}</span>
             </button>

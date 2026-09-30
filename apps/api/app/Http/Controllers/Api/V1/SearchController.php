@@ -60,7 +60,7 @@ class SearchController extends Controller
                 $sub->whereRaw("body_search @@ plainto_tsquery('simple', ?)", [$q])
                     ->orWhere('messages.body', 'ILIKE', $like);
             })
-            ->with(['sender:id,username,display_name,avatar_attachment_id', 'attachments'])
+            ->with(['sender:id,username,display_name,avatar_attachment_id', 'sender.avatarAttachment', 'attachments'])
             ->orderByDesc('messages.created_at')
             ->orderByDesc('messages.id');
 

@@ -4,9 +4,14 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Message\MessageSerializer;
 use App\Domain\Workspace\WorkspaceSummaryBuilder;
+use App\Enums\AttachmentKind;
+use App\Enums\AttachmentStatus;
+use App\Events\UserSettingsUpdated;
+use App\Events\UserUpdated;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
+use App\Models\Attachment;
 use App\Models\Message;
 use App\Models\User;
 use App\Support\WorkspaceContext;
@@ -48,7 +53,41 @@ class MeController extends Controller
 
         /** @var User $user */
         $user = $request->user();
-        $user->fill($data)->save();
+
+        // FR-PROF-006 — a non-null id is accepted only when it is the user's
+        // OWN READY kind=avatar upload. Without this the field was a bare
+        // `nullable|ulid`: anything shaped like a ULID went straight onto the
+        // row, so a member could point their avatar at another user's PRIVATE
+        // attachment and get it serialized (and signed) to everyone. Unknown
+        // id, not-mine, wrong kind and not-ready are all the SAME opaque
+        // AVATAR_INVALID — no enumeration. null clears the photo.
+        if (($data['avatar_attachment_id'] ?? null) !== null) {
+            $avatar = Attachment::withoutGlobalScopes()->find($data['avatar_attachment_id']);
+
+            if ($avatar === null
+                || $avatar->uploader_id !== $user->id
+                || $avatar->kind !== AttachmentKind::Avatar
+                || $avatar->status !== AttachmentStatus::Ready) {
+                throw ApiException::avatarInvalid();
+            }
+        }
+
+        $user->fill($data);
+
+        // EVT-086 + EVT-087 fire only on a REAL change of a field other
+        // members (EVT-087, per active workspace) or the user's other tabs
+        // (EVT-086, private-user) can observe. A PATCH that writes the same
+        // value back — or touches only locale/timezone — broadcasts nothing.
+        $profileChanged = $user->isDirty('avatar_attachment_id') || $user->isDirty('display_name');
+
+        $user->save();
+
+        if ($profileChanged) {
+            $workspaceIds = $user->workspaces()->pluck('workspaces.id')->all(); // active memberships only (relation filters pivot)
+
+            broadcast(new UserUpdated($user->id, $workspaceIds));
+            broadcast(new UserSettingsUpdated($user->id));
+        }
 
         return response()->json(['data' => ['user' => new UserResource($user->refresh())]]);
     }
@@ -111,6 +150,7 @@ class MeController extends Controller
             ->where(fn ($q) => $q->where('rooms.is_secret', false)->orWhere('rooms.secret_expires_at', '>', now())) // FR-ROOM-012
             ->with([
                 'sender:id,username,display_name,avatar_attachment_id',
+                'sender.avatarAttachment',
                 'replyTo:id,room_id,seq,sender_id,body,deleted_at',
                 'attachments',
                 'mentions:id',

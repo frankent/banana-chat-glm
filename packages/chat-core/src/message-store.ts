@@ -1,4 +1,4 @@
-import type { Message } from '@banana-chat/shared';
+import type { Message, UserStub } from '@banana-chat/shared';
 
 export interface GapFillRequest {
   roomId: string;
@@ -125,6 +125,31 @@ export class MessageStore {
     return this.state;
   }
 
+  /**
+   * FR-PROF-006 / EVT-087 — a member changed their profile (the event carries
+   * only `user_id`). A refetch of the latest page merges fresh `sender` stubs
+   * into THOSE rows only; every older loaded row by the same person would keep
+   * the stale photo. Re-stamp every row whose sender appears in `senders`.
+   * Only rows whose stub actually changed are replaced, so an idle refetch
+   * emits nothing and no bubble re-renders.
+   */
+  updateSenders(senders: Iterable<UserStub | null | undefined>): MessageStoreState {
+    const fresh = new Map<string, UserStub>();
+    for (const sender of senders) if (sender) fresh.set(sender.id, sender);
+    if (fresh.size === 0) return this.state;
+    let changed = false;
+    for (const [id, message] of this.byId) {
+      const next = fresh.get(message.sender_id);
+      if (next === undefined || message.sender === null || sameStub(message.sender, next)) continue;
+      this.byId.set(id, { ...message, sender: { ...message.sender, ...next } });
+      changed = true;
+    }
+    if (!changed) return this.state;
+    this.state = { ...this.state, messages: this.state.messages.map((m) => this.byId.get(m.id) ?? m) };
+    this.emit(this.state);
+    return this.state;
+  }
+
   dispose(): void {
     this.clearTimer();
   }
@@ -203,4 +228,13 @@ export class MessageStore {
       this.fillTimer = null;
     }
   }
+}
+
+function sameStub(a: UserStub, b: UserStub): boolean {
+  return a.display_name === b.display_name
+    && a.username === b.username
+    && a.avatar_attachment_id === b.avatar_attachment_id
+    && a.avatar?.sm === b.avatar?.sm
+    && a.avatar?.md === b.avatar?.md
+    && a.avatar?.animated === b.avatar?.animated;
 }

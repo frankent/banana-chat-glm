@@ -315,6 +315,7 @@ export function ChatView() {
   const room = roomQuery.data;
   const secretActive = room !== undefined && isSecretRoomActive(room.room);
   const peerId = room?.other_user?.id ?? membersQuery.data?.find(member => member.id !== me.id)?.id;
+  const peerAvatar = room?.room.type === 'dm' ? room.other_user?.avatar ?? membersQuery.data?.find(member => member.id !== me.id)?.avatar : null;
   const title = room?.room.type === 'dm' ? room.other_user?.display_name ?? membersQuery.data?.find(member => member.id !== me.id)?.display_name ?? 'Direct message' : room?.room.name ?? '…';
   // Backend already filters read_by to last_read_seq >= myNewestSeq, so
   // everyone left after excluding me has read my latest message.
@@ -340,7 +341,7 @@ export function ChatView() {
       <header className="bc-chat-header">
         <button className="bc-chat-back bc-chat-control" aria-label={text('chat.back')} onClick={() => navigate('/')}><Icon name="back" /></button>
         <div className="bc-chat-identity">
-          <Avatar name={title} />
+          <Avatar name={title} avatar={peerAvatar} />
           <div><h2>{title}</h2>
           {room?.room.type === 'group' && room.room.member_count > 0 && (
             <p className="text-xs text-slate-400">{room.room.member_count} members</p>

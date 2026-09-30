@@ -422,6 +422,13 @@ components:
               type: object
               description: e.g. VALIDATION_FAILED carries details.fields
             request_id: { type: [string, 'null'] }
+    Avatar:
+      type: object
+      description: 'FR-PROF-006: signed avatar URLs, stable within the wall-clock hour. animated = the gif original only, else null.'
+      properties:
+        sm: { type: string }
+        md: { type: string }
+        animated: { type: [string, 'null'] }
     UserStub:
       type: object
       properties:
@@ -429,6 +436,10 @@ components:
         username: { type: string }
         display_name: { type: string }
         avatar_attachment_id: { type: [string, 'null'] }
+        avatar:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Avatar'
     WorkspaceSummary:
       type: object
       properties:

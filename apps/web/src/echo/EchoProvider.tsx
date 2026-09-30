@@ -14,6 +14,7 @@ import { endpoints, tokenManager } from '../lib/api';
 import { evictRoom } from '../lib/room-eviction';
 import { useSession } from '../state/session';
 import { handleAiEvent } from '../state/ai';
+import { invalidatePeople } from '../lib/people-cache';
 import type { AiStreamEvent } from '@banana-chat/shared';
 
 declare global {
@@ -38,7 +39,7 @@ export function useEcho(): EchoContextValue {
  * through the API's /broadcasting/auth with the in-memory access token.
  */
 export function EchoProvider({ children }: { children: ReactNode }) {
-  const { status, me, currentWorkspace, logout } = useSession();
+  const { status, me, currentWorkspace, logout, applyMe } = useSession();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
@@ -121,7 +122,7 @@ export function EchoProvider({ children }: { children: ReactNode }) {
       return;
     }
     void ensureWebPushRegistered();
-  }, [me]);
+  }, [me?.id]); // eslint-disable-line react-hooks/exhaustive-deps -- a profile edit must not re-run push registration
 
   // API-074 focus ping. The server silences a push for a room this device is already
   // reading within the last 30s (FR-NOTI-002); web never reported anything, so a
@@ -135,7 +136,7 @@ export function EchoProvider({ children }: { children: ReactNode }) {
     report();
     document.addEventListener('visibilitychange', report);
     return () => document.removeEventListener('visibilitychange', report);
-  }, [location.pathname, me]);
+  }, [location.pathname, me?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // user-scoped channel: session.revoked (admin suspend/logout-all), user.updated
   useEffect(() => {
@@ -148,6 +149,9 @@ export function EchoProvider({ children }: { children: ReactNode }) {
       void endpoints.me().then(result => {
         // DEC-087: a remote enable protects future returns without interrupting typing.
         applyPrivacySettings(result.settings.notification?.privacy_mode ?? false, version, false);
+        // EVT-086 also fires for a profile change made in another tab/device
+        // (FR-PROF-006): the account trigger must show the new photo here too.
+        applyMe(result.user);
         void queryClient.invalidateQueries({ queryKey: ['notification-settings'] });
       }).catch(() => undefined);
     };
@@ -324,7 +328,7 @@ export function EchoProvider({ children }: { children: ReactNode }) {
       channel.stopListening('.workspace.member_added');
       channel.stopListening('.workspace.member_removed');
     };
-  }, [instance, me, logout, queryClient]);
+  }, [instance, me?.id, logout, queryClient, applyMe]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // workspace channel (FR-RT-001): user.updated / user.status_changed —
   // directory + roster freshness (deactivated members must disappear).
@@ -335,8 +339,7 @@ export function EchoProvider({ children }: { children: ReactNode }) {
     const channel = instance.private(`workspace.${currentWorkspace.workspace.id}`);
     const refreshPeople = () => {
       void queryClient.invalidateQueries({ queryKey: ['notification-settings'] });
-      void queryClient.invalidateQueries({ queryKey: ['directory'] });
-      void queryClient.invalidateQueries({ queryKey: ['room-members'] });
+      invalidatePeople(queryClient);
     };
 
     channel.listen('.user.updated', refreshPeople);

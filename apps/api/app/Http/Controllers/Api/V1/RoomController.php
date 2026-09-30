@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Domain\Room\Actions\CreateRoomAction;
 use App\Domain\Room\RoomPolicy;
 use App\Domain\Room\SystemMessageWriter;
+use App\Domain\Media\AvatarUrls;
 use App\Enums\MemberStatus;
 use App\Enums\MessageType;
 use App\Enums\RoomRole;
@@ -406,8 +407,12 @@ class RoomController extends Controller
 
         $offlineAfter = $this->settings->int('presence.offline_after_seconds');
 
+        // FR-PROF-006 — one batched avatar query for the whole member page
+        // (join rows, no relation to eager-load).
+        $avatars = AvatarUrls::mapFor(collect($members->items())->pluck('avatar_attachment_id'));
+
         return response()->json([
-            'data' => collect($members->items())->map(function ($m) use ($offlineAfter) {
+            'data' => collect($members->items())->map(function ($m) use ($offlineAfter, $avatars) {
                 $lastSeen = $m->last_seen_at !== null ? Carbon::parse($m->last_seen_at) : null;
 
                 return [
@@ -415,6 +420,7 @@ class RoomController extends Controller
                     'username' => $m->username,
                     'display_name' => $m->display_name,
                     'avatar_attachment_id' => $m->avatar_attachment_id,
+                    'avatar' => $avatars->get($m->avatar_attachment_id),
                     'role' => $m->role instanceof RoomRole ? $m->role->value : (string) $m->role,
                     'joined_at' => $m->joined_at !== null ? Carbon::parse($m->joined_at)->toIso8601String() : null,
                     'presence' => $lastSeen !== null && $lastSeen->diffInSeconds(now()) < $offlineAfter ? 'online' : 'offline',
@@ -608,7 +614,11 @@ class RoomController extends Controller
 
         $offlineAfter = $this->settings->int('presence.offline_after_seconds');
 
-        return collect($rows)->map(function ($row) use ($lastMessages, $dmOthers, $muted, $offlineAfter, $membership) {
+        // FR-PROF-006 — one batched avatar query for every DM counterpart on
+        // the page (join rows, no relation to eager-load).
+        $avatars = AvatarUrls::mapFor($dmOthers->flatten()->pluck('avatar_attachment_id'));
+
+        return collect($rows)->map(function ($row) use ($lastMessages, $dmOthers, $muted, $offlineAfter, $membership, $avatars) {
             $type = $row->type instanceof RoomType ? $row->type : RoomType::from($row->type);
             $lastSeq = (int) $row->last_seq;
             $lastRead = (int) ($row->my_last_read_seq ?? $membership?->last_read_seq ?? 0);
@@ -652,6 +662,7 @@ class RoomController extends Controller
                     'username' => $other->username,
                     'display_name' => $other->display_name,
                     'avatar_attachment_id' => $other->avatar_attachment_id,
+                    'avatar' => $avatars->get($other->avatar_attachment_id),
                     'presence' => $other->last_seen_at !== null
                         && Carbon::parse($other->last_seen_at)->diffInSeconds(now()) < $offlineAfter ? 'online' : 'offline',
                 ] : null,

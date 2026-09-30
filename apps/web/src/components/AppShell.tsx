@@ -5,6 +5,8 @@ import { useSession } from '../state/session';
 import { useChatText } from '../lib/use-chat-text';
 import { ConnectionBanner } from './ConnectionBanner';
 import { InviteQrDialog } from './InviteQrDialog';
+import { AvatarEditor } from './AvatarEditor';
+import { avatarText } from '../lib/avatar-text';
 import { Logo } from './Logo';
 import { NotificationCenter } from './NotificationCenter';
 import { NotificationPrompt } from './NotificationPrompt';
@@ -39,7 +41,7 @@ function useIsMobileLayout(): boolean {
 
 export function AppShell() {
   const { status, me, currentWorkspace, logout } = useSession();
-  const { text } = useChatText();
+  const { text, locale } = useChatText();
   const location = useLocation();
   const navigate = useNavigate();
   const [accountOpen, setAccountOpen] = useState(false);
@@ -51,6 +53,8 @@ export function AppShell() {
   // logout (AppShell unmounts) and never shown for a different workspace.
   const [invitesByWorkspace, setInvitesByWorkspace] = useState<Record<string, WorkspaceInvite>>({});
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+  // FR-PROF-006 — profile photo editor, opened from the account menu.
+  const [avatarEditorOpen, setAvatarEditorOpen] = useState(false);
   // Close on outside click and Escape -- a menu you cannot dismiss is worse than
   // no menu, especially on touch where there is no Escape key.
   useEffect(() => {
@@ -147,7 +151,7 @@ export function AppShell() {
                 aria-label="Account menu"
                 onClick={() => setAccountOpen((open) => !open)}
               >
-                <Avatar name={me?.display_name ?? ''} />
+                <Avatar name={me?.display_name ?? ''} avatar={me?.avatar} />
               </button>
               {accountOpen && (
                 <div className="bc-account-menu" role="menu">
@@ -155,6 +159,9 @@ export function AppShell() {
                     <strong>{me?.display_name}</strong>
                     <span>@{me?.username}</span>
                   </div>
+                  <button role="menuitem" aria-haspopup="dialog" data-testid="account-change-photo" onClick={() => { setAccountOpen(false); setAvatarEditorOpen(true); }}>
+                    <Icon name="camera" size={16} /> {avatarText[locale].menu}
+                  </button>
                   <button role="menuitem" onClick={() => { setAccountOpen(false); navigate('/change-password'); }}>
                     <Icon name="lock" size={16} /> Change password
                   </button>
@@ -181,6 +188,7 @@ export function AppShell() {
             onClose={() => { setInviteDialogOpen(false); accountTriggerRef.current?.focus(); }}
           />
         )}
+        {avatarEditorOpen && <AvatarEditor onClose={() => { setAvatarEditorOpen(false); accountTriggerRef.current?.focus(); }} />}
         {sidebarOpen && <button className="bc-sidebar-shade" aria-label="Close conversations" onClick={() => setSidebarOpen(false)} />}
         <aside className={`bc-sidebar ${sidebarOpen ? 'is-open' : ''}`} onClick={(event) => { if ((event.target as HTMLElement).closest('a[href]')) setSidebarOpen(false); }}>
           <div className="bc-workspace"><span className="bc-workspace-symbol">{currentWorkspace.workspace.name[0]}</span><div><span className="bc-eyebrow">YOUR WORKSPACE</span><WorkspaceSwitcher /></div>{bellInSidebar && <NotificationCenter />}</div>

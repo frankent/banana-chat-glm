@@ -223,6 +223,18 @@ export class Endpoints {
   }
 
   /**
+   * API-009 — update my profile. FR-PROF-006 / DEC-088: `avatar_attachment_id`
+   * must be my OWN ready kind=avatar upload (else 422 AVATAR_INVALID); null
+   * removes the photo. The response user carries the fresh `avatar` object.
+   */
+  updateMe(input: { display_name?: string; locale?: string; timezone?: string; avatar_attachment_id?: string | null }) {
+    return this.api.request<{ user: UserStub & { locale: string } }>('/api/v1/me', {
+      method: 'PATCH',
+      body: input,
+    });
+  }
+
+  /**
    * API-236 / FR-NOTI-009 (app lock, DEC-087) — re-check the account password
    * for the current session. 204 on match; 422 INVALID_PASSWORD otherwise;
    * 429 past the 8/min verify-password limiter. Never touches tokens.

@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Domain\Media\AvatarUrls;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -16,6 +17,9 @@ class UserResource extends JsonResource
             'username' => $this->username,
             'display_name' => $this->display_name,
             'avatar_attachment_id' => $this->avatar_attachment_id,
+            // FR-PROF-006 — {sm, md, animated}|null from the one shared helper
+            // (single-user payloads only; lists batch via AvatarUrls::mapFor).
+            'avatar' => AvatarUrls::for($this->avatarAttachment),
             'status' => $this->status->value,
             'locale' => $this->locale,
             'timezone' => $this->timezone,

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Enums\UserStatus;
+use App\Domain\Media\AvatarUrls;
 use App\Http\Controllers\Controller;
 use App\Models\Room;
 use App\Models\RoomMember;
@@ -68,8 +69,12 @@ class WorkspaceController extends Controller
 
         $offlineAfter = $this->settings->int('presence.offline_after_seconds');
 
+        // FR-PROF-006 — one batched avatar query for the whole page (join
+        // rows, no relation to eager-load).
+        $avatars = AvatarUrls::mapFor(collect($members->items())->pluck('avatar_attachment_id'));
+
         return response()->json([
-            'data' => collect($members->items())->map(function ($m) use ($offlineAfter) {
+            'data' => collect($members->items())->map(function ($m) use ($offlineAfter, $avatars) {
                 $lastSeen = $m->last_seen_at !== null
                     ? Carbon::parse($m->last_seen_at)
                     : null;
@@ -79,6 +84,7 @@ class WorkspaceController extends Controller
                     'username' => $m->username,
                     'display_name' => $m->display_name,
                     'avatar_attachment_id' => $m->avatar_attachment_id,
+                    'avatar' => $avatars->get($m->avatar_attachment_id),
                     'role' => $m->workspace_role,
                     'presence' => $lastSeen !== null && $lastSeen->diffInSeconds(now()) < $offlineAfter ? 'online' : 'offline',
                     'last_seen_at' => $lastSeen?->toIso8601String(),

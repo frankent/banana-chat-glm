@@ -22,6 +22,12 @@ class SettingsService
         'message.forward_max_messages' => 20,
         'message.forward_max_rooms' => 10,
         'upload.image.max_bytes' => 20971520,
+        // FR-PROF-006 — avatars are tiny profile photos, not chat images: a
+        // 5MB CODE default, separate from upload.image.max_bytes so a 20MB
+        // image cap never widens the avatar surface. Matches the
+        // App\Filament\Pages\Settings::ranges() entry (numeric key — see the
+        // warning above about adding both halves together).
+        'upload.avatar.max_bytes' => 5242880,
         'upload.video.max_bytes' => 209715200,
         'upload.file.max_bytes' => 104857600,
         'upload.image.allowed_mimes' => ['jpeg', 'png', 'gif', 'webp', 'heic'],

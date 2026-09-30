@@ -5,11 +5,13 @@ namespace App\Models;
 use App\Concerns\HasUlid;
 use App\Enums\MemberStatus;
 use App\Enums\UserStatus;
+use App\Models\Attachment;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser as FilamentUserContract;
 use Filament\Models\Contracts\HasName as FilamentHasNameContract;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
@@ -48,6 +50,7 @@ class User extends Authenticatable implements FilamentHasNameContract, FilamentU
         'last_seen_at',
         'locale',
         'timezone',
+        'avatar_attachment_id',
         'is_system_admin',
         'failed_login_count',
         'created_by',
@@ -122,5 +125,17 @@ class User extends Authenticatable implements FilamentHasNameContract, FilamentU
     public function notificationSetting(): HasOne
     {
         return $this->hasOne(UserNotificationSetting::class);
+    }
+
+    /**
+     * FR-PROF-006 — the avatar photo (an account-level kind=avatar
+     * attachment). Deliberately WITHOUT the workspace global scope: the
+     * attachment's workspace_id is where the photo was UPLOADED, and an
+     * account-level artefact must keep resolving in every other workspace the
+     * user is active in (API-062 already lets any member read kind=avatar).
+     */
+    public function avatarAttachment(): BelongsTo
+    {
+        return $this->belongsTo(Attachment::class, 'avatar_attachment_id')->withoutGlobalScopes();
     }
 }

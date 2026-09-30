@@ -79,6 +79,15 @@ input:focus,textarea:focus,select:focus { outline-color:#c8b564; }
   .bc-rail-bottom .bc-account-menu { left:calc(100% + 8px); right:auto; min-width:200px; max-width:calc(100vw - 72px); }
 }
 .bc-avatar { display:inline-flex; align-items:center; justify-content:center; width:37px; height:37px; border-radius:12px; background:var(--avatar-bg); color:var(--avatar-ink); font-size:12px; font-weight:650; flex-shrink:0; }
+/* FR-PROF-006 — a photo sits over the initials (same box, so no layout shift)
+   and fades in once decoded; a person's photo is always a circle, whatever
+   radius the initials tile uses in that context. */
+.bc-avatar.has-photo { position:relative; overflow:hidden; border-radius:50%; }
+.bc-avatar-photo { position:absolute; inset:0; display:block; width:100%; height:100%; max-width:none; object-fit:cover; border-radius:inherit; background:var(--avatar-bg); opacity:0; transition:opacity .18s ease; user-select:none; }
+.bc-avatar-photo.is-loaded { opacity:1; }
+@media (prefers-reduced-motion: reduce) { .bc-avatar-photo { transition:none; } }
+.bc-mention-avatar { width:24px; height:24px; border-radius:50%; font-size:9px; }
+.bc-rail-bottom .bc-account-trigger .bc-avatar { border-radius:50%; box-shadow:0 0 0 2px #ffffff26; }
 .bc-sidebar { width:300px; background:var(--bc-side); border-right:1px solid var(--bc-line); display:flex; flex-direction:column; flex-shrink:0; }
 .bc-workspace { display:flex; align-items:center; gap:10px; padding:25px 18px 20px; }
 .bc-workspace>div:nth-child(2) { min-width:0; flex:1; }

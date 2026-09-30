@@ -64,7 +64,7 @@ class MessageEditor
             $this->mentions->sync($message, $message->room()->firstOrFail(), $actor);
 
             $fresh = $message->refresh();
-            $fresh->loadMissing('sender:id,username,display_name,avatar_attachment_id', 'attachments', 'mentions:id');
+            $fresh->loadMissing('sender:id,username,display_name,avatar_attachment_id', 'sender.avatarAttachment', 'attachments', 'mentions:id');
 
             broadcast(new MessageUpdated($fresh->room()->firstOrFail(), MessageSerializer::forEvent($fresh)));
 

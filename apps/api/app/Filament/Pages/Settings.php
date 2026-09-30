@@ -58,7 +58,7 @@ class Settings extends Page
             'call.max_participants' => [2, 50],
             'auth.password.min_length' => [8, 128], 'auth.lockout.threshold' => [3, 100], 'auth.lockout.minutes' => [1, 1440],
             'auth.access_token_ttl_minutes' => [5, 1440], 'auth.refresh_token_ttl_days' => [1, 90], 'auth.max_sessions_per_user' => [1, 100],
-            'upload.image.max_bytes' => [1024, 1073741824], 'upload.video.max_bytes' => [1024, 2147483647], 'upload.file.max_bytes' => [1024, 2147483647],
+            'upload.image.max_bytes' => [1024, 1073741824], 'upload.avatar.max_bytes' => [1024, 1073741824], 'upload.video.max_bytes' => [1024, 2147483647], 'upload.file.max_bytes' => [1024, 2147483647],
             'upload.multipart_threshold_bytes' => [5242880, 1073741824], 'upload.multipart_part_bytes' => [5242880, 1073741824],
             'presence.offline_after_seconds' => [10, 3600], 'typing.ttl_seconds' => [1, 30], 'push.suppress_if_focused_seconds' => [0, 600],
             'storage.quota_per_workspace_gb' => [0.01, 1000000],

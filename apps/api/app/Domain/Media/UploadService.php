@@ -37,6 +37,19 @@ class UploadService
      */
     private const PUBLIC_CHAT_KINDS = ['image', 'video', 'file'];
 
+    /**
+     * FR-PROF-006 — avatar allowlist: jpeg/png/webp stills + gif (animated
+     * allowed; the original is never re-encoded so the animation survives).
+     * Deliberately NOT driven by the admin-editable
+     * upload.image.allowed_mimes: that list carries heic/heif for chat photos
+     * which the avatar webp pipeline cannot decode, and widening chat images
+     * must never widen the account-level avatar surface. Enforced on the
+     * SNIFFED type in assertMimeMatchesKind, like every other allowlist here.
+     *
+     * @var list<string>
+     */
+    private const AVATAR_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
     public function __construct(
         private readonly SettingsService $settings,
     ) {}
@@ -160,7 +173,11 @@ class UploadService
         }
 
         $maxBytes = match ($attachmentKind) {
-            AttachmentKind::Image, AttachmentKind::Avatar => $this->settings->int('upload.image.max_bytes'),
+            // FR-PROF-006 — avatars have their OWN cap (5MB CODE default),
+            // never upload.image.max_bytes: a 20MB chat-image allowance must
+            // not widen the account-level avatar surface.
+            AttachmentKind::Avatar => $this->settings->int('upload.avatar.max_bytes'),
+            AttachmentKind::Image => $this->settings->int('upload.image.max_bytes'),
             AttachmentKind::Video => $this->settings->int('upload.video.max_bytes'),
             AttachmentKind::File => $this->settings->int('upload.file.max_bytes'),
         };
@@ -429,7 +446,14 @@ class UploadService
         }
 
         $allowed = match ($kind) {
-            AttachmentKind::Image, AttachmentKind::Avatar => $this->imageMimes(),
+            AttachmentKind::Image => $this->imageMimes(),
+            // FR-PROF-006 — avatars are stills or animated GIF only. NOT
+            // upload.image.allowed_mimes: that list is admin-editable and
+            // carries heic/heif for chat photos, while an avatar's webp
+            // pipeline (still + first-frame thumbs) has no HEIC decoder — a
+            // constant list is the floor the avatar surface is actually
+            // specced against.
+            AttachmentKind::Avatar => self::AVATAR_MIMES,
             AttachmentKind::Video => $this->videoMimes(),
             AttachmentKind::File => null, // any non-blocked, non-executable type
         };

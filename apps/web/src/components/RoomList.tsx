@@ -19,7 +19,7 @@ function RoomRow({ item, myUserId }: { item: RoomListItem; myUserId: string }) {
   const unread = item.unread_count > 0;
   return (
     <NavLink to={`/rooms/${item.room.id}`} className={({ isActive }) => `bc-room-row ${isActive ? 'selected' : ''}`} data-muted={item.muted}>
-      <span className="bc-room-avatar"><Avatar name={roomTitle(item)} />{item.room.type !== 'dm' && <span className="bc-room-kind"><Icon name={item.room.is_secret ? 'lock' : 'users'} size={11} /></span>}</span>
+      <span className="bc-room-avatar"><Avatar name={roomTitle(item)} avatar={item.room.type === 'dm' ? item.other_user?.avatar : null} />{item.room.type !== 'dm' && <span className="bc-room-kind"><Icon name={item.room.is_secret ? 'lock' : 'users'} size={11} /></span>}</span>
       <span className="bc-room-main">
         <span className="bc-room-line1"><span className={`bc-room-name ${unread ? 'unread' : ''}`}>{roomTitle(item)}</span>{time && <time className="bc-room-time" dateTime={lastAt!} title={time.full}>{time.short}</time>}</span>
         <span className="bc-room-line2"><span className="bc-room-preview">{roomPreviewText(item.last_message, myUserId)}</span><span className="bc-room-badges">

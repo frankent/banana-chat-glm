@@ -29,6 +29,12 @@ interface SessionState {
   installSession: (res: LoginResponse) => 'ok' | 'must_change_password';
   logout: () => Promise<void>;
   switchWorkspace: (slug: string) => void;
+  /**
+   * FR-PROF-006 — fold a fresh server user (PATCH /me response, or /me after
+   * EVT-086 from another tab) into the session. Ignored when it is not the
+   * signed-in user (a response that raced a logout/login).
+   */
+  applyMe: (user: Partial<Me> & { id: string }) => void;
 }
 
 let sessionEpoch = 0;
@@ -104,6 +110,12 @@ export const useSession = create<SessionState>((set, get) => ({
     }
     set({ status: 'anonymous', me: null, workspaces: [], currentWorkspace: null });
     void revoke;
+  },
+
+  applyMe(user) {
+    const current = get().me;
+    if (current === null || current.id !== user.id) return;
+    set({ me: { ...current, ...user } });
   },
 
   switchWorkspace(slug) {

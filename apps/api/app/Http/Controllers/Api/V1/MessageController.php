@@ -6,6 +6,7 @@ use App\Domain\Message\MessageEditor;
 use App\Domain\Message\MessageForwarder;
 use App\Domain\Message\MessageSerializer;
 use App\Domain\Message\MessageWriter;
+use App\Domain\Media\AvatarUrls;
 use App\Domain\Room\RoomPolicy;
 use App\Events\RoomRead;
 use App\Events\WorkspaceUnreadChanged;
@@ -93,6 +94,7 @@ class MessageController extends Controller
             ->where('room_id', $room->id)
             ->with([
                 'sender:id,username,display_name,avatar_attachment_id',
+                'sender.avatarAttachment',
                 'replyTo:id,room_id,seq,sender_id,body,deleted_at',
                 'attachments',
                 'mentions:id',
@@ -182,6 +184,7 @@ class MessageController extends Controller
 
         $message->loadMissing([
             'sender:id,username,display_name,avatar_attachment_id',
+            'sender.avatarAttachment',
             'replyTo:id,room_id,seq,sender_id,body,deleted_at',
             'attachments',
             'mentions:id',
@@ -296,6 +299,10 @@ class MessageController extends Controller
                 'room_members.last_read_seq', 'room_members.last_read_at',
             ]);
 
+        // FR-PROF-006 — one batched query for the whole reader list (join
+        // rows, no relation to eager-load).
+        $avatars = AvatarUrls::mapFor($rows->pluck('avatar_attachment_id'));
+
         return response()->json([
             'data' => [
                 'seq' => $seq,
@@ -304,6 +311,7 @@ class MessageController extends Controller
                     'username' => $r->username,
                     'display_name' => $r->display_name,
                     'avatar_attachment_id' => $r->avatar_attachment_id,
+                    'avatar' => $avatars->get($r->avatar_attachment_id),
                     'last_read_seq' => (int) $r->last_read_seq,
                     'last_read_at' => $r->last_read_at !== null
                         ? Carbon::parse($r->last_read_at)->toIso8601String()

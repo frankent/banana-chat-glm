@@ -113,3 +113,20 @@ export type {
 export { isWebPushConfigured, webPushStatus, serviceWorkerUrl, resolveWebDeviceId, WEB_DEVICE_ID_KEY } from './web-push.js';
 export type { FirebaseWebConfig, WebPushEnvironment, WebPushStatus } from './web-push.js';
 export { DEVICE_ID_PATTERN, generateDeviceId, isValidDeviceId } from './device-id.js';
+// FR-PROF-006 / DEC-088 — avatar file rules, crop math, render source.
+export {
+  AVATAR_MAX_BYTES,
+  AVATAR_MAX_ZOOM,
+  AVATAR_MIME_TYPES,
+  AVATAR_MIN_ZOOM,
+  AVATAR_OUTPUT_MAX_PX,
+  avatarSource,
+  checkAvatarFile,
+  clampCrop,
+  cropCoverScale,
+  cropOutputSize,
+  cropSourceRect,
+  panCrop,
+  zoomCrop,
+} from './avatar.js';
+export type { AvatarCrop, AvatarFileCheck, AvatarImageSize, AvatarMimeType } from './avatar.js';

@@ -77,7 +77,7 @@ export function ReadReceiptDialog({
       <ul className="bc-read-list-items">
         {entries.map((entry) => (
           <li key={entry.user_id} className="bc-read-list-row">
-            <Avatar name={entry.display_name} />
+            <Avatar name={entry.display_name} avatar={entry.avatar} />
             <span>{entry.display_name}</span>
           </li>
         ))}
