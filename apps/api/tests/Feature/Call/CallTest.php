@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Models\UserNotificationSetting;
 use App\Models\Workspace;
 use App\Services\SettingsService;
+use Firebase\JWT\JWT;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
@@ -188,4 +189,45 @@ test('TC-CALL-004 removing the group starter preserves remaining participants', 
     expect(RoomCall::find($c['id'])->ended_at)->toBeNull();
     expect($starter->fresh()->left_at)->not->toBeNull();
     expect($remaining->fresh()->left_at)->toBeNull();
+});
+
+// FR-CALL-009 / DEC-086: backgrounded phones reconnect minutes after joining —
+// the join token must outlive 60s, while admin/API-to-SFU credentials stay short.
+test('TC-CALL-040 participant join tokens carry calls.token_ttl while API-to-SFU tokens stay 60 seconds', function () {
+    config(['calls.token_ttl' => 3600]);
+    $c = $this->postJson('/api/v1/rooms/'.$this->room->id.'/calls', ['kind' => 'video'], $this->headers)->json('data');
+    $join = $this->postJson('/api/v1/calls/'.$c['id'].'/join', [], $this->calleeHeaders)->assertOk()->json('data');
+    $claims = json_decode(base64_decode(strtr(explode('.', $join['token'])[1], '-_', '+/')), true);
+    expect($claims['exp'] - $claims['nbf'])->toBeGreaterThanOrEqual(3600)->toBeLessThan(3610);
+    // Admin (Twirp) requests keep the historic 60s credential.
+    app(MediaServer::class)->request('ListRooms', '');
+    Http::assertSent(function ($request) {
+        if (! str_ends_with($request->url(), '/ListRooms')) {
+            return false;
+        }
+        $token = substr($request->header('Authorization')[0], 7);
+        $claims = json_decode(base64_decode(strtr(explode('.', $token)[1], '-_', '+/')), true);
+
+        return $claims['exp'] - $claims['nbf'] <= 65;
+    });
+});
+
+// FR-CALL-009 / DEC-086: the longer ttl must not weaken revocation — signaling
+// accepts a reconnect token minutes old, rejects anything past the ttl, and
+// still 403s a participant whose left_at is set regardless of token age.
+test('TC-CALL-041 authorizeMedia accepts an in-ttl stale token, rejects past-ttl, and left participants stay 403', function () {
+    $c = $this->postJson('/api/v1/rooms/'.$this->room->id.'/calls', ['kind' => 'video'], $this->headers)->json('data');
+    $this->postJson('/api/v1/calls/'.$c['id'].'/join', [], $this->calleeHeaders)->assertOk();
+    $p = CallParticipant::where('call_id', $c['id'])->where('user_id', $this->callee->id)->first();
+    $mint = fn (int $age, int $ttl) => JWT::encode(
+        ['iss' => 'testkey', 'nbf' => time() - $age - 5, 'exp' => time() - $age + $ttl, 'sub' => $p->id, 'video' => ['room' => 'call-'.$c['id']]],
+        config('calls.secret'), 'HS256',
+    );
+    // 2 minutes old but well within the 6h default participant ttl.
+    $this->getJson('/api/v1/calls/authorize-media', ['Authorization' => 'Bearer '.$mint(120, 21600)])->assertNoContent();
+    // Older than the ttl: expired JWT fails closed with 401.
+    $this->getJson('/api/v1/calls/authorize-media', ['Authorization' => 'Bearer '.$mint(21600 + 120, 21600)])->assertUnauthorized();
+    // Membership revocation still denies even a brand-new unexpired token.
+    $p->update(['left_at' => now()]);
+    $this->getJson('/api/v1/calls/authorize-media', ['Authorization' => 'Bearer '.$mint(0, 21600)])->assertForbidden();
 });

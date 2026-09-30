@@ -36,6 +36,18 @@ export { NotificationGate, DesktopNotificationGate, desktopNotificationBody, unr
 export type { AlertKind } from './notification.js';
 export { ticketKey, deadlineState } from './kanban.js';
 export { CallAttempt, canRingCall } from './call.js';
+// FR-CALL-009 / DEC-086: background survival + automatic rejoin decisions.
+export {
+  CALL_DISCONNECT_REASON,
+  classifyDisconnect,
+  isMobileBrowser,
+  MAX_RECONNECT_ATTEMPTS,
+  RECONNECT_BASE_DELAY_MS,
+  RECONNECT_MAX_DELAY_MS,
+  reconnectDelayMs,
+  shouldGiveUpReconnect,
+} from './call-reconnect.js';
+export type { CallDisconnectAction } from './call-reconnect.js';
 export { meetingGuestName, meetingReturnPath } from './meeting.js';
 export { editMarkdown } from './markdown-editor.js';
 export type { MarkdownAction } from './markdown-editor.js';

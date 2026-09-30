@@ -106,10 +106,13 @@ class CallService
             }
             $this->changed($call);
 
+            // FR-CALL-009 / DEC-086: participant join tokens live for
+            // calls.token_ttl (default 6h) so a backgrounded phone's reconnect
+            // is not 401'd by /_call_auth while the call is still active.
             return ['call' => $this->serialize($call, $uid), 'url' => config('calls.url'), 'token' => $this->media->token([
                 'sub' => $p->id, 'name' => DB::table('users')->where('id', $uid)->value('display_name'),
                 'video' => ['roomJoin' => true, 'room' => 'call-'.$call->id, 'canSubscribe' => true, 'canPublish' => true, 'canPublishData' => false, 'canPublishSources' => $call->kind === 'voice' ? ['microphone'] : ['microphone', 'camera', 'screen_share', 'screen_share_audio']],
-            ])];
+            ], (int) config('calls.token_ttl'))];
         });
     }
 

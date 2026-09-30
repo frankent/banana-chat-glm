@@ -180,3 +180,19 @@ test('TC-MEET-008 archived workspace expires guest grants and reconciliation end
     app()->call([new ReconcileMeetings, 'handle']);
     expect(Meeting::find($m['id'])->ended_at)->not->toBeNull();
 });
+
+// FR-CALL-009 / DEC-086: a guest backgrounding their phone rejoins minutes
+// later — meeting join tokens share calls.token_ttl and a resume rejoin must
+// not mint a duplicate participant.
+test('TC-MEET-011 meeting join tokens use calls.token_ttl and resume rejoins reuse the participant', function () {
+    config(['calls.token_ttl' => 7200]);
+    $m = meetingFixture($this);
+    $url = '/api/v1/public-meetings/'.$m['code'].'/join';
+    $join = $this->postJson($url, ['name' => 'Visitor'])->assertOk()->json('data');
+    $claims = json_decode(base64_decode(strtr(explode('.', $join['token'])[1], '-_', '+/')), true);
+    expect($claims['exp'] - $claims['nbf'])->toBeGreaterThanOrEqual(7200)->toBeLessThan(7210);
+    $again = $this->postJson($url, ['participant_token' => $join['participant_token']])->assertOk()->json('data');
+    expect(MeetingParticipant::where('meeting_id', $m['id'])->count())->toBe(1);
+    $againClaims = json_decode(base64_decode(strtr(explode('.', $again['token'])[1], '-_', '+/')), true);
+    expect($againClaims['exp'] - $againClaims['nbf'])->toBeGreaterThanOrEqual(7200);
+});

@@ -9,9 +9,15 @@ use Illuminate\Support\Facades\Http;
 /** FR-CALL-004: grant signing stays server-side; never log tokens. */
 class MediaServer
 {
-    public function token(array $claims): string
+    /**
+     * FR-CALL-009 / DEC-086: $ttl defaults to the historic 60s (admin/API-to-SFU
+     * requests keep it); participant join tokens pass `calls.token_ttl` instead
+     * so a phone frozen in the background can still reconnect — revocation is
+     * unchanged because authorizeMedia re-checks DB membership on every connect.
+     */
+    public function token(array $claims, int $ttl = 60): string
     {
-        return JWT::encode(array_merge(['iss' => config('calls.key'), 'nbf' => time() - 5, 'exp' => time() + 60], $claims), config('calls.secret'), 'HS256');
+        return JWT::encode(array_merge(['iss' => config('calls.key'), 'nbf' => time() - 5, 'exp' => time() + $ttl], $claims), config('calls.secret'), 'HS256');
     }
 
     public function decode(string $token): object

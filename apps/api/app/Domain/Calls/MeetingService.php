@@ -74,10 +74,12 @@ class MeetingService
             $p->save();
             $p->touch();
 
+            // FR-CALL-009 / DEC-086: meeting join tokens share calls.token_ttl
+            // with private calls so backgrounded rejoins pass /_call_auth.
             return ['meeting' => $this->summary($m), 'participant_token' => $secret, 'participant_id' => $p->id, 'can_end' => $user?->id === $m->created_by,
                 'workspace_slug' => $user?->id === $m->created_by ? DB::table('workspaces')->where('id', $m->workspace_id)->value('slug') : null,
                 'url' => config('calls.url'), 'token' => $this->media->token(['sub' => $p->id, 'name' => $p->name.($p->user_id ? '' : ' (Guest)'),
-                    'video' => ['roomJoin' => true, 'room' => $remote, 'canSubscribe' => true, 'canPublish' => true, 'canPublishData' => false, 'canPublishSources' => ['microphone', 'camera', 'screen_share', 'screen_share_audio']]])];
+                    'video' => ['roomJoin' => true, 'room' => $remote, 'canSubscribe' => true, 'canPublish' => true, 'canPublishData' => false, 'canPublishSources' => ['microphone', 'camera', 'screen_share', 'screen_share_audio']]], (int) config('calls.token_ttl'))];
         });
     }
 

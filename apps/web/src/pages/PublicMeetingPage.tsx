@@ -272,6 +272,24 @@ function MeetingLobby({ code }: { code: string }) {
             registerDisconnect={(fn) => {
               closeMedia.current = fn;
             }}
+            // FR-CALL-009 / DEC-086: rejoin a backgrounded drop by resuming
+            // the SAME participant (participant_token) so no duplicate row is
+            // created; the server rotates the secret on every join, so store
+            // the new one or "Leave" would 403 after a rejoin.
+            refreshCredentials={async () => {
+              const current = activeRef.current;
+              const credentials = await endpoints.joinMeeting(
+                code,
+                lobby.data?.identity
+                  ? undefined
+                  : (meetingGuestName(name) ?? undefined),
+                current?.participant_token,
+              );
+              save(key, credentials.participant_token);
+              if (current)
+                current.participant_token = credentials.participant_token;
+              return credentials;
+            }}
             checkActive={async () => {
               try {
                 await endpoints.meetingLobby(code);
