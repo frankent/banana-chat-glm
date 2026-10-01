@@ -8,9 +8,10 @@ import {
   cropOutputSize, cropSourceRect, panCrop, zoomCrop,
 } from '@banana-chat/chat-core';
 import type { AvatarCrop } from '@banana-chat/chat-core';
+import type { UserAvatar } from '@banana-chat/shared';
 import { endpoints } from '../lib/api';
 import { invalidatePeople } from '../lib/people-cache';
-import { avatarText, type AvatarTextKey } from '../lib/avatar-text';
+import { avatarText, roomAvatarText, type AvatarTextKey } from '../lib/avatar-text';
 import { useChatText } from '../lib/use-chat-text';
 import { AvatarUploadError, uploadAvatar } from '../hooks/useUploader';
 import { useSession } from '../state/session';
@@ -26,9 +27,13 @@ type Phase = 'idle' | 'preparing' | 'uploading' | 'processing' | 'applying' | 'c
 const CIRCLE = 0.84;
 const NUDGE = 8;
 
+/** What the editor changes: my own photo (default) or a group's (FR-PROF-008). */
+export type AvatarTarget = { kind: 'me' } | { kind: 'room'; roomId: string; name: string; avatar: UserAvatar | null | undefined };
+
 function errorKey(error: unknown): AvatarTextKey {
   if (error instanceof ApiError) {
     if (error.code === 'AVATAR_INVALID') return 'errInvalid';
+    if (error.code === 'ROOM_FORBIDDEN' || error.status === 403) return 'errForbidden';
     if (error.code === 'MEDIA_TOO_LARGE') return 'errServerSize';
     return 'errProcessing';
   }
@@ -39,15 +44,18 @@ function errorKey(error: unknown): AvatarTextKey {
 
 /**
  * FR-PROF-006 / DEC-088 — change or remove my profile photo.
+ * FR-PROF-008 / DEC-090 — with `target.kind === 'room'` the same editor
+ * changes a group's photo (PATCH /rooms/{id}) instead.
  *
  * Stills are cropped here (drag / pinch / wheel / arrow keys + zoom slider)
  * and re-encoded to a ≤1024px square webp, so the server only ever thumbs a
  * square. GIFs never touch a canvas — that would flatten the animation — so
  * the original bytes are uploaded and the circle centre-crops them on display.
  */
-export function AvatarEditor({ onClose }: { onClose: () => void }) {
+export function AvatarEditor({ onClose, target = { kind: 'me' } }: { onClose: () => void; target?: AvatarTarget }) {
   const { locale } = useChatText();
-  const text = avatarText[locale];
+  const roomTarget = target.kind === 'room' ? target : null;
+  const text: Record<AvatarTextKey, string> = { ...avatarText[locale], ...(roomTarget !== null ? roomAvatarText[locale] : {}) };
   const me = useSession(s => s.me);
   const slug = useSession(s => s.currentWorkspace?.workspace.slug ?? '');
   const applyMe = useSession(s => s.applyMe);
@@ -216,6 +224,18 @@ export function AvatarEditor({ onClose }: { onClose: () => void }) {
     return blob;
   };
 
+  /** PATCH /me for my photo, PATCH /rooms/{id} for a group's (FR-PROF-008), then refetch every surface. */
+  const apply = async (attachmentId: string | null) => {
+    if (roomTarget !== null) {
+      await endpoints.updateRoom(roomTarget.roomId, slug, { avatar_attachment_id: attachmentId });
+      for (const key of ['rooms', 'room']) void queryClient.invalidateQueries({ queryKey: [key] });
+      return;
+    }
+    const { user } = await endpoints.updateMe({ avatar_attachment_id: attachmentId });
+    applyMe(user);
+    invalidatePeople(queryClient);
+  };
+
   const save = async () => {
     if (selection === null || busy || slug === '') return;
     setError(null);
@@ -233,9 +253,7 @@ export function AvatarEditor({ onClose }: { onClose: () => void }) {
         onProgress: fraction => { setProgress(fraction); if (fraction >= 1) setPhase('processing'); },
       });
       setPhase('applying');
-      const { user } = await endpoints.updateMe({ avatar_attachment_id: id });
-      applyMe(user);
-      invalidatePeople(queryClient);
+      await apply(id);
       close();
     } catch (caught) {
       if (controller.signal.aborted) return;
@@ -250,13 +268,11 @@ export function AvatarEditor({ onClose }: { onClose: () => void }) {
     setError(null);
     setPhase('removing');
     try {
-      const { user } = await endpoints.updateMe({ avatar_attachment_id: null });
-      applyMe(user);
-      invalidatePeople(queryClient);
+      await apply(null);
       close();
-    } catch {
+    } catch (caught) {
       setPhase('confirm-remove');
-      setError('errRemove');
+      setError(caught instanceof ApiError && caught.status === 403 ? 'errForbidden' : 'errRemove');
     }
   };
 
@@ -273,7 +289,9 @@ export function AvatarEditor({ onClose }: { onClose: () => void }) {
     : phase === 'removing' ? text.removing
     : null;
   const ringProgress = phase === 'uploading' ? progress : phase === 'processing' || phase === 'applying' ? 1 : 0;
-  const hasPhoto = me?.avatar != null;
+  const currentName = roomTarget !== null ? roomTarget.name : me?.display_name ?? '';
+  const currentAvatar = roomTarget !== null ? roomTarget.avatar : me?.avatar;
+  const hasPhoto = currentAvatar != null;
   const scale = image !== null && circle > 0 ? cropCoverScale(image, circle) * crop.zoom : 0;
   const ringRadius = circle / 2 + 5;
   const ringLength = 2 * Math.PI * ringRadius;
@@ -283,6 +301,7 @@ export function AvatarEditor({ onClose }: { onClose: () => void }) {
       ref={dialogRef}
       className={`bc-avatar-editor ${dragOver ? 'is-drag-over' : ''}`}
       data-testid="avatar-editor"
+      data-target={roomTarget !== null ? 'room' : 'me'}
       aria-labelledby={titleId}
       aria-busy={busy}
       lang={locale}
@@ -332,7 +351,7 @@ export function AvatarEditor({ onClose }: { onClose: () => void }) {
         )}
         <div className="bc-ae-circle" data-testid="avatar-circle">
           {selection?.kind === 'gif' && <img className="bc-ae-gif" data-testid="avatar-gif-preview" src={selection.url} alt="" draggable={false} />}
-          {selection === null && <Avatar name={me?.display_name ?? ''} avatar={me?.avatar} large className="bc-ae-current" label={hasPhoto ? text.current : text.noPhoto} />}
+          {selection === null && <Avatar name={currentName} avatar={currentAvatar} large className="bc-ae-current" label={hasPhoto ? text.current : text.noPhoto} />}
         </div>
         {ringProgress > 0 && (
           <svg className="bc-ae-ring" viewBox={`0 0 ${stageSize} ${stageSize}`} aria-hidden="true">

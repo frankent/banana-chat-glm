@@ -2,16 +2,14 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Domain\Media\AvatarUrls;
 use App\Domain\Message\MessageSerializer;
 use App\Domain\Workspace\WorkspaceSummaryBuilder;
-use App\Enums\AttachmentKind;
-use App\Enums\AttachmentStatus;
 use App\Events\UserSettingsUpdated;
 use App\Events\UserUpdated;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
-use App\Models\Attachment;
 use App\Models\Message;
 use App\Models\User;
 use App\Support\WorkspaceContext;
@@ -55,21 +53,14 @@ class MeController extends Controller
         $user = $request->user();
 
         // FR-PROF-006 — a non-null id is accepted only when it is the user's
-        // OWN READY kind=avatar upload. Without this the field was a bare
-        // `nullable|ulid`: anything shaped like a ULID went straight onto the
-        // row, so a member could point their avatar at another user's PRIVATE
-        // attachment and get it serialized (and signed) to everyone. Unknown
-        // id, not-mine, wrong kind and not-ready are all the SAME opaque
-        // AVATAR_INVALID — no enumeration. null clears the photo.
+        // OWN READY kind=avatar upload (shared check with FR-PROF-008 room
+        // photos). Without this the field was a bare `nullable|ulid`:
+        // anything shaped like a ULID went straight onto the row, so a
+        // member could point their avatar at another user's PRIVATE
+        // attachment and get it serialized (and signed) to everyone. null
+        // clears the photo.
         if (($data['avatar_attachment_id'] ?? null) !== null) {
-            $avatar = Attachment::withoutGlobalScopes()->find($data['avatar_attachment_id']);
-
-            if ($avatar === null
-                || $avatar->uploader_id !== $user->id
-                || $avatar->kind !== AttachmentKind::Avatar
-                || $avatar->status !== AttachmentStatus::Ready) {
-                throw ApiException::avatarInvalid();
-            }
+            AvatarUrls::assertOwnReadyUpload($data['avatar_attachment_id'], $user);
         }
 
         $user->fill($data);

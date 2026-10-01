@@ -2,8 +2,11 @@
 
 namespace App\Domain\Media;
 
+use App\Enums\AttachmentKind;
 use App\Enums\AttachmentStatus;
+use App\Exceptions\ApiException;
 use App\Models\Attachment;
+use App\Models\User;
 use DateTimeInterface;
 use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Support\Carbon;
@@ -114,5 +117,25 @@ class AvatarUrls
             ->keyBy('id');
 
         return $ids->mapWithKeys(fn (string $id) => [$id => self::for($attachments->get($id))]);
+    }
+
+    /**
+     * FR-PROF-006 / FR-PROF-008 / DEC-090 — the ONE validity check behind
+     * every avatar pointer write (PATCH /me and PATCH /rooms/{id}): a
+     * non-null id is accepted only when it is the ACTOR'S OWN READY
+     * kind=avatar upload. Unknown id, not-mine, wrong kind and not-ready
+     * all collapse into the SAME opaque AVATAR_INVALID — no enumeration of
+     * which ids exist or who owns them.
+     */
+    public static function assertOwnReadyUpload(string $attachmentId, User $actor): void
+    {
+        $avatar = Attachment::withoutGlobalScopes()->find($attachmentId);
+
+        if ($avatar === null
+            || $avatar->uploader_id !== $actor->id
+            || $avatar->kind !== AttachmentKind::Avatar
+            || $avatar->status !== AttachmentStatus::Ready) {
+            throw ApiException::avatarInvalid();
+        }
     }
 }

@@ -474,6 +474,12 @@ components:
             type: { type: string, enum: [dm, group, channel] }
             name: { type: [string, 'null'] }
             description: { type: [string, 'null'] }
+            avatar_attachment_id: { type: [string, 'null'] }
+            avatar:
+              nullable: true
+              allOf:
+                - $ref: '#/components/schemas/Avatar'
+              description: 'FR-PROF-008 — group photo; null for DM rooms (the peer''s photo is other_user.avatar)'
             last_seq: { type: integer }
             member_count: { type: integer }
             last_message_at: { type: [string, 'null'] }
@@ -1039,7 +1045,26 @@ paths:
       - { name: roomId, in: path, required: true, schema: { type: string } }
       - { $ref: '#/components/parameters/workspaceSlug' }
     get: { summary: API-022 room detail, responses: { '200': {description: 'ok'}, '404': {description: 'not found'} } }
-    patch: { summary: API-023 update group info, responses: { '200': {description: 'updated'} } }
+    patch:
+      summary: 'API-022 update group info (FR-ROOM-007; avatar: FR-PROF-008 / DEC-090)'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, minLength: 1, maxLength: 100 }
+                description: { type: [string, 'null'], maxLength: 500 }
+                avatar_attachment_id:
+                  type: [string, 'null']
+                  description: 'group photo — an actual change requires room owner/admin (403 ROOM_FORBIDDEN for plain members regardless of settings.who_can_edit_info) and must be the caller''s own ready kind=avatar upload (422 AVATAR_INVALID); null removes the photo; re-sending the current id is a no-op; DM rooms are immutable (422 ROOM_DM_IMMUTABLE)'
+                settings:
+                  type: object
+                  description: 'who_can_add_members / who_can_edit_info — room admin+ only'
+      responses:
+        '200': { description: "updated — room carries avatar {sm, md, animated|null} | null" }
+        '403': { description: 'ROOM_FORBIDDEN — plain member changing the photo, or info/settings not allowed' }
+        '422': { description: 'AVATAR_INVALID / ROOM_DM_IMMUTABLE / VALIDATION_FAILED' }
     delete: { summary: API-024 soft delete + purge_after, responses: { '204': {description: 'deleted'} } }
   /rooms/{roomId}/members:
     parameters:

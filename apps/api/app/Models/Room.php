@@ -34,6 +34,9 @@ class Room extends Model
         'type',
         'name',
         'description',
+        // FR-PROF-008 — group photo pointer; written by RoomController::update
+        // only after the DEC-090 owner/admin + own-ready-avatar checks.
+        'avatar_attachment_id',
         'dm_key',
         'created_by',
         'owner_id',

@@ -25,8 +25,12 @@ function systemText(message: Message): string {
   switch (event) {
     case 'room.created':
       return `${actor} created the room`;
-    case 'room.renamed':
+    case 'room.renamed': // legacy spelling
+    case 'room_renamed':
       return `${actor} renamed the room to ${String(message.system_event?.name ?? '')}`;
+    // FR-PROF-008 — context is empty by design (no signed URLs in messages)
+    case 'room_avatar_changed':
+      return `${actor} changed the group photo`;
     case 'member_added':
       return `${actor} added ${String(message.system_event?.username ?? 'a member')}`;
     case 'member_removed':

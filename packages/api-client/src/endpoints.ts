@@ -37,6 +37,7 @@ import type {
   PublicChatUploadTicket,
   PublicChatVisitorMessagePage,
   PublicChatVisitorView,
+  Room,
   RoomListItem,
   SearchPage,
   UploadTicket,
@@ -286,6 +287,19 @@ export class Endpoints {
 
   room(roomId: string, slug: string) {
     return this.api.request<RoomDetail>(`/api/v1/rooms/${roomId}`, { workspaceSlug: slug });
+  }
+
+  /**
+   * API-022 — PATCH /rooms/{id}. FR-PROF-008 / DEC-090: `avatar_attachment_id`
+   * is a READY kind=avatar upload of mine (else 422 AVATAR_INVALID), `null`
+   * removes the photo; owner/admin only (403 ROOM_FORBIDDEN).
+   */
+  updateRoom(roomId: string, slug: string, input: { name?: string; description?: string | null; avatar_attachment_id?: string | null }) {
+    return this.api.request<{ room: Pick<Room, 'id' | 'name' | 'description' | 'avatar_attachment_id' | 'member_count'> & { avatar?: Room['avatar'] } }>(`/api/v1/rooms/${roomId}`, {
+      method: 'PATCH',
+      body: input,
+      workspaceSlug: slug,
+    });
   }
 
   /** Room roster for @mention autocomplete (flat cursor-paginated array, API-024). */

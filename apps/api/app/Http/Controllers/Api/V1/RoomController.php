@@ -161,6 +161,10 @@ class RoomController extends Controller
                     'name' => $room->name,
                     'description' => $room->description,
                     'avatar_attachment_id' => $room->avatar_attachment_id,
+                    // FR-PROF-008 — group photo {sm, md, animated}|null;
+                    // DM rows stay null (the peer's own photo is
+                    // other_user.avatar in list payloads).
+                    'avatar' => $this->roomAvatar($room),
                     'created_by' => $room->created_by,
                     'owner_id' => $room->owner_id,
                     'settings' => $room->settings,
@@ -178,7 +182,8 @@ class RoomController extends Controller
     }
 
     /**
-     * API-022 — patch name/description/avatar/settings (FR-ROOM-007).
+     * API-022 — patch name/description/avatar/settings (FR-ROOM-007,
+     * FR-PROF-008 group photo).
      */
     public function update(Request $request, string $roomId): JsonResponse
     {
@@ -202,6 +207,21 @@ class RoomController extends Controller
 
         $touchesSettings = array_key_exists('settings', $data);
         $this->policy->assertCanEditInfo($room, $membership, $touchesSettings);
+
+        // FR-PROF-008 / DEC-090 — the group photo is gated independently of
+        // who_can_edit_info, but only when the id in the payload ACTUALLY
+        // changes: a client re-sending the current value is a no-op, not a
+        // permission probe. Plain members get 403 even for a removal (null).
+        $avatarChanges = array_key_exists('avatar_attachment_id', $data)
+            && $data['avatar_attachment_id'] !== $room->avatar_attachment_id;
+
+        if ($avatarChanges) {
+            $this->policy->assertCanChangeAvatar($membership);
+
+            if ($data['avatar_attachment_id'] !== null) {
+                AvatarUrls::assertOwnReadyUpload($data['avatar_attachment_id'], $user);
+            }
+        }
 
         $renamed = isset($data['name']) && trim($data['name']) !== $room->name;
 
@@ -228,6 +248,13 @@ class RoomController extends Controller
             $room->refresh();
         }
 
+        if ($avatarChanges) {
+            // context carries no URLs (DEC-088 signed urls never ride a
+            // stored row or a broadcast) — members refetch the room payload
+            $this->systemMessages->write($room, $user, 'room_avatar_changed');
+            $room->refresh();
+        }
+
         broadcast(new RoomUpdated($room->refresh()));
         $this->audit->log('room.updated', actor: $user, targetType: 'room', targetId: $room->id);
 
@@ -236,6 +263,7 @@ class RoomController extends Controller
             'name' => $room->name,
             'description' => $room->description,
             'avatar_attachment_id' => $room->avatar_attachment_id,
+            'avatar' => $this->roomAvatar($room),
             'settings' => $room->settings,
             'member_count' => $room->member_count,
         ]]]);
@@ -577,6 +605,21 @@ class RoomController extends Controller
     }
 
     /**
+     * FR-PROF-008 — the group photo for a single-room payload (show/update).
+     * DM rows stay null: the peer's own photo travels as other_user.avatar.
+     *
+     * @return array{sm: string, md: string, animated: string|null}|null
+     */
+    private function roomAvatar(Room $room): ?array
+    {
+        if ($room->isDm() || $room->avatar_attachment_id === null) {
+            return null;
+        }
+
+        return AvatarUrls::mapFor([$room->avatar_attachment_id])->get($room->avatar_attachment_id);
+    }
+
+    /**
      * @param  array<int, mixed>  $rows  Room or stdlib join rows carrying room + pivot columns
      * @return array<int, array<string, mixed>>
      */
@@ -614,9 +657,13 @@ class RoomController extends Controller
 
         $offlineAfter = $this->settings->int('presence.offline_after_seconds');
 
-        // FR-PROF-006 — one batched avatar query for every DM counterpart on
-        // the page (join rows, no relation to eager-load).
-        $avatars = AvatarUrls::mapFor($dmOthers->flatten()->pluck('avatar_attachment_id'));
+        // FR-PROF-006 / FR-PROF-008 — ONE batched avatar query for every DM
+        // counterpart AND every group photo on the page (join rows, no
+        // relation to eager-load).
+        $avatars = AvatarUrls::mapFor(
+            $dmOthers->flatten()->pluck('avatar_attachment_id')
+                ->concat(collect($rows)->pluck('avatar_attachment_id'))
+        );
 
         return collect($rows)->map(function ($row) use ($lastMessages, $dmOthers, $muted, $offlineAfter, $membership, $avatars) {
             $type = $row->type instanceof RoomType ? $row->type : RoomType::from($row->type);
@@ -634,6 +681,9 @@ class RoomController extends Controller
                     'name' => $row->name,
                     'description' => $row->description,
                     'avatar_attachment_id' => $row->avatar_attachment_id,
+                    // FR-PROF-008 — group photo; DM rows stay null (the
+                    // peer's own photo is other_user.avatar below).
+                    'avatar' => $type === RoomType::Dm ? null : $avatars->get($row->avatar_attachment_id),
                     'created_by' => $row->created_by,
                     'last_seq' => $lastSeq,
                     'member_count' => (int) $row->member_count,
@@ -683,6 +733,11 @@ class RoomController extends Controller
             MessageType::Image => '📷 รูปภาพ',
             MessageType::Video => '🎬 วิดีโอ',
             MessageType::File => '📎 '.($message->attachments->first()?->original_name ?? 'ไฟล์'),
+            MessageType::System => match ($message->system_event['event'] ?? null) {
+                'room_avatar_changed' => '🖼️ เปลี่ยนรูปกลุ่ม',
+                'room_renamed' => 'เปลี่ยนชื่อกลุ่มเป็น '.($message->system_event['name'] ?? ''),
+                default => '',
+            },
             default => '',
         };
     }

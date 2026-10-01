@@ -26,9 +26,13 @@ function dailyRow(string $userId, ?string $workspaceId, string $date, array $cou
 }
 
 test('TC-AI-122 daily rows aggregate into monthly sums per user/workspace/month', function () {
+    // two DISTINCT days of the same month — on the 1st, startOfMonth() ==
+    // today() and a second insert for today() would hit the
+    // ai_usage_daily unique index (user, workspace, date)
     $m = today()->startOfMonth()->toDateString();
+    $mid = today()->startOfMonth()->addDays(14)->toDateString();
     dailyRow($this->tony->id, $this->ws->id, $m, ['messages' => 10, 'tokens_in' => 100, 'tokens_out' => 50, 'tokens_memory' => 5, 'failed' => 1]);
-    dailyRow($this->tony->id, $this->ws->id, today()->toDateString(), ['messages' => 7, 'tokens_in' => 70, 'tokens_out' => 30, 'tokens_memory' => 5, 'failed' => 0]);
+    dailyRow($this->tony->id, $this->ws->id, $mid, ['messages' => 7, 'tokens_in' => 70, 'tokens_out' => 30, 'tokens_memory' => 5, 'failed' => 0]);
     dailyRow($this->tony->id, null, today()->toDateString(), ['messages' => 3, 'tokens_in' => 30, 'tokens_out' => 20, 'tokens_memory' => 0, 'failed' => 0]);
     // previous month rolls into its own row
     dailyRow($this->anna->id, $this->ws->id, today()->subMonth()->startOfMonth()->toDateString(), ['messages' => 1, 'tokens_in' => 1, 'tokens_out' => 1, 'tokens_memory' => 1, 'failed' => 1]);

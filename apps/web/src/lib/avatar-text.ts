@@ -1,4 +1,4 @@
-/** FR-PROF-006 — profile photo editor strings (local, like privacy-text). */
+/** FR-PROF-006 / FR-PROF-008 — profile + group photo editor strings (local, like privacy-text). */
 export const avatarText = {
   th: {
     menu: 'เปลี่ยนรูปโปรไฟล์',
@@ -42,6 +42,7 @@ export const avatarText = {
     errProcessing: 'ประมวลผลรูปไม่สำเร็จ ลองอีกครั้งหรือเลือกรูปอื่น',
     errNetwork: 'เชื่อมต่อไม่ได้ ตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง',
     errRemove: 'ลบรูปไม่สำเร็จ กรุณาลองอีกครั้ง',
+    errForbidden: 'คุณไม่มีสิทธิ์เปลี่ยนรูปนี้แล้ว',
     saved: 'บันทึกรูปโปรไฟล์แล้ว',
   },
   en: {
@@ -86,7 +87,39 @@ export const avatarText = {
     errProcessing: 'The photo could not be processed. Try again or pick another.',
     errNetwork: 'Could not connect. Check your connection and try again.',
     errRemove: 'Could not remove your photo. Please try again.',
+    errForbidden: 'You no longer have permission to change this photo.',
     saved: 'Profile photo saved',
   },
 } as const;
 export type AvatarTextKey = keyof typeof avatarText.th;
+
+/**
+ * FR-PROF-008 / DEC-090 — the same editor, pointed at a group. Only what
+ * differs is overridden; everything else (crop, GIF, upload and error copy)
+ * is shared with the profile photo.
+ */
+export const roomAvatarText: Record<'th' | 'en', Partial<Record<AvatarTextKey, string>>> = {
+  th: {
+    menu: 'เปลี่ยนรูปกลุ่ม',
+    title: 'เปลี่ยนรูปกลุ่ม',
+    subtitle: 'สมาชิกทุกคนในกลุ่มจะเห็นรูปนี้ในรายการแชทและหัวข้อห้อง',
+    current: 'รูปกลุ่มปัจจุบัน',
+    noPhoto: 'กลุ่มนี้ยังไม่มีรูป ตอนนี้ทุกคนเห็นตัวอักษรย่อของชื่อกลุ่ม',
+    pasteHint: 'วางรูปจากคลิปบอร์ดได้ด้วย (Ctrl+V)',
+    removeTitle: 'ลบรูปกลุ่ม?',
+    removeBody: 'ทุกคนจะเห็นตัวอักษรย่อของชื่อกลุ่มแทน',
+    applying: 'กำลังตั้งเป็นรูปกลุ่ม…',
+    errRemove: 'ลบรูปกลุ่มไม่สำเร็จ กรุณาลองอีกครั้ง',
+  },
+  en: {
+    menu: 'Change group photo',
+    title: 'Change group photo',
+    subtitle: 'Everyone in this group sees it in the chat list and the room header.',
+    current: 'Current group photo',
+    noPhoto: 'No group photo yet. People see the group initials for now.',
+    removeTitle: 'Remove the group photo?',
+    removeBody: 'People will see the group initials instead.',
+    applying: 'Setting the group photo…',
+    errRemove: 'Could not remove the group photo. Please try again.',
+  },
+};

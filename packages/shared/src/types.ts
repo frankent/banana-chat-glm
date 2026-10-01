@@ -50,6 +50,12 @@ export interface Room {
   name: string | null;
   description: string | null;
   avatar_attachment_id: string | null;
+  /**
+   * FR-PROF-008 / DEC-090 — the group's serialized photo (same shape as a
+   * member's). Optional: rows cached before the field shipped lack it; DM
+   * rooms never carry one (the peer's photo is `other_user.avatar`).
+   */
+  avatar?: UserAvatar | null;
   created_by: string;
   last_seq: number;
   member_count: number;

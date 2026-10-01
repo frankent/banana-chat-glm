@@ -139,6 +139,21 @@ class RoomPolicy
     }
 
     /**
+     * FR-PROF-008 / DEC-090 — the group photo is an owner/admin action:
+     * room admin+ (incl. workspace admins) may set/replace/remove it,
+     * plain members may not, REGARDLESS of who_can_edit_info (that
+     * setting keeps gating name/description only). The controller only
+     * calls this when the id in the payload ACTUALLY differs from the
+     * current value, so a client re-sending the same id is harmless.
+     */
+    public function assertCanChangeAvatar(RoomMember $actor): void
+    {
+        if (! $this->isRoomAdmin($actor, $this->contextUser())) {
+            throw ApiException::roomForbidden();
+        }
+    }
+
+    /**
      * FR-ROOM-006 — role changes:
      * owner sets owner (self → admin); owner/admin set/unset admin;
      * admin cannot unset another admin.

@@ -19,6 +19,8 @@ import { ForwardDialog } from './ForwardDialog';
 import { MessageItem } from './MessageItem';
 import { ReadReceiptTrigger, ReadReceiptDialog } from './ReadReceipt';
 import { Avatar, Icon } from './Visual';
+import { AvatarEditor } from './AvatarEditor';
+import { avatarText, roomAvatarText } from '../lib/avatar-text';
 import { Composer } from './Composer';
 import { useRoomTools } from '../hooks/useRoomTools';
 import { NotesPanel } from './NotesPanel';
@@ -55,7 +57,10 @@ export function ChatView() {
   const typingNames = useRoomTools(roomId, slug, me?.id);
   const pinsQuery = useQuery({queryKey:['pins', slug, roomId, me?.id], queryFn:() => endpoints.pins(roomId!, slug!), enabled:!!roomId && !!slug, refetchInterval:15000});
   const [mediaOpen, setMediaOpen] = useState(false);
-  useEffect(() => {setForward(null);setForwardStatus('');setSecretChatFor(null);setReply(null);setNotesOpen(false);setMediaOpen(false);setToolError('');setReadListFor(null);}, [roomId, slug]);
+  // FR-PROF-008 — group photo editor; `returnTo` is whatever opened it, refocused on close.
+  const [photoOpen, setPhotoOpen] = useState(false);
+  const photoReturn = useRef<HTMLElement | null>(null);
+  useEffect(() => {setForward(null);setForwardStatus('');setSecretChatFor(null);setReply(null);setNotesOpen(false);setMediaOpen(false);setToolError('');setReadListFor(null);setPhotoOpen(false);}, [roomId, slug]);
   const listRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const visible = useRef(false);
@@ -139,6 +144,14 @@ export function ChatView() {
     const channel = echo.private(`room.${roomId}`);
     const store = roomStore(roomId);
 
+    // EVT-002 room.updated — name/photo changed by another member. The event is
+    // URL-free by design (signed URLs never ride a broadcast), so refetch. The
+    // sidebar needs it here too: EchoProvider skips room.activity for the open room.
+    const onRoomUpdated = () => {
+      void queryClient.invalidateQueries({ queryKey: ['room', roomId] });
+      void queryClient.invalidateQueries({ queryKey: ['rooms', slug] });
+    };
+
     const onMessage = (envelope: EventEnvelope<{ message: Message }>) => {
       const message = envelope.data?.message;
       if (message === undefined) {
@@ -149,6 +162,8 @@ export function ChatView() {
       if (message.sender_id === me.id) {
         void queryClient.invalidateQueries({ queryKey: ['rooms', slug] });
       }
+      // FR-PROF-008 — the system message is the durable twin of room.updated
+      if (message.type === 'system' && message.system_event?.event === 'room_avatar_changed') onRoomUpdated();
     };
 
     const onRead = () => {
@@ -175,7 +190,8 @@ export function ChatView() {
 
     channel.listen('.message.created', onMessage).listen('.room.read', onRead)
       .listen('.message.updated', onUpdated)
-      .listen('.message.deleted', onDeleted);
+      .listen('.message.deleted', onDeleted)
+      .listen('.room.updated', onRoomUpdated);
 
     // EVT-003 room.deleted on the room channel — owner deletion or secret
     // expiry (FR-ROOM-012): leave immediately, purging every local layer
@@ -192,6 +208,7 @@ export function ChatView() {
       channel.stopListening('.room.read');
       channel.stopListening('.message.updated');
       channel.stopListening('.message.deleted');
+      channel.stopListening('.room.updated');
       channel.stopListening('.room.deleted');
       echo.leave(`room.${roomId}`);
     };
@@ -315,7 +332,7 @@ export function ChatView() {
   const room = roomQuery.data;
   const secretActive = room !== undefined && isSecretRoomActive(room.room);
   const peerId = room?.other_user?.id ?? membersQuery.data?.find(member => member.id !== me.id)?.id;
-  const peerAvatar = room?.room.type === 'dm' ? room.other_user?.avatar ?? membersQuery.data?.find(member => member.id !== me.id)?.avatar : null;
+  const peerAvatar = room?.room.type === 'dm' ? room.other_user?.avatar ?? membersQuery.data?.find(member => member.id !== me.id)?.avatar : room?.room.avatar ?? null;
   const title = room?.room.type === 'dm' ? room.other_user?.display_name ?? membersQuery.data?.find(member => member.id !== me.id)?.display_name ?? 'Direct message' : room?.room.name ?? '…';
   // Backend already filters read_by to last_read_seq >= myNewestSeq, so
   // everyone left after excluding me has read my latest message.
@@ -324,6 +341,10 @@ export function ChatView() {
 
   // FR-MSG-005/006 — edit (sender only), delete (sender anytime, moderator for others)
   const canModerate = roomQuery.data?.my_role === 'owner' || roomQuery.data?.my_role === 'admin' || currentWorkspace?.role === 'owner' || currentWorkspace?.role === 'admin';
+  // FR-PROF-008 — owner/admin (room or workspace) may change a group's photo; plain members get nothing.
+  const canChangeGroupPhoto = room?.room.type === 'group' && canModerate;
+  const photoText = { ...avatarText[locale], ...roomAvatarText[locale] };
+  const openPhoto = (trigger: HTMLElement | null) => { photoReturn.current = trigger; setPhotoOpen(true); };
   const editMessage = async (messageId: string, body: string) => {
     const response = await endpoints.editMessage(messageId, slug, body);
     roomStore(roomId).add(response.message);
@@ -341,7 +362,9 @@ export function ChatView() {
       <header className="bc-chat-header">
         <button className="bc-chat-back bc-chat-control" aria-label={text('chat.back')} onClick={() => navigate('/')}><Icon name="back" /></button>
         <div className="bc-chat-identity">
-          <Avatar name={title} avatar={peerAvatar} />
+          {canChangeGroupPhoto
+            ? <button type="button" className="bc-chat-avatar-button" data-testid="group-photo-button" aria-haspopup="dialog" aria-label={photoText.menu} title={photoText.menu} onClick={event => openPhoto(event.currentTarget)}><Avatar name={title} avatar={peerAvatar} /></button>
+            : <Avatar name={title} avatar={peerAvatar} />}
           <div><h2>{title}</h2>
           {room?.room.type === 'group' && room.room.member_count > 0 && (
             <p className="text-xs text-slate-400">{room.room.member_count} members</p>
@@ -362,6 +385,9 @@ export function ChatView() {
               <div className="bc-mobile-calls">{room && (room.room.type === 'dm' || room.room.type === 'group') && <CallButtons roomId={roomId} type={room.room.type} />}</div>
               <button onClick={() => {setNotesOpen(!notesOpen);setMediaOpen(false);}} aria-label="Room notes"><Icon name="notes" size={18} />{text('chat.notes')}</button>
               <button onClick={() => {setMediaOpen(v => !v);setNotesOpen(false);}} aria-pressed={mediaOpen} aria-label="Media and files" data-testid="room-media-toggle"><Icon name="files" size={18} />{text('chat.files')}</button>
+              {canChangeGroupPhoto && (
+                <button type="button" aria-haspopup="dialog" data-testid="room-photo-menu" onClick={event => openPhoto(event.currentTarget.closest('details')?.querySelector('summary') ?? null)}><Icon name="image" size={18} />{photoText.menu}</button>
+              )}
               {room?.room.type === 'dm' && !secretActive && (
                 <button disabled={!peerId} onClick={() => setSecretChatFor(roomId)}>
                   <span aria-hidden="true">🔒</span>{text('chat.openSecretChat')}
@@ -371,6 +397,13 @@ export function ChatView() {
           </details>
         </div>
       </header>
+      {photoOpen && canChangeGroupPhoto && room && (
+        <AvatarEditor
+          key={`${slug}:${roomId}`}
+          target={{ kind: 'room', roomId, name: title, avatar: room.room.avatar }}
+          onClose={() => { setPhotoOpen(false); const back = photoReturn.current; photoReturn.current = null; window.requestAnimationFrame(() => back?.focus()); }}
+        />
+      )}
       {secretChatFor === roomId && room?.room.type === 'dm' && !secretActive && peerId && (
         <SecretChatDialog key={`${slug}:${roomId}`} peerId={peerId} slug={slug} onClose={() => setSecretChatFor(null)} />
       )}
