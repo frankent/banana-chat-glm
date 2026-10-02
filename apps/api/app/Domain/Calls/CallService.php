@@ -4,6 +4,7 @@ namespace App\Domain\Calls;
 
 use App\Domain\Media\AvatarUrls;
 use App\Domain\Notification\PushDecisionService;
+use App\Domain\Room\SystemMessageWriter;
 use App\Enums\NotificationMode;
 use App\Events\CallChanged;
 use App\Events\NotificationAlert;
@@ -18,7 +19,7 @@ use Illuminate\Support\Facades\DB;
 
 class CallService
 {
-    public function __construct(private MediaServer $media, private CallCapacity $capacity) {}
+    public function __construct(private MediaServer $media, private CallCapacity $capacity, private SystemMessageWriter $systemMessages) {}
 
     public function allowed(string $uid, string $rid): bool
     {
@@ -125,6 +126,10 @@ class CallService
             $call = RoomCall::create(['room_id' => $room->id, 'workspace_id' => $room->workspace_id, 'started_by' => $uid, 'kind' => $kind, 'capacity' => $this->capacity->forRoom($room->isDm())]);
             $this->media->request('CreateRoom', 'call-'.$call->id, ['name' => 'call-'.$call->id, 'empty_timeout' => 60, 'departure_timeout' => 20, 'max_participants' => $call->capacity]);
             $this->changed($call);
+            // FR-CALL-010 / DEC-091 — a "call started" card with Join in the
+            // timeline; only for a NEW call (the $existing branch above posts
+            // nothing). Context = ids only; the card reads live call state.
+            $this->systemMessages->write($room, User::findOrFail($uid), 'call_started', ['call_id' => $call->id, 'kind' => $kind]);
             foreach (DB::table('room_members')->where('room_id', $room->id)->whereNull('left_at')->where('user_id', '!=', $uid)->pluck('user_id') as $recipientId) {
                 $recipient = User::find($recipientId);
                 $setting = $recipient?->notificationSetting;

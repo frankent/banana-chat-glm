@@ -36,8 +36,10 @@ const Context = createContext<{
   busy: boolean;
   start: (roomId: string, kind: "voice" | "video") => void;
   join: (call: RoomCall) => void;
-}>({ enabled: false, calls: [], busy: false, start: () => {}, join: () => {} });
-const useCalls = () => useContext(Context);
+  /** The call this tab is connected to (FR-CALL-010 card: "You're in this call"). */
+  activeCallId: string | null;
+}>({ enabled: false, calls: [], busy: false, start: () => {}, join: () => {}, activeCallId: null });
+export const useCalls = () => useContext(Context);
 export function CallProvider({ children }: { children: ReactNode }) {
   const { me, status, currentWorkspace } = useSession();
   const slug = currentWorkspace?.workspace.slug;
@@ -145,6 +147,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
         busy: busy || !!active,
         start: (r, k) => void start(r, k),
         join: (c) => void join(c),
+        activeCallId: active?.call.id ?? null,
       }}
     >
       {children}

@@ -7,6 +7,7 @@ import { useSession } from '../state/session';
 import { MediaViewer } from './MediaViewer';
 import { Markdown } from './ai/Markdown';
 import { Avatar, Icon } from './Visual';
+import { CallStartedCard } from './calls/CallStartedCard';
 import type { Attachment, Message } from '@banana-chat/shared';
 
 function formatTime(iso: string, locale: string): string {
@@ -175,6 +176,10 @@ export function MessageItem({ message, mine, canModerate = false, grouped = fals
   useEffect(() => {
     if (editing) inputRef.current?.focus();
   }, [editing]);
+
+  if (message.type === 'system' && message.system_event?.event === 'call_started' && !message.deleted_at) {
+    return <CallStartedCard message={message} />;
+  }
 
   if (message.type === 'system') {
     return (

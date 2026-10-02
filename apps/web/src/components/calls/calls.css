@@ -378,3 +378,32 @@
 }
 .bc-call-incoming > div { min-width: 0; }
 .bc-call-incoming strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* FR-CALL-010 — "call started" card in the timeline */
+.bc-call-msg-row { display: flex; justify-content: center; margin: 10px 0; padding: 0 12px; }
+.bc-call-msg {
+  display: flex; align-items: center; gap: 12px;
+  width: min(100%, 380px); padding: 10px 10px 10px 12px;
+  background: #fff; border: 1px solid #e3e8e0; border-radius: 14px;
+  box-shadow: 0 1px 2px #1b293314; text-align: left; color: #202b36;
+}
+.bc-call-msg-icon {
+  flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%;
+  background: #e2f5ee; color: #0e7f5d;
+}
+.bc-call-msg[data-state="live"] .bc-call-msg-icon { animation: bc-call-msg-pulse 2s ease-out infinite; }
+.bc-call-msg[data-state="ended"] .bc-call-msg-icon { background: #eef1f3; color: #7a8794; }
+.bc-call-msg-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.bc-call-msg-text strong { font-size: 13px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+.bc-call-msg-text > span { font-size: 12px; color: #607080; }
+.bc-call-msg[data-state="live"] .bc-call-msg-text [role="status"] { color: #0e7f5d; font-weight: 600; }
+.bc-chat-shell .bc-call-msg-row .bc-call-msg-join,
+.bc-call-msg-join {
+  flex: none; width: auto; min-height: 36px; padding: 0 14px; border: 0; border-radius: 999px;
+  background: #0e926b; color: #fff; font-size: 13px; font-weight: 600; justify-content: center; cursor: pointer;
+}
+.bc-call-msg-join:hover:not(:disabled) { background: #0b7d5b; }
+.bc-call-msg-join:focus-visible { outline: 3px solid #376fb0; outline-offset: 2px; }
+.bc-call-msg-join:disabled { opacity: .55; cursor: default; }
+@keyframes bc-call-msg-pulse { 0% { box-shadow: 0 0 0 0 #0e926b55; } 70% { box-shadow: 0 0 0 8px #0e926b00; } 100% { box-shadow: 0 0 0 0 #0e926b00; } }
+@media (prefers-reduced-motion: reduce) { .bc-call-msg[data-state="live"] .bc-call-msg-icon { animation: none; } }

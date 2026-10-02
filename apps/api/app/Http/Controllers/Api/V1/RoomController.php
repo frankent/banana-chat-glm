@@ -733,11 +733,7 @@ class RoomController extends Controller
             MessageType::Image => '📷 รูปภาพ',
             MessageType::Video => '🎬 วิดีโอ',
             MessageType::File => '📎 '.($message->attachments->first()?->original_name ?? 'ไฟล์'),
-            MessageType::System => match ($message->system_event['event'] ?? null) {
-                'room_avatar_changed' => '🖼️ เปลี่ยนรูปกลุ่ม',
-                'room_renamed' => 'เปลี่ยนชื่อกลุ่มเป็น '.($message->system_event['name'] ?? ''),
-                default => '',
-            },
+            MessageType::System => SystemMessageWriter::preview($message),
             default => '',
         };
     }

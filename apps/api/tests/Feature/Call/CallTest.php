@@ -4,9 +4,13 @@ use App\Domain\Calls\CallService;
 use App\Domain\Calls\MediaServer;
 use App\Domain\Media\MediaUrls;
 use App\Events\CallChanged;
+use App\Events\MessageCreated;
 use App\Events\NotificationAlert;
+use App\Events\RoomActivity;
+use App\Jobs\NotifyMessage;
 use App\Jobs\ReconcileCalls;
 use App\Models\CallParticipant;
+use App\Models\Message;
 use App\Models\Room;
 use App\Models\RoomCall;
 use App\Models\User;
@@ -17,6 +21,7 @@ use Firebase\JWT\JWT;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 
 beforeEach(function () {
@@ -387,4 +392,45 @@ test('TC-CALL-045 calls list batches avatar lookups across rows (no N+1)', funct
     $withFour = $attachmentQueries(4);
 
     expect($withTwo)->toBe(1)->and($withFour)->toBe(1);
+});
+
+test('TC-CALL-046 FR-CALL-010 a new call posts ONE call_started system message (ids only); a repeat start posts none', function () {
+    Event::fake([CallChanged::class, NotificationAlert::class, MessageCreated::class, RoomActivity::class]);
+    $url = '/api/v1/rooms/'.$this->room->id.'/calls';
+    $call = $this->postJson($url, ['kind' => 'voice'], $this->headers)->assertSuccessful()->json('data');
+    $this->postJson($url, ['kind' => 'voice'], $this->calleeHeaders)->assertSuccessful()->assertJsonPath('data.id', $call['id']);
+
+    $rows = Message::where('room_id', $this->room->id)->where('type', 'system')->get();
+    expect($rows)->toHaveCount(1)
+        ->and($rows[0]->system_event)->toEqualCanonicalizing(['event' => 'call_started', 'call_id' => $call['id'], 'kind' => 'voice'])
+        ->and($rows[0]->sender_id)->toBe($this->caller->id);
+
+    // DEC-091 — announced live to the room and to each member's list
+    Event::assertDispatchedTimes(MessageCreated::class, 1);
+    Event::assertDispatched(MessageCreated::class, fn ($e) => ($e->broadcastWith()['data']['message']['system_event']['event'] ?? null) === 'call_started');
+    Event::assertDispatched(RoomActivity::class, fn ($e) => str_contains(json_encode($e->broadcastWith(), JSON_UNESCAPED_UNICODE), '📞 เริ่มโทรด้วยเสียง'));
+});
+
+test('TC-CALL-047 FR-CALL-010 call_started is visible in history, previews the room list and sends no push', function () {
+    Queue::fake();
+    $this->room->update(['type' => 'group', 'name' => 'Ops']);
+    $call = $this->postJson('/api/v1/rooms/'.$this->room->id.'/calls', ['kind' => 'video'], $this->headers)->assertSuccessful()->json('data');
+
+    Queue::assertNotPushed(NotifyMessage::class);
+
+    $messages = $this->getJson('/api/v1/rooms/'.$this->room->id.'/messages', $this->calleeHeaders)->assertOk()->json('data');
+    $messages = $messages['messages'] ?? $messages;
+    $system = collect($messages)->firstWhere('type', 'system');
+    expect($system['system_event'])->toMatchArray(['event' => 'call_started', 'call_id' => $call['id'], 'kind' => 'video'])
+        ->and($system['sender']['id'])->toBe($this->caller->id);
+
+    $row = collect($this->getJson('/api/v1/rooms', $this->calleeHeaders)->assertOk()->json('data'))->firstWhere('room.id', $this->room->id);
+    expect($row['last_message']['body'])->toBe('📹 เริ่มวิดีโอคอล');
+});
+
+test('TC-CALL-048 FR-CALL-010 a start that fails (media down) leaves no orphan call_started message', function () {
+    $this->mediaDown = true;
+    $this->postJson('/api/v1/rooms/'.$this->room->id.'/calls', ['kind' => 'video'], $this->headers);
+    expect(RoomCall::where('room_id', $this->room->id)->count())->toBe(0)
+        ->and(Message::where('room_id', $this->room->id)->where('type', 'system')->count())->toBe(0);
 });

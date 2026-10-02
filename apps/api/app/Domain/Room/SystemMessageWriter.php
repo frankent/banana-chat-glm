@@ -2,6 +2,7 @@
 
 namespace App\Domain\Room;
 
+use App\Domain\Message\MessageWriter;
 use App\Enums\MessageType;
 use App\Models\Message;
 use App\Models\Room;
@@ -18,7 +19,7 @@ class SystemMessageWriter
 {
     public function write(Room $room, User $actor, string $event, array $context = []): Message
     {
-        return DB::transaction(function () use ($room, $actor, $event, $context): Message {
+        $message = DB::transaction(function () use ($room, $actor, $event, $context): Message {
             /** @var Room $locked */
             $locked = Room::query()
                 ->whereKey($room->id)
@@ -52,5 +53,29 @@ class SystemMessageWriter
 
             return $message;
         });
+
+        // DEC-091 — system rows reach open timelines and room lists live, like
+        // user messages; after commit so a caller's outer transaction (e.g.
+        // CallService::start) never announces a row that rolls back. No push:
+        // MessageWriter never dispatches NotifyMessage for system rows.
+        DB::afterCommit(fn () => app(MessageWriter::class)->fanOut($message));
+
+        return $message;
+    }
+
+    /**
+     * Room-list preview for a system row — shared by the list (API-020) and
+     * the realtime room.activity so both say the same thing.
+     */
+    public static function preview(Message $message): string
+    {
+        $event = $message->system_event ?? [];
+
+        return match ($event['event'] ?? null) {
+            'call_started' => ($event['kind'] ?? 'video') === 'voice' ? '📞 เริ่มโทรด้วยเสียง' : '📹 เริ่มวิดีโอคอล',
+            'room_avatar_changed' => '🖼️ เปลี่ยนรูปกลุ่ม',
+            'room_renamed' => 'เปลี่ยนชื่อกลุ่มเป็น '.($event['name'] ?? ''),
+            default => '',
+        };
     }
 }

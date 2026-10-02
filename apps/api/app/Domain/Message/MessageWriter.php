@@ -2,6 +2,7 @@
 
 namespace App\Domain\Message;
 
+use App\Domain\Room\SystemMessageWriter;
 use App\Enums\AttachmentKind;
 use App\Enums\AttachmentStatus;
 use App\Enums\MessageType;
@@ -247,6 +248,10 @@ class MessageWriter
             return $message->body;
         }
 
+        if ($message->type === MessageType::System) {
+            return SystemMessageWriter::preview($message);
+        }
+
         $first = $message->attachments->first(); // loaded by forEvent()
 
         return match ($message->type) {
@@ -285,8 +290,9 @@ class MessageWriter
     /**
      * Post-commit broadcasts: EVT-010 to the room, EVT-015/024 to each member
      * on private-user so lists/badges update even for unsubscribed rooms.
+     * Public for SystemMessageWriter (DEC-091): system rows take the same path.
      */
-    private function fanOut(Message $message): void
+    public function fanOut(Message $message): void
     {
         $room = $message->room()->firstOrFail();
         $payload = MessageSerializer::forEvent($message);
