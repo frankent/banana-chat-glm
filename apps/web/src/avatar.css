@@ -168,3 +168,15 @@
 }
 #root .bc-chat-header .bc-chat-avatar-button:hover { background: transparent; box-shadow: 0 0 0 3px #f2cf5580; }
 #root .bc-chat-header .bc-chat-avatar-button:focus-visible { outline: 2px solid #376fb0; outline-offset: 2px; }
+
+/* FR-ROOM-007 / DEC-092 — rename group dialog (reuses the editor shell above). */
+.bc-rename { width: min(420px, calc(100vw - 32px)); }
+.bc-rename-form { display: flex; flex-direction: column; gap: 8px; }
+.bc-rename-form label { font-size: 13px; line-height: 20px; font-weight: 600; color: var(--ae-ink); }
+.bc-rename-input {
+  box-sizing: border-box; width: 100%; min-height: 44px; padding: 0 14px; border: 1px solid var(--ae-line); border-radius: 12px;
+  background: var(--ae-bg); color: var(--ae-ink); font: inherit; font-size: 16px;
+}
+.bc-rename-input:focus-visible { outline: 2px solid var(--ae-focus); outline-offset: 1px; }
+.bc-rename-counter { align-self: flex-end; font-size: 12px; line-height: 16px; color: var(--ae-muted); }
+.bc-rename-form .bc-ae-actions { margin-top: 8px; }

@@ -57,6 +57,12 @@ export interface Room {
    */
   avatar?: UserAvatar | null;
   created_by: string;
+  /**
+   * FR-ROOM-007 / DEC-092 — only on GET /rooms/{id}. `who_can_edit_info`
+   * 'admins' limits renaming and the group photo to room admin+; anything
+   * else (incl. absent) means every member may.
+   */
+  settings?: { who_can_edit_info?: 'everyone' | 'admins'; who_can_add_members?: 'everyone' | 'admins' } | null;
   last_seq: number;
   member_count: number;
   last_message_at: string | null;

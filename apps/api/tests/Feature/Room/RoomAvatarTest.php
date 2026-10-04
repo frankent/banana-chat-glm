@@ -21,9 +21,9 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
- * TC-ROOM-083..093 — group photo (FR-PROF-008, DEC-090, API-022 amended,
- * EVT-002, DEC-087/088): owner/admin sets/replaces/removes, plain members
- * 403 regardless of who_can_edit_info, own-ready-avatar validation, payload
+ * TC-ROOM-083..096 — group photo (FR-PROF-008, DEC-090, DEC-092, API-022
+ * amended, EVT-002, DEC-087/088): any member sets/replaces/removes it unless
+ * who_can_edit_info=admins, own-ready-avatar validation, payload
  * serialization with no N+1, URL-free broadcast, no avatar in push.
  *
  * Local disk (pinned in phpunit.xml): signed urls point at the signed API
@@ -220,35 +220,78 @@ test('TC-ROOM-084 room admin sets it too; rename + photo in one PATCH write both
         ->and($events->values()->get(2)['event'])->toBe('room_avatar_changed');
 });
 
-test('TC-ROOM-085 plain member → 403 ROOM_FORBIDDEN even with who_can_edit_info=everyone (set and remove)', function () {
+test('TC-ROOM-085 plain member sets, replaces and removes the group photo (DEC-092) — each change is a system message by them', function () {
     [$tony, $tonyToken] = loginAs($this->tony);
     [$somchai, $somchaiToken] = loginAs($this->somchai);
-
-    $this->room->forceFill(['settings' => ['who_can_edit_info' => 'everyone']])->save();
 
     $id = uploadRoomAvatar($this, $tonyToken, 'group.png', 'image/png', $this->png);
     $this->patchJson("/api/v1/rooms/{$this->room->id}", ['avatar_attachment_id' => $id], wsHeaders($tonyToken, 'acme'))
         ->assertOk();
 
-    // member cannot replace it — and nothing else in the payload sneaks through
-    $foreign = uploadRoomAvatar($this, $somchaiToken, 'somchai.png', 'image/png', $this->png);
-
+    // a plain member replaces the owner's photo, renames, and removes it — default who_can_edit_info
+    $mine = uploadRoomAvatar($this, $somchaiToken, 'somchai.png', 'image/png', $this->png);
     $this->patchJson("/api/v1/rooms/{$this->room->id}", [
-        'name' => 'Hax',
-        'avatar_attachment_id' => $foreign,
+        'name' => 'Renamed by member',
+        'avatar_attachment_id' => $mine,
     ], wsHeaders($somchaiToken, 'acme'))
-        ->assertStatus(403)
-        ->assertJsonPath('error.code', 'ROOM_FORBIDDEN');
+        ->assertOk()
+        ->assertJsonPath('data.room.name', 'Renamed by member')
+        ->assertJsonPath('data.room.avatar_attachment_id', $mine)
+        ->assertJsonPath('data.room.avatar.sm', fn ($sm) => str_starts_with((string) $sm, 'http'));
 
-    // member cannot remove it either
     $this->patchJson("/api/v1/rooms/{$this->room->id}", ['avatar_attachment_id' => null], wsHeaders($somchaiToken, 'acme'))
-        ->assertStatus(403)
-        ->assertJsonPath('error.code', 'ROOM_FORBIDDEN');
+        ->assertOk()
+        ->assertJsonPath('data.room.avatar', null);
 
     $fresh = $this->room->fresh();
-    expect($fresh->avatar_attachment_id)->toBe($id)
-        ->and($fresh->name)->toBe('Engineering')
-        ->and(Message::query()->where('room_id', $this->room->id)->where('type', 'system')->count())->toBe(1); // only the owner's set
+    expect($fresh->avatar_attachment_id)->toBeNull()
+        ->and($fresh->name)->toBe('Renamed by member');
+
+    $bySomchai = Message::query()->where('room_id', $this->room->id)->where('type', 'system')
+        ->where('sender_id', $this->somchai->id)->get();
+    expect($bySomchai)->toHaveCount(3) // room_renamed + room_avatar_changed (set) + room_avatar_changed (remove)
+        ->and($bySomchai->pluck('system_event')->pluck('event')->sort()->values()->all())
+        ->toBe(['room_avatar_changed', 'room_avatar_changed', 'room_renamed']);
+});
+
+test('TC-ROOM-095 who_can_edit_info=admins still locks name AND photo to room admin+ (set and remove); the owner still can', function () {
+    [$tony, $tonyToken] = loginAs($this->tony);
+    [$somchai, $somchaiToken] = loginAs($this->somchai);
+
+    $id = uploadRoomAvatar($this, $tonyToken, 'group.png', 'image/png', $this->png);
+    $this->patchJson("/api/v1/rooms/{$this->room->id}", ['avatar_attachment_id' => $id], wsHeaders($tonyToken, 'acme'))
+        ->assertOk();
+
+    $this->room->forceFill(['settings' => ['who_can_edit_info' => 'admins']])->save();
+
+    $mine = uploadRoomAvatar($this, $somchaiToken, 'somchai.png', 'image/png', $this->png);
+    $this->patchJson("/api/v1/rooms/{$this->room->id}", ['avatar_attachment_id' => $mine], wsHeaders($somchaiToken, 'acme'))
+        ->assertStatus(403)->assertJsonPath('error.code', 'ROOM_FORBIDDEN');
+    $this->patchJson("/api/v1/rooms/{$this->room->id}", ['avatar_attachment_id' => null], wsHeaders($somchaiToken, 'acme'))
+        ->assertStatus(403)->assertJsonPath('error.code', 'ROOM_FORBIDDEN');
+    $this->patchJson("/api/v1/rooms/{$this->room->id}", ['name' => 'Hax'], wsHeaders($somchaiToken, 'acme'))
+        ->assertStatus(403)->assertJsonPath('error.code', 'ROOM_FORBIDDEN');
+
+    $fresh = $this->room->fresh();
+    expect($fresh->avatar_attachment_id)->toBe($id)->and($fresh->name)->toBe('Engineering');
+
+    $this->patchJson("/api/v1/rooms/{$this->room->id}", ['avatar_attachment_id' => null], wsHeaders($tonyToken, 'acme'))
+        ->assertOk();
+});
+
+test('TC-ROOM-096 member renames the group → 200, trimmed name, room_renamed system message by the member, RoomUpdated broadcast', function () {
+    Event::fake([RoomUpdated::class]);
+    [$somchai, $somchaiToken] = loginAs($this->somchai);
+
+    $this->patchJson("/api/v1/rooms/{$this->room->id}", ['name' => '  Platform team  '], wsHeaders($somchaiToken, 'acme'))
+        ->assertOk()
+        ->assertJsonPath('data.room.name', 'Platform team');
+
+    $row = Message::query()->where('room_id', $this->room->id)->where('type', 'system')->sole();
+    expect($row->sender_id)->toBe($this->somchai->id)
+        ->and($row->system_event['event'])->toBe('room_renamed')
+        ->and($row->system_event['name'])->toBe('Platform team');
+    Event::assertDispatched(RoomUpdated::class);
 });
 
 // ---- id validation ----
@@ -298,7 +341,7 @@ test('TC-ROOM-086 foreign / pending / non-avatar-kind / unknown id → 422 AVATA
         ->and(Message::query()->where('room_id', $this->room->id)->where('type', 'system')->count())->toBe(0);
 });
 
-test('TC-ROOM-087 member re-sending the CURRENT id is a harmless no-op — no 403, no system message', function () {
+test('TC-ROOM-087 member re-sending the CURRENT id is a harmless no-op — no system message', function () {
     [$tony, $tonyToken] = loginAs($this->tony);
     [$somchai, $somchaiToken] = loginAs($this->somchai);
 
@@ -306,7 +349,7 @@ test('TC-ROOM-087 member re-sending the CURRENT id is a harmless no-op — no 40
     $this->patchJson("/api/v1/rooms/{$this->room->id}", ['avatar_attachment_id' => $id], wsHeaders($tonyToken, 'acme'))
         ->assertOk();
 
-    // a plain member re-sending the same value is NOT an avatar change
+    // re-sending the same value is NOT an avatar change
     $this->patchJson("/api/v1/rooms/{$this->room->id}", ['avatar_attachment_id' => $id], wsHeaders($somchaiToken, 'acme'))
         ->assertOk()
         ->assertJsonPath('data.room.avatar_attachment_id', $id);

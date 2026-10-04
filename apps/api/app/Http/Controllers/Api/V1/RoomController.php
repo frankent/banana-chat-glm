@@ -208,19 +208,14 @@ class RoomController extends Controller
         $touchesSettings = array_key_exists('settings', $data);
         $this->policy->assertCanEditInfo($room, $membership, $touchesSettings);
 
-        // FR-PROF-008 / DEC-090 — the group photo is gated independently of
-        // who_can_edit_info, but only when the id in the payload ACTUALLY
-        // changes: a client re-sending the current value is a no-op, not a
-        // permission probe. Plain members get 403 even for a removal (null).
+        // FR-PROF-008 / DEC-092 — any member may change the photo (same gate
+        // as the name, assertCanEditInfo above); the id must still be the
+        // actor's own ready avatar upload.
         $avatarChanges = array_key_exists('avatar_attachment_id', $data)
             && $data['avatar_attachment_id'] !== $room->avatar_attachment_id;
 
-        if ($avatarChanges) {
-            $this->policy->assertCanChangeAvatar($membership);
-
-            if ($data['avatar_attachment_id'] !== null) {
-                AvatarUrls::assertOwnReadyUpload($data['avatar_attachment_id'], $user);
-            }
+        if ($avatarChanges && $data['avatar_attachment_id'] !== null) {
+            AvatarUrls::assertOwnReadyUpload($data['avatar_attachment_id'], $user);
         }
 
         $renamed = isset($data['name']) && trim($data['name']) !== $room->name;

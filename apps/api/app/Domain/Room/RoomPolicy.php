@@ -119,8 +119,9 @@ class RoomPolicy
     }
 
     /**
-     * FR-ROOM-007 — PATCH room: info gated by who_can_edit_info,
-     * settings json owner/admin only.
+     * FR-ROOM-007 / DEC-092 — PATCH room: info (name, description, group
+     * photo) gated by who_can_edit_info (default everyone), settings json
+     * owner/admin only.
      */
     public function assertCanEditInfo(Room $room, RoomMember $actor, bool $touchesSettings): void
     {
@@ -134,21 +135,6 @@ class RoomPolicy
 
         $setting = $room->settings['who_can_edit_info'] ?? 'everyone';
         if ($setting === 'admins' && ! $this->isRoomAdmin($actor, $this->contextUser())) {
-            throw ApiException::roomForbidden();
-        }
-    }
-
-    /**
-     * FR-PROF-008 / DEC-090 — the group photo is an owner/admin action:
-     * room admin+ (incl. workspace admins) may set/replace/remove it,
-     * plain members may not, REGARDLESS of who_can_edit_info (that
-     * setting keeps gating name/description only). The controller only
-     * calls this when the id in the payload ACTUALLY differs from the
-     * current value, so a client re-sending the same id is harmless.
-     */
-    public function assertCanChangeAvatar(RoomMember $actor): void
-    {
-        if (! $this->isRoomAdmin($actor, $this->contextUser())) {
             throw ApiException::roomForbidden();
         }
     }

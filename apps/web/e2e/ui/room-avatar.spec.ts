@@ -27,7 +27,7 @@ function serverState(avatar: UserAvatar | null = null) {
     name: 'Design studio · ออกแบบ',
     uploads: [] as UploadCall[],
     puts: [] as { contentType: string | undefined; body: Buffer }[],
-    patches: [] as Array<{ avatar_attachment_id?: string | null }>,
+    patches: [] as Array<{ avatar_attachment_id?: string | null; name?: string }>,
     completes: [] as string[],
     patchFailure: null as { status: number; code: string } | null,
     putFails: false,
@@ -35,7 +35,7 @@ function serverState(avatar: UserAvatar | null = null) {
 }
 type Server = ReturnType<typeof serverState>;
 
-interface Options { role?: 'owner' | 'admin' | 'member'; locale?: 'th' | 'en'; forwarding?: boolean }
+interface Options { role?: 'owner' | 'admin' | 'member'; locale?: 'th' | 'en'; forwarding?: boolean; editInfo?: 'admins' }
 
 async function roomAvatarFixture(page: Page, server: Server, opts: Options = {}) {
   const role = opts.role ?? 'owner';
@@ -69,7 +69,7 @@ async function roomAvatarFixture(page: Page, server: Server, opts: Options = {})
   const room = () => ({
     id: 'ui-design', workspace_id: 'ui-workspace', type: 'group' as const, name: server.name, description: null,
     avatar_attachment_id: server.avatar ? 'att-group' : null, avatar: server.avatar,
-    created_by: me.id, last_seq: 40, member_count: 8, last_message_at: message(40).created_at,
+    created_by: me.id, settings: opts.editInfo ? { who_can_edit_info: opts.editInfo } : {}, last_seq: 40, member_count: 8, last_message_at: message(40).created_at,
   });
   const rooms = (): RoomListItem[] => [
     { room: room(), my_role: role, other_user: null, last_message: message(40), unread_count: 0, muted: false },
@@ -83,9 +83,13 @@ async function roomAvatarFixture(page: Page, server: Server, opts: Options = {})
   await page.route(/\/api\/v1\/rooms\/ui-design$/, route => {
     const request = route.request();
     if (request.method() === 'PATCH') {
-      const input = request.postDataJSON() as { avatar_attachment_id?: string | null };
+      const input = request.postDataJSON() as { avatar_attachment_id?: string | null; name?: string };
       server.patches.push(input);
       if (server.patchFailure) return route.fulfill({ status: server.patchFailure.status, json: { error: { code: server.patchFailure.code, message: 'Synthetic failure', request_id: null } } });
+      if (input.name !== undefined) {
+        server.name = input.name;
+        return route.fulfill({ json: { data: { room: { id: 'ui-design', name: server.name, description: null, avatar_attachment_id: server.avatar ? 'att-group' : null, avatar: server.avatar, settings: {}, member_count: 8 } } } });
+      }
       server.avatar = input.avatar_attachment_id ? (input.avatar_attachment_id.startsWith('att-gif') ? photo('peer', true) : photo('me')) : null;
       return route.fulfill({ json: { data: { room: { id: 'ui-design', name: server.name, description: null, avatar_attachment_id: input.avatar_attachment_id ?? null, avatar: server.avatar, settings: {}, member_count: 8 } } } });
     }
@@ -103,6 +107,7 @@ const editor = (page: Page) => page.getByTestId('avatar-editor');
 const headerButton = (page: Page) => page.getByTestId('group-photo-button');
 const menuToggle = (page: Page) => page.locator('.bc-room-tools > summary');
 const menuItem = (page: Page) => page.getByTestId('room-photo-menu');
+const renameItem = (page: Page) => page.getByTestId('room-rename-menu');
 const rowPhoto = (page: Page, name: string) => page.locator('.bc-room-row', { hasText: name }).getByTestId('avatar-photo');
 
 async function openRoom(page: Page) {
@@ -136,20 +141,20 @@ async function expectCirclePhoto(img: Locator) {
   expect(style).toEqual({ fit: 'cover', radius: '50%', overflow: 'hidden', loaded: true });
 }
 
-async function expectDialogFits(page: Page) {
+async function expectDialogFits(page: Page, dialog: Locator = editor(page)) {
   const viewport = page.viewportSize()!;
-  const box = (await editor(page).boundingBox())!;
+  const box = (await dialog.boundingBox())!;
   expect(box.x).toBeGreaterThanOrEqual(-0.5);
   expect(box.y).toBeGreaterThanOrEqual(-0.5);
   expect(box.x + box.width).toBeLessThanOrEqual(viewport.width + 0.5);
   expect(box.y + box.height).toBeLessThanOrEqual(viewport.height + 0.5);
   const overflow = await page.evaluate(() => {
-    const dialog = document.querySelector('[data-testid="avatar-editor"]')!;
+    const dialog = document.querySelector('dialog[open]')!;
     return { page: document.documentElement.scrollWidth - window.innerWidth, dialog: dialog.scrollWidth - dialog.clientWidth };
   });
   expect(overflow.page).toBeLessThanOrEqual(0);
   expect(overflow.dialog).toBeLessThanOrEqual(0);
-  for (const control of await editor(page).locator('button:visible').all()) {
+  for (const control of await dialog.locator('button:visible').all()) {
     const b = (await control.boundingBox())!;
     expect(b.height, await control.textContent() ?? '').toBeGreaterThanOrEqual(44);
     expect(b.width).toBeGreaterThanOrEqual(44);
@@ -159,8 +164,8 @@ async function expectDialogFits(page: Page) {
 }
 
 test.describe('FR-PROF-008 group photo', () => {
-  test('TC-WEB-ROOMAVATAR-001 owner and admin get the menu item and a header button; a plain member gets neither (and DMs never do)', async ({ page, browser }) => {
-    for (const role of ['owner', 'admin'] as const) {
+  test('TC-WEB-ROOMAVATAR-001 every member gets the menu item and a header button (DEC-092); who_can_edit_info=admins takes it from plain members; DMs never offer it', async ({ page, browser }) => {
+    for (const role of ['owner', 'admin', 'member'] as const) {
       const context = await browser.newContext();
       const other = await context.newPage();
       await roomAvatarFixture(other, serverState(), { role });
@@ -172,7 +177,8 @@ test.describe('FR-PROF-008 group photo', () => {
       await expect(menuItem(other)).toHaveText('เปลี่ยนรูปกลุ่ม');
       await context.close();
     }
-    await roomAvatarFixture(page, serverState(), { role: 'member' });
+    // the room opted into admins-only: a plain member gets neither, an admin still does
+    await roomAvatarFixture(page, serverState(), { role: 'member', editInfo: 'admins' });
     await openRoom(page);
     await expect(page.locator('.bc-chat-identity .bc-avatar')).toBeVisible();
     await expect(headerButton(page)).toHaveCount(0);
@@ -180,6 +186,13 @@ test.describe('FR-PROF-008 group photo', () => {
     await menuToggle(page).click();
     await expect(page.locator('.bc-room-tools-menu')).toBeVisible();
     await expect(menuItem(page)).toHaveCount(0);
+    await expect(renameItem(page)).toHaveCount(0);
+    const adminCtx = await browser.newContext();
+    const adminPage = await adminCtx.newPage();
+    await roomAvatarFixture(adminPage, serverState(), { role: 'admin', editInfo: 'admins' });
+    await openRoom(adminPage);
+    await expect(headerButton(adminPage)).toBeVisible();
+    await adminCtx.close();
     // a DM never offers it, even for an owner of the other room
     const dm = await browser.newContext();
     const dmPage = await dm.newPage();
@@ -326,8 +339,8 @@ test.describe('FR-PROF-008 group photo', () => {
     await expect(member.locator('.bc-chat-identity [data-testid=avatar-photo]')).toHaveAttribute('src', '/ui-avatars/me-sm.png');
     await expect(rowPhoto(member, 'Design studio')).toHaveAttribute('src', '/ui-avatars/me-sm.png');
     await expectCirclePhoto(member.locator('.bc-chat-identity [data-testid=avatar-photo]'));
-    // still inert for a plain member
-    await expect(headerButton(member)).toHaveCount(0);
+    // a plain member may change it too (DEC-092)
+    await expect(headerButton(member)).toBeVisible();
 
     // removal arrives via the durable twin: the system message on the room channel
     server.avatar = null;
@@ -445,4 +458,146 @@ test.describe('FR-PROF-008 group photo', () => {
       });
     }
   }
+});
+
+const renameDialog = (page: Page) => page.getByTestId('rename-dialog');
+const renameInput = (page: Page) => page.getByTestId('rename-input');
+
+async function openRename(page: Page, item = 'เปลี่ยนชื่อกลุ่ม') {
+  await menuToggle(page).click();
+  await renameItem(page).filter({ hasText: item }).click();
+  await expect(renameDialog(page)).toBeVisible();
+  await renameDialog(page).evaluate(el => Promise.all(el.getAnimations().map(a => a.finished)));
+}
+
+test.describe('FR-ROOM-007 / DEC-092 rename group', () => {
+  test('TC-WEB-ROOMRENAME-001 a plain member can rename: prefilled + selected, Save needs a real change, trimmed PATCH, header + list follow, focus returns', async ({ page }) => {
+    const server = serverState();
+    await roomAvatarFixture(page, server, { role: 'member' });
+    await openRoom(page);
+    await openRename(page);
+    await expect(renameDialog(page).getByRole('heading', { name: 'เปลี่ยนชื่อกลุ่ม' })).toBeVisible();
+    await expect(renameInput(page)).toHaveValue('Design studio · ออกแบบ');
+    await expect(renameInput(page)).toBeFocused();
+    await expect(page.getByTestId('rename-save')).toBeDisabled();
+    await page.keyboard.type('  Platform team  ');
+    await expect(page.getByTestId('rename-save')).toBeEnabled();
+    await page.getByTestId('rename-save').click();
+    await expect(renameDialog(page)).toHaveCount(0);
+    expect(server.patches).toEqual([{ name: 'Platform team' }]);
+    await expect(page.locator('.bc-chat-header h2')).toHaveText('Platform team');
+    await expect(page.locator('.bc-room-row', { hasText: 'Platform team' })).toBeVisible();
+    await expect(menuToggle(page)).toBeFocused();
+  });
+
+  test('TC-WEB-ROOMRENAME-002 empty or unchanged name keeps Save disabled (no PATCH, Enter does nothing); Escape cancels', async ({ page }) => {
+    const server = serverState();
+    await roomAvatarFixture(page, server);
+    await openRoom(page);
+    await openRename(page);
+    await renameInput(page).fill('   ');
+    await expect(page.getByTestId('rename-save')).toBeDisabled();
+    await renameInput(page).press('Enter');
+    await renameInput(page).fill('Design studio · ออกแบบ');
+    await expect(page.getByTestId('rename-save')).toBeDisabled();
+    await renameInput(page).press('Enter');
+    await expect(renameDialog(page)).toBeVisible();
+    await renameInput(page).fill('Something else');
+    await page.keyboard.press('Escape');
+    await expect(renameDialog(page)).toHaveCount(0);
+    expect(server.patches).toEqual([]);
+    await expect(page.locator('.bc-chat-header h2')).toHaveText('Design studio · ออกแบบ');
+  });
+
+  test('TC-WEB-ROOMRENAME-003 100 characters is the ceiling; a revoked permission and a network failure are human errors and the dialog stays usable', async ({ page }) => {
+    const server = serverState();
+    await roomAvatarFixture(page, server, { role: 'member' });
+    await openRoom(page);
+    await openRename(page);
+    await renameInput(page).fill('x'.repeat(130));
+    await expect(renameInput(page)).toHaveValue('x'.repeat(100));
+    await renameInput(page).fill('Platform');
+    server.patchFailure = { status: 403, code: 'ROOM_FORBIDDEN' };
+    await page.getByTestId('rename-save').click();
+    await expect(page.getByTestId('rename-error')).toHaveText('คุณไม่มีสิทธิ์เปลี่ยนชื่อกลุ่มนี้แล้ว');
+    await expect(page.getByTestId('rename-save')).toBeEnabled();
+    server.patchFailure = { status: 500, code: 'SERVER_ERROR' };
+    await page.getByTestId('rename-save').click();
+    await expect(page.getByTestId('rename-error')).toHaveText('เปลี่ยนชื่อไม่สำเร็จ กรุณาลองอีกครั้ง');
+    server.patchFailure = null;
+    await page.getByTestId('rename-save').click();
+    await expect(renameDialog(page)).toHaveCount(0);
+    await expect(page.locator('.bc-chat-header h2')).toHaveText('Platform');
+  });
+
+  test('TC-WEB-ROOMRENAME-004 who_can_edit_info=admins hides the item from members and keeps it for admins; DMs never offer it', async ({ page, browser }) => {
+    await roomAvatarFixture(page, serverState(), { role: 'member', editInfo: 'admins' });
+    await openRoom(page);
+    await menuToggle(page).click();
+    await expect(page.locator('.bc-room-tools-menu')).toBeVisible();
+    await expect(renameItem(page)).toHaveCount(0);
+    const context = await browser.newContext();
+    const admin = await context.newPage();
+    await roomAvatarFixture(admin, serverState(), { role: 'admin', editInfo: 'admins' });
+    await openRoom(admin);
+    await menuToggle(admin).click();
+    await expect(renameItem(admin)).toBeVisible();
+    const dm = await context.newPage();
+    await roomAvatarFixture(dm, serverState(), { role: 'owner' });
+    await dm.goto('/rooms/ui-direct');
+    await expect(dm.locator('.bc-chat-header')).toContainText('Chen');
+    await menuToggle(dm).click();
+    await expect(renameItem(dm)).toHaveCount(0);
+    await context.close();
+  });
+
+  test('TC-WEB-ROOMRENAME-005 another member sees the new name live (system message room_renamed + room.updated) in header and list', async ({ page, browser }) => {
+    const server = serverState();
+    const context = await browser.newContext();
+    const other = await context.newPage();
+    const chat = await roomAvatarFixture(other, server, { role: 'member' });
+    await openRoom(other);
+    await roomAvatarFixture(page, server, { role: 'member' });
+    await openRoom(page);
+    await openRename(page);
+    await renameInput(page).fill('Platform team');
+    await page.getByTestId('rename-save').click();
+    await expect(renameDialog(page)).toHaveCount(0);
+    await chat.emit('message.created', { message: { ...message(41), type: 'system', body: null, sender_id: me.id, sender: me, system_event: { event: 'room_renamed', name: 'Platform team' } } });
+    await expect(other.locator('.bc-chat-header h2')).toHaveText('Platform team');
+    await expect(other.locator('.bc-room-row', { hasText: 'Platform team' })).toBeVisible();
+    await expect(other.locator('[data-seq="41"]')).toContainText('renamed the room to Platform team');
+    await context.close();
+  });
+
+  for (const viewport of [{ width: 360, height: 760 }, { width: 1280, height: 800 }]) {
+    test(`TC-WEB-ROOMRENAME-007 dialog fits @${viewport.width}`, async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await roomAvatarFixture(page, serverState());
+      await openRoom(page);
+      await openRename(page);
+      await expectDialogFits(page, renameDialog(page));
+      expect((await renameInput(page).boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      await mkdir(shots, { recursive: true });
+      await page.screenshot({ path: `${shots}/rename-${viewport.width}.png` });
+    });
+  }
+
+  test('TC-WEB-ROOMRENAME-006 English copy; keyboard-only open/save', async ({ page }) => {
+    const server = serverState();
+    await roomAvatarFixture(page, server, { locale: 'en' });
+    await openRoom(page);
+    await menuToggle(page).focus();
+    await page.keyboard.press('Enter');
+    await renameItem(page).focus();
+    await expect(renameItem(page)).toHaveText('Rename group');
+    await page.keyboard.press('Enter');
+    await expect(renameDialog(page)).toContainText('Everyone in this group sees the new name');
+    await expect(renameInput(page)).toBeFocused();
+    await page.keyboard.press('End');
+    await page.keyboard.type(' 2');
+    await page.keyboard.press('Enter');
+    await expect(renameDialog(page)).toHaveCount(0);
+    expect(server.patches).toEqual([{ name: 'Design studio · ออกแบบ 2' }]);
+  });
 });
