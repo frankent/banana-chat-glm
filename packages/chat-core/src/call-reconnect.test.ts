@@ -44,7 +44,7 @@ describe('reconnect backoff and give-up (FR-CALL-009 / DEC-086)', () => {
     expect(reconnectDelayMs(99)).toBe(8_000);
   });
 
-  it('TC-CALL-041 gives up only after the attempt budget is exhausted', () => {
+  it('TC-CALL-042 gives up only after the attempt budget is exhausted', () => {
     expect(shouldGiveUpReconnect(0)).toBe(false);
     expect(shouldGiveUpReconnect(MAX_RECONNECT_ATTEMPTS - 1)).toBe(false);
     expect(shouldGiveUpReconnect(MAX_RECONNECT_ATTEMPTS)).toBe(true);
