@@ -30,3 +30,23 @@ export const renameText = {
   },
 };
 export type RenameTextKey = keyof typeof renameText.th;
+
+/** FR-WS-004 / DEC-093 — the same dialog renames the workspace; only the wording differs. */
+export const workspaceRenameText: Record<'th' | 'en', Partial<Record<RenameTextKey, string>>> = {
+  th: {
+    menu: 'เปลี่ยนชื่อ workspace',
+    title: 'เปลี่ยนชื่อ workspace',
+    subtitle: 'ทุกคนใน workspace จะเห็นชื่อใหม่ที่แถบด้านข้างและหัวข้อหน้าต่าง',
+    label: 'ชื่อ workspace',
+    errForbidden: 'คุณไม่มีสิทธิ์เปลี่ยนชื่อ workspace นี้แล้ว',
+    errGeneric: 'เปลี่ยนชื่อไม่สำเร็จ กรุณาลองอีกครั้ง',
+  },
+  en: {
+    menu: 'Rename workspace',
+    title: 'Rename workspace',
+    subtitle: 'Everyone in the workspace sees the new name in the sidebar and the window title.',
+    label: 'Workspace name',
+    errForbidden: 'You no longer have permission to rename this workspace.',
+    errGeneric: 'Could not rename the workspace. Please try again.',
+  },
+};

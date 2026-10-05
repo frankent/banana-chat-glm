@@ -258,6 +258,20 @@ export class Endpoints {
 
   // -- workspace (API-011..014) --
 
+  /**
+   * API-013, FR-WS-004/DEC-093 — owner/admin (or system admin) renames the
+   * workspace and/or sets (ready kind=avatar upload of mine, else 422
+   * AVATAR_INVALID) or removes (`null`) its photo. 403 WS_FORBIDDEN otherwise.
+   * The slug never changes.
+   */
+  updateWorkspace(slug: string, input: { name?: string; avatar_attachment_id?: string | null }) {
+    return this.api.request<{ workspace: WorkspaceSummary['workspace'] }>('/api/v1/workspace', {
+      method: 'PATCH',
+      body: input,
+      workspaceSlug: slug,
+    });
+  }
+
   directory(q = '', slug: string) {
     return this.api.request<UserStub[]>(`/api/v1/members?q=${encodeURIComponent(q)}`, { workspaceSlug: slug });
   }

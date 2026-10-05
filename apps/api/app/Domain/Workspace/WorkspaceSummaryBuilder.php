@@ -2,7 +2,9 @@
 
 namespace App\Domain\Workspace;
 
+use App\Domain\Media\AvatarUrls;
 use App\Models\RoomMember;
+use App\Models\Workspace;
 use App\Models\User;
 use Illuminate\Support\Collection;
 
@@ -12,6 +14,25 @@ use Illuminate\Support\Collection;
  */
 class WorkspaceSummaryBuilder
 {
+    /**
+     * FR-WS-004 — the workspace identity every payload carries: id/slug/name/
+     * status plus the photo (`avatar` = {sm, md, animated} | null, DEC-088).
+     *
+     * @param  array{sm: string, md: string, animated: string|null}|null  $avatar
+     * @return array<string, mixed>
+     */
+    public static function identity(Workspace $workspace, ?array $avatar): array
+    {
+        return [
+            'id' => $workspace->id,
+            'slug' => $workspace->slug,
+            'name' => $workspace->name,
+            'status' => $workspace->status->value,
+            'avatar_attachment_id' => $workspace->avatar_attachment_id,
+            'avatar' => $avatar,
+        ];
+    }
+
     /**
      * @return Collection<int, array<string, mixed>>
      */
@@ -23,7 +44,10 @@ class WorkspaceSummaryBuilder
             ->whereHas('workspace', fn ($query) => $query->where('status', 'active'))
             ->get();
 
-        return $memberships->map(function ($membership) {
+        // one batched query for every workspace photo on the page
+        $avatars = AvatarUrls::mapFor($memberships->pluck('workspace.avatar_attachment_id'));
+
+        return $memberships->map(function ($membership) use ($avatars) {
             $unread = RoomMember::query()
                 ->join('rooms', 'rooms.id', '=', 'room_members.room_id')
                 ->where('room_members.user_id', $membership->user_id)
@@ -57,12 +81,10 @@ class WorkspaceSummaryBuilder
                 ->exists();
 
             return [
-                'workspace' => [
-                    'id' => $membership->workspace->id,
-                    'slug' => $membership->workspace->slug,
-                    'name' => $membership->workspace->name,
-                    'status' => $membership->workspace->status->value,
-                ],
+                'workspace' => self::identity(
+                    $membership->workspace,
+                    $avatars->get($membership->workspace->avatar_attachment_id),
+                ),
                 'role' => $membership->role->value,
                 'unread_rooms_count' => (int) $unread->rooms,
                 'total_unread' => (int) $unread->total,

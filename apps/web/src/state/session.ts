@@ -30,6 +30,12 @@ interface SessionState {
   logout: () => Promise<void>;
   switchWorkspace: (slug: string) => void;
   /**
+   * FR-WS-004 — fold a fresh /me/workspaces list in. currentWorkspace is
+   * re-pointed by id and keeps its OLD object identity when nothing visible
+   * changed, because Echo effects depend on it and must not resubscribe.
+   */
+  applyWorkspaces: (list: WorkspaceSummary[]) => void;
+  /**
    * FR-PROF-006 — fold a fresh server user (PATCH /me response, or /me after
    * EVT-086 from another tab) into the session. Ignored when it is not the
    * signed-in user (a response that raced a logout/login).
@@ -122,5 +128,17 @@ export const useSession = create<SessionState>((set, get) => ({
     const next = get().workspaces.find((w) => w.workspace.slug === slug) ?? null;
     window.localStorage.setItem(LAST_WS_KEY, slug);
     set({ currentWorkspace: next });
+  },
+
+  applyWorkspaces(list) {
+    const cur = get().currentWorkspace;
+    const fresh = cur ? list.find((w) => w.workspace.id === cur.workspace.id) : undefined;
+    const same = cur !== null && fresh !== undefined
+      && fresh.role === cur.role
+      && fresh.workspace.slug === cur.workspace.slug
+      && fresh.workspace.name === cur.workspace.name
+      && fresh.workspace.status === cur.workspace.status
+      && (fresh.workspace.avatar_attachment_id ?? null) === (cur.workspace.avatar_attachment_id ?? null);
+    set({ workspaces: list, currentWorkspace: same ? cur : (fresh ?? cur) });
   },
 }));

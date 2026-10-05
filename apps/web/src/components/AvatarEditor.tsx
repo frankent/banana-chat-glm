@@ -11,7 +11,7 @@ import type { AvatarCrop } from '@banana-chat/chat-core';
 import type { UserAvatar } from '@banana-chat/shared';
 import { endpoints } from '../lib/api';
 import { invalidatePeople } from '../lib/people-cache';
-import { avatarText, roomAvatarText, type AvatarTextKey } from '../lib/avatar-text';
+import { avatarText, roomAvatarText, workspaceAvatarText, type AvatarTextKey } from '../lib/avatar-text';
 import { useChatText } from '../lib/use-chat-text';
 import { AvatarUploadError, uploadAvatar } from '../hooks/useUploader';
 import { useSession } from '../state/session';
@@ -28,12 +28,15 @@ const CIRCLE = 0.84;
 const NUDGE = 8;
 
 /** What the editor changes: my own photo (default) or a group's (FR-PROF-008). */
-export type AvatarTarget = { kind: 'me' } | { kind: 'room'; roomId: string; name: string; avatar: UserAvatar | null | undefined };
+export type AvatarTarget =
+  | { kind: 'me' }
+  | { kind: 'room'; roomId: string; name: string; avatar: UserAvatar | null | undefined }
+  | { kind: 'workspace'; name: string; avatar: UserAvatar | null | undefined };
 
 function errorKey(error: unknown): AvatarTextKey {
   if (error instanceof ApiError) {
     if (error.code === 'AVATAR_INVALID') return 'errInvalid';
-    if (error.code === 'ROOM_FORBIDDEN' || error.status === 403) return 'errForbidden';
+    if (error.code === 'ROOM_FORBIDDEN' || error.code === 'WS_FORBIDDEN' || error.status === 403) return 'errForbidden';
     if (error.code === 'MEDIA_TOO_LARGE') return 'errServerSize';
     return 'errProcessing';
   }
@@ -55,7 +58,11 @@ function errorKey(error: unknown): AvatarTextKey {
 export function AvatarEditor({ onClose, target = { kind: 'me' } }: { onClose: () => void; target?: AvatarTarget }) {
   const { locale } = useChatText();
   const roomTarget = target.kind === 'room' ? target : null;
-  const text: Record<AvatarTextKey, string> = { ...avatarText[locale], ...(roomTarget !== null ? roomAvatarText[locale] : {}) };
+  const groupLike = target.kind === 'me' ? null : target;
+  const text: Record<AvatarTextKey, string> = {
+    ...avatarText[locale],
+    ...(target.kind === 'room' ? roomAvatarText[locale] : target.kind === 'workspace' ? workspaceAvatarText[locale] : {}),
+  };
   const me = useSession(s => s.me);
   const slug = useSession(s => s.currentWorkspace?.workspace.slug ?? '');
   const applyMe = useSession(s => s.applyMe);
@@ -231,6 +238,11 @@ export function AvatarEditor({ onClose, target = { kind: 'me' } }: { onClose: ()
       for (const key of ['rooms', 'room']) void queryClient.invalidateQueries({ queryKey: [key] });
       return;
     }
+    if (target.kind === 'workspace') {
+      await endpoints.updateWorkspace(slug, { avatar_attachment_id: attachmentId });
+      void queryClient.invalidateQueries({ queryKey: ['workspaces'] });
+      return;
+    }
     const { user } = await endpoints.updateMe({ avatar_attachment_id: attachmentId });
     applyMe(user);
     invalidatePeople(queryClient);
@@ -289,8 +301,8 @@ export function AvatarEditor({ onClose, target = { kind: 'me' } }: { onClose: ()
     : phase === 'removing' ? text.removing
     : null;
   const ringProgress = phase === 'uploading' ? progress : phase === 'processing' || phase === 'applying' ? 1 : 0;
-  const currentName = roomTarget !== null ? roomTarget.name : me?.display_name ?? '';
-  const currentAvatar = roomTarget !== null ? roomTarget.avatar : me?.avatar;
+  const currentName = groupLike !== null ? groupLike.name : me?.display_name ?? '';
+  const currentAvatar = groupLike !== null ? groupLike.avatar : me?.avatar;
   const hasPhoto = currentAvatar != null;
   const scale = image !== null && circle > 0 ? cropCoverScale(image, circle) * crop.zoom : 0;
   const ringRadius = circle / 2 + 5;
@@ -301,7 +313,7 @@ export function AvatarEditor({ onClose, target = { kind: 'me' } }: { onClose: ()
       ref={dialogRef}
       className={`bc-avatar-editor ${dragOver ? 'is-drag-over' : ''}`}
       data-testid="avatar-editor"
-      data-target={roomTarget !== null ? 'room' : 'me'}
+      data-target={target.kind}
       aria-labelledby={titleId}
       aria-busy={busy}
       lang={locale}

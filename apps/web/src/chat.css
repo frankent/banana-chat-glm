@@ -25,7 +25,8 @@
 .bc-app .bc-sidebar { background: #fff; border-right-color: var(--chat-line); font-family: 'Banana Thai', 'DM Sans', 'Noto Sans Thai', system-ui, sans-serif; }
 @media (min-width: 1200px) { .bc-app .bc-sidebar { width: 336px; } }
 .bc-app .bc-workspace { min-height: 80px; padding: 20px 24px 12px; gap: 10px; }
-.bc-app .bc-workspace-symbol { width: 32px; height: 32px; border-radius: 10px; background: #f3f5f2; border-color: #e7ebe4; font-size: 13px; color: #536448; }
+.bc-app .bc-workspace .bc-workspace-avatar { width: 32px; height: 32px; border-radius: 10px; font-size: 13px; }
+.bc-app .bc-workspace .bc-workspace-avatar.has-photo { border-radius: 10px; }
 .bc-app .bc-workspace .bc-eyebrow { font-size: 9px; color: var(--chat-muted); letter-spacing: 1px; }
 .bc-app .bc-workspace select { font-size: 13px; color: var(--chat-ink); }
 .bc-app .bc-sidebar-footer { padding: 14px 24px; color: var(--chat-muted); font-size: 11px; gap: 8px; }

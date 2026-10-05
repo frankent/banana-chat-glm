@@ -19,6 +19,7 @@ class Workspace extends Model
     protected $fillable = [
         'slug',
         'name',
+        'avatar_attachment_id',
         'status',
         'settings',
         'message_retention_days',

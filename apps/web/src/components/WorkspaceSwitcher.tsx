@@ -7,7 +7,7 @@ export function WorkspaceSwitcher() {
   const { me, workspaces, currentWorkspace, switchWorkspace } = useSession();
   const query = useQuery({ queryKey: ['workspaces', me?.id], queryFn: () => endpoints.myWorkspaces(), enabled: me !== null });
   useEffect(() => {
-    if (query.data) useSession.setState({ workspaces: query.data });
+    if (query.data) useSession.getState().applyWorkspaces(query.data);
   }, [query.data]);
   if (workspaces.length === 0) {
     return null;

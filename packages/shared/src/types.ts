@@ -32,7 +32,8 @@ export interface UserStub {
 }
 
 export interface WorkspaceSummary {
-  workspace: { id: string; slug: string; name: string; status: string };
+  /** avatar: FR-WS-004/DEC-093 — URLs are server-minted per payload; null/absent = no photo. */
+  workspace: { id: string; slug: string; name: string; status: string; avatar_attachment_id?: string | null; avatar?: UserAvatar | null };
   role: WorkspaceRole;
   unread_rooms_count: number;
   total_unread: number;

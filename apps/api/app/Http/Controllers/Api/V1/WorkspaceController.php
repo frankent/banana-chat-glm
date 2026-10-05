@@ -2,17 +2,25 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Enums\UserStatus;
 use App\Domain\Media\AvatarUrls;
+use App\Domain\Workspace\WorkspaceSummaryBuilder;
+use App\Enums\UserStatus;
+use App\Enums\WorkspaceRole;
+use App\Events\WorkspaceUpdated;
+use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Models\Room;
 use App\Models\RoomMember;
+use App\Models\User;
+use App\Models\Workspace;
 use App\Models\WorkspaceMember;
+use App\Services\AuditLogger;
 use App\Services\SettingsService;
 use App\Support\WorkspaceContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /**
  * API-011/012/050 — workspace-scoped reads (FR-WS-001..005).
@@ -22,6 +30,7 @@ class WorkspaceController extends Controller
     public function __construct(
         private readonly WorkspaceContext $context,
         private readonly SettingsService $settings,
+        private readonly AuditLogger $audit,
     ) {}
 
     /**
@@ -107,12 +116,7 @@ class WorkspaceController extends Controller
 
         return response()->json([
             'data' => [
-                'workspace' => [
-                    'id' => $workspace->id,
-                    'slug' => $workspace->slug,
-                    'name' => $workspace->name,
-                    'status' => $workspace->status->value,
-                ],
+                'workspace' => WorkspaceSummaryBuilder::identity($workspace, $this->avatar($workspace)),
                 'my_role' => $membership->role->value,
                 'stats' => [
                     'member_count' => WorkspaceMember::query()
@@ -123,6 +127,66 @@ class WorkspaceController extends Controller
                 ],
             ],
         ]);
+    }
+
+    /**
+     * API-013 / FR-WS-004 / DEC-093 — owner/admin (or system admin) changes the
+     * workspace name and photo. The slug is the routing header and never
+     * changes here. A non-null avatar id must be the actor's OWN ready
+     * kind=avatar upload (same rule as PATCH /me and PATCH /rooms).
+     */
+    public function update(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'name' => ['sometimes', 'string', 'min:1', 'max:100'],
+            'avatar_attachment_id' => ['sometimes', 'nullable', 'ulid'],
+        ]);
+
+        /** @var User $user */
+        $user = $request->user();
+        $rank = $this->context->membership()?->role?->rank() ?? 0;
+
+        if (! $user->is_system_admin && $rank < WorkspaceRole::Admin->rank()) {
+            throw ApiException::workspaceForbidden();
+        }
+
+        $workspace = $this->context->workspace();
+
+        $avatarChanges = array_key_exists('avatar_attachment_id', $data)
+            && $data['avatar_attachment_id'] !== $workspace->avatar_attachment_id;
+
+        if ($avatarChanges && $data['avatar_attachment_id'] !== null) {
+            AvatarUrls::assertOwnReadyUpload($data['avatar_attachment_id'], $user);
+        }
+
+        $renamed = isset($data['name']) && trim($data['name']) !== $workspace->name;
+
+        if ($renamed || $avatarChanges) {
+            DB::transaction(function () use ($workspace, $data, $renamed, $avatarChanges): void {
+                if ($renamed) {
+                    $workspace->name = trim($data['name']);
+                }
+                if ($avatarChanges) {
+                    $workspace->avatar_attachment_id = $data['avatar_attachment_id'];
+                }
+                $workspace->save();
+            });
+
+            broadcast(new WorkspaceUpdated($workspace->id));
+            $this->audit->log('workspace.updated', actor: $user, targetType: 'workspace', targetId: $workspace->id, context: [
+                'fields' => array_values(array_filter([$renamed ? 'name' : null, $avatarChanges ? 'avatar_attachment_id' : null])),
+            ], workspaceId: $workspace->id);
+        }
+
+        return response()->json(['data' => ['workspace' => WorkspaceSummaryBuilder::identity($workspace, $this->avatar($workspace))]]);
+    }
+
+    /** @return array{sm: string, md: string, animated: string|null}|null */
+    private function avatar(Workspace $workspace): ?array
+    {
+        return $workspace->avatar_attachment_id === null
+            ? null
+            : AvatarUrls::mapFor([$workspace->avatar_attachment_id])->get($workspace->avatar_attachment_id);
     }
 
     /**

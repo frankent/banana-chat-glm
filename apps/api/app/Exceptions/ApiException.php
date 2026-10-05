@@ -118,6 +118,12 @@ class ApiException extends RuntimeException
         return new self('ROOM_FORBIDDEN', 'คุณไม่มีสิทธิ์ดำเนินการนี้ในห้อง', 403);
     }
 
+    /** FR-WS-004 / API-013 — workspace info edits are owner/admin only. */
+    public static function workspaceForbidden(): self
+    {
+        return new self('WS_FORBIDDEN', 'คุณไม่มีสิทธิ์แก้ไขข้อมูล workspace นี้', 403);
+    }
+
     public static function roomNotMember(): self
     {
         return new self('ROOM_NOT_MEMBER', 'คุณไม่ได้เป็นสมาชิกของห้องนี้', 403);

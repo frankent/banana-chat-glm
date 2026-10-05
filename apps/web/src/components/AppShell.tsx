@@ -6,7 +6,9 @@ import { useChatText } from '../lib/use-chat-text';
 import { ConnectionBanner } from './ConnectionBanner';
 import { InviteQrDialog } from './InviteQrDialog';
 import { AvatarEditor } from './AvatarEditor';
-import { avatarText } from '../lib/avatar-text';
+import { RenameGroupDialog } from './RenameGroupDialog';
+import { avatarText, workspaceAvatarText } from '../lib/avatar-text';
+import { workspaceRenameText } from '../lib/rename-text';
 import { Logo } from './Logo';
 import { NotificationCenter } from './NotificationCenter';
 import { NotificationPrompt } from './NotificationPrompt';
@@ -40,7 +42,7 @@ function useIsMobileLayout(): boolean {
 }
 
 export function AppShell() {
-  const { status, me, currentWorkspace, logout } = useSession();
+  const { status, me, currentWorkspace, workspaces, logout } = useSession();
   const { text, locale } = useChatText();
   const location = useLocation();
   const navigate = useNavigate();
@@ -55,6 +57,9 @@ export function AppShell() {
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   // FR-PROF-006 — profile photo editor, opened from the account menu.
   const [avatarEditorOpen, setAvatarEditorOpen] = useState(false);
+  // FR-WS-004 — workspace photo / name, owner & admin only.
+  const [wsPhotoOpen, setWsPhotoOpen] = useState(false);
+  const [wsRenameOpen, setWsRenameOpen] = useState(false);
   // Close on outside click and Escape -- a menu you cannot dismiss is worse than
   // no menu, especially on touch where there is no Escape key.
   useEffect(() => {
@@ -113,6 +118,11 @@ export function AppShell() {
   }
 
   const canInvite = currentWorkspace.role === 'owner' || currentWorkspace.role === 'admin';
+  // FR-WS-004 — the freshest list entry carries the current signed avatar URL;
+  // currentWorkspace keeps its identity across refetches so Echo never resubscribes.
+  const wsView = workspaces.find(w => w.workspace.id === currentWorkspace.workspace.id)?.workspace ?? currentWorkspace.workspace;
+  // FR-WS-004 — mirrors the server gate: owner/admin of THIS workspace, or an instance-wide system admin.
+  const canEditWorkspace = canInvite || me?.is_system_admin === true;
   const currentInvite = invitesByWorkspace[currentWorkspace.workspace.id] ?? null;
 
   return (
@@ -165,6 +175,16 @@ export function AppShell() {
                   <button role="menuitem" onClick={() => { setAccountOpen(false); navigate('/change-password'); }}>
                     <Icon name="lock" size={16} /> Change password
                   </button>
+                  {canEditWorkspace && (
+                    <button role="menuitem" aria-haspopup="dialog" data-testid="ws-rename-menu" onClick={() => { setAccountOpen(false); setWsRenameOpen(true); }}>
+                      <Icon name="edit" size={16} /> {workspaceRenameText[locale].menu}
+                    </button>
+                  )}
+                  {canEditWorkspace && (
+                    <button role="menuitem" aria-haspopup="dialog" data-testid="ws-photo-menu" onClick={() => { setAccountOpen(false); setWsPhotoOpen(true); }}>
+                      <Icon name="camera" size={16} /> {workspaceAvatarText[locale].menu}
+                    </button>
+                  )}
                   {canInvite && (
                     <button role="menuitem" aria-haspopup="dialog" onClick={() => { setAccountOpen(false); setInviteDialogOpen(true); }}>
                       <Icon name="qr" size={16} /> {text('invite.menu')}
@@ -189,9 +209,22 @@ export function AppShell() {
           />
         )}
         {avatarEditorOpen && <AvatarEditor onClose={() => { setAvatarEditorOpen(false); accountTriggerRef.current?.focus(); }} />}
+        {wsPhotoOpen && (
+          <AvatarEditor
+            target={{ kind: 'workspace', name: wsView.name, avatar: wsView.avatar }}
+            onClose={() => { setWsPhotoOpen(false); accountTriggerRef.current?.focus(); }}
+          />
+        )}
+        {wsRenameOpen && (
+          <RenameGroupDialog
+            scope="workspace"
+            currentName={wsView.name}
+            onClose={() => { setWsRenameOpen(false); accountTriggerRef.current?.focus(); }}
+          />
+        )}
         {sidebarOpen && <button className="bc-sidebar-shade" aria-label="Close conversations" onClick={() => setSidebarOpen(false)} />}
         <aside className={`bc-sidebar ${sidebarOpen ? 'is-open' : ''}`} onClick={(event) => { if ((event.target as HTMLElement).closest('a[href]')) setSidebarOpen(false); }}>
-          <div className="bc-workspace"><span className="bc-workspace-symbol">{currentWorkspace.workspace.name[0]}</span><div><span className="bc-eyebrow">YOUR WORKSPACE</span><WorkspaceSwitcher /></div>{bellInSidebar && <NotificationCenter />}</div>
+          <div className="bc-workspace"><Avatar className="bc-workspace-avatar" name={wsView.name} avatar={wsView.avatar} /><div><span className="bc-eyebrow">YOUR WORKSPACE</span><WorkspaceSwitcher /></div>{bellInSidebar && <NotificationCenter />}</div>
           {/* FR-UI-CL-005 — the sidebar previously duplicated a "Messages." heading
               and marketing caption here; the workspace switcher above already
               names the space, so this header keeps only search, "new chat" and

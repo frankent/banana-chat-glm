@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { ApiError, NetworkError } from '@banana-chat/api-client';
 import { endpoints } from '../lib/api';
-import { renameText, type RenameTextKey } from '../lib/rename-text';
+import { renameText, workspaceRenameText, type RenameTextKey } from '../lib/rename-text';
 import { useChatText } from '../lib/use-chat-text';
 import { useSession } from '../state/session';
 import { Icon } from './Visual';
@@ -18,10 +18,13 @@ function errorKey(error: unknown): RenameTextKey {
   return 'errGeneric';
 }
 
-/** FR-ROOM-007 / DEC-092 — any member renames the group (PATCH /rooms/{id} {name}); the server gate is who_can_edit_info. */
-export function RenameGroupDialog({ roomId, currentName, onClose }: { roomId: string; currentName: string; onClose: () => void }) {
+/**
+ * FR-ROOM-007 / DEC-092 — any member renames the group (PATCH /rooms/{id} {name}); the server gate is who_can_edit_info.
+ * FR-WS-004 / DEC-093 — `scope="workspace"` renames the workspace instead (PATCH /workspace, owner/admin).
+ */
+export function RenameGroupDialog({ roomId, currentName, onClose, scope = 'room' }: { roomId?: string; currentName: string; onClose: () => void; scope?: 'room' | 'workspace' }) {
   const { locale } = useChatText();
-  const text = renameText[locale];
+  const text: Record<RenameTextKey, string> = { ...renameText[locale], ...(scope === 'workspace' ? workspaceRenameText[locale] : {}) };
   const slug = useSession(s => s.currentWorkspace?.workspace.slug ?? '');
   const queryClient = useQueryClient();
   const titleId = useId();
@@ -44,8 +47,13 @@ export function RenameGroupDialog({ roomId, currentName, onClose }: { roomId: st
     setBusy(true);
     setError(null);
     try {
-      await endpoints.updateRoom(roomId, slug, { name: trimmed });
-      for (const key of ['rooms', 'room']) void queryClient.invalidateQueries({ queryKey: [key] });
+      if (scope === 'workspace') {
+        await endpoints.updateWorkspace(slug, { name: trimmed });
+        void queryClient.invalidateQueries({ queryKey: ['workspaces'] });
+      } else {
+        await endpoints.updateRoom(roomId ?? '', slug, { name: trimmed });
+        for (const key of ['rooms', 'room']) void queryClient.invalidateQueries({ queryKey: [key] });
+      }
       close();
     } catch (caught) {
       setBusy(false);
@@ -57,7 +65,7 @@ export function RenameGroupDialog({ roomId, currentName, onClose }: { roomId: st
     <dialog
       ref={dialogRef}
       className="bc-avatar-editor bc-rename"
-      data-testid="rename-dialog"
+      data-testid={scope === 'workspace' ? 'ws-rename-dialog' : 'rename-dialog'}
       aria-labelledby={titleId}
       aria-busy={busy}
       lang={locale}

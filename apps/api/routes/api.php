@@ -215,6 +215,7 @@ Route::prefix('v1')->group(function (): void {
         Route::post('/board/tickets/{id}/comments', [KanbanController::class, 'comment'])->whereUlid('id');
 
         Route::get('/workspace', [WorkspaceController::class, 'show']);
+        Route::patch('/workspace', [WorkspaceController::class, 'update']); // API-013 / FR-WS-004
         // API-230/231 — FR-WS-006/DEC-081. Permission (ws admin+) is checked
         // inside WorkspaceInviteService, matching RoomPolicy::isWsAdmin's style.
         Route::post('/workspace-invites', [WorkspaceInviteController::class, 'store'])->middleware('throttle:invite-issue');

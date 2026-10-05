@@ -123,3 +123,30 @@ export const roomAvatarText: Record<'th' | 'en', Partial<Record<AvatarTextKey, s
     errRemove: 'Could not remove the group photo. Please try again.',
   },
 };
+
+/** FR-WS-004 / DEC-093 — same editor, workspace wording. */
+export const workspaceAvatarText: Record<'th' | 'en', Partial<Record<AvatarTextKey, string>>> = {
+  th: {
+    menu: 'เปลี่ยนรูป workspace',
+    title: 'เปลี่ยนรูป workspace',
+    subtitle: 'ทุกคนใน workspace จะเห็นรูปนี้ที่แถบด้านข้าง',
+    current: 'รูป workspace ปัจจุบัน',
+    noPhoto: 'workspace นี้ยังไม่มีรูป ตอนนี้ทุกคนเห็นตัวอักษรย่อของชื่อ',
+    pasteHint: 'วางรูปจากคลิปบอร์ดได้ด้วย (Ctrl+V)',
+    removeTitle: 'ลบรูป workspace?',
+    removeBody: 'ทุกคนจะเห็นตัวอักษรย่อของชื่อ workspace แทน',
+    applying: 'กำลังตั้งเป็นรูป workspace…',
+    errRemove: 'ลบรูป workspace ไม่สำเร็จ กรุณาลองอีกครั้ง',
+  },
+  en: {
+    menu: 'Change workspace photo',
+    title: 'Change workspace photo',
+    subtitle: 'Everyone in the workspace sees it in the sidebar.',
+    current: 'Current workspace photo',
+    noPhoto: 'No workspace photo yet. People see the name initial for now.',
+    removeTitle: 'Remove the workspace photo?',
+    removeBody: 'People will see the workspace initial instead.',
+    applying: 'Setting the workspace photo…',
+    errRemove: 'Could not remove the workspace photo. Please try again.',
+  },
+};

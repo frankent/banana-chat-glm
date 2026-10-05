@@ -342,8 +342,12 @@ export function EchoProvider({ children }: { children: ReactNode }) {
       invalidatePeople(queryClient);
     };
 
+    // EVT-088 workspace.updated — name / photo changed by an admin (FR-WS-004). URL-free: refetch.
+    const refreshWorkspaces = () => { void queryClient.invalidateQueries({ queryKey: ['workspaces'] }); };
+
     channel.listen('.user.updated', refreshPeople);
     channel.listen('.user.status_changed', refreshPeople);
+    channel.listen('.workspace.updated', refreshWorkspaces);
 
     // EVT-081/082 (FR-PCHAT-003/004) — public chat room created / changed. The
     // staff variants fan out to private-workspace.{wid} so every agent's queue
@@ -368,6 +372,7 @@ export function EchoProvider({ children }: { children: ReactNode }) {
     return () => {
       channel.stopListening('.user.updated');
       channel.stopListening('.user.status_changed');
+      channel.stopListening('.workspace.updated');
       channel.stopListening('.public_chat.room.created');
       channel.stopListening('.public_chat.room.changed');
     };

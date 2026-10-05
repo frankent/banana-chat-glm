@@ -91,7 +91,6 @@ input:focus,textarea:focus,select:focus { outline-color:#c8b564; }
 .bc-sidebar { width:300px; background:var(--bc-side); border-right:1px solid var(--bc-line); display:flex; flex-direction:column; flex-shrink:0; }
 .bc-workspace { display:flex; align-items:center; gap:10px; padding:25px 18px 20px; }
 .bc-workspace>div:nth-child(2) { min-width:0; flex:1; }
-.bc-workspace-symbol { width:36px; height:36px; border:1px solid #dce3cf; border-radius:11px; background:#e8eddc; color:#7b885a; display:grid; place-items:center; font-weight:700; }
 .bc-eyebrow { font-size:9px; letter-spacing:1.6px; font-weight:650; color:#849078; }
 .bc-workspace .bc-eyebrow { font-size:8px; letter-spacing:1px; }
 .bc-workspace select { background:transparent; border:0; border-radius:4px; padding:3px 14px 3px 0; font-size:13px; color:#354130; font-weight:650; }
