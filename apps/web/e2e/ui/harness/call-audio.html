@@ -1,0 +1,14 @@
+<!doctype html>
+<!-- FR-CALL-008/009 DEC-094 test harness: mounts the production useCallPlaybackFallback hook on a
+     never-connected LiveKit Room with a REAL AudioContext and a real RemoteAudioTrack. Served only by
+     the Vite dev server for e2e/ui/call-audio.spec.ts; not part of the production build. -->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Call audio harness</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./call-audio.tsx"></script>
+  </body>
+</html>

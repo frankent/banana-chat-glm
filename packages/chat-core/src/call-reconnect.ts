@@ -74,16 +74,14 @@ export function shouldGiveUpReconnect(
 }
 
 /**
- * FR-CALL-009 / DEC-086: iOS/Android Safari and Chrome suspend the Web Audio
- * graph when the page is backgrounded, silencing every track routed through
- * the FR-CALL-008 boost chain — on those browsers MediaPanel must not create
- * the AudioContext at all (plain `<audio>` playback keeps working). iPadOS
- * 13+ masquerades as desktop macOS ("MacIntel" platform), so multi-touch is
- * the discriminator there.
+ * FR-CALL-009 / DEC-094: remote call audio normally plays through the
+ * FR-CALL-008 Web Audio boost graph (the `<audio>` elements stay muted). While
+ * the AudioContext is anything but "running" — iOS/Android suspend or
+ * interrupt it when the page is backgrounded, and a browser may not have
+ * unlocked it yet — the graph is silent, so the muted elements must play the
+ * stream themselves (plain, at most 100%). Decided from the context state
+ * alone, so it holds for any browser without sniffing the user agent.
  */
-export function isMobileBrowser(ua: string, maxTouchPoints: number, platform: string): boolean {
-  if (/iPhone|iPad|iPod|Android/.test(ua)) {
-    return maxTouchPoints > 1;
-  }
-  return platform === 'MacIntel' && maxTouchPoints > 1;
+export function shouldPlayViaMediaElement(contextState: string): boolean {
+  return contextState !== 'running';
 }

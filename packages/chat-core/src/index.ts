@@ -41,12 +41,12 @@ export { CallAttempt, canRingCall } from './call.js';
 export {
   CALL_DISCONNECT_REASON,
   classifyDisconnect,
-  isMobileBrowser,
   MAX_RECONNECT_ATTEMPTS,
   RECONNECT_BASE_DELAY_MS,
   RECONNECT_MAX_DELAY_MS,
   reconnectDelayMs,
   shouldGiveUpReconnect,
+  shouldPlayViaMediaElement,
 } from './call-reconnect.js';
 export type { CallDisconnectAction } from './call-reconnect.js';
 export { meetingGuestName, meetingReturnPath } from './meeting.js';

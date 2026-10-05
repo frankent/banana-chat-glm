@@ -29,7 +29,6 @@ import {
   callGainCeiling,
   callGainPercent,
   classifyDisconnect,
-  isMobileBrowser,
   reconnectDelayMs,
   shouldGiveUpReconnect,
 } from "@banana-chat/chat-core";
@@ -38,6 +37,7 @@ import { Avatar } from "../Visual";
 import { createCallAudioBoost } from "./audio-boost";
 import { CallTileBody } from "./CallTile";
 import { startCallKeepalive } from "./background-keepalive";
+import { useCallPlaybackFallback } from "./use-call-playback-fallback";
 
 /** Exported for the FR-PROF-007 tile harness (e2e/ui); MediaPanel is its only app caller. */
 export function Tiles() {
@@ -156,6 +156,7 @@ function BoostedAudio({ context, gain }: { context: AudioContext | null; gain: n
     currentGain.current = gain;
     nodes.current.forEach((chain) => chain.boost.gain.setTargetAtTime(gain, context?.currentTime ?? 0, 0.03));
   }, [gain, context]);
+  useCallPlaybackFallback(room, context);
   // FR-CALL-008: without Web Audio the boost chain is unavailable, so playback
   // is capped at the standard 100% ceiling rather than a second hard-coded 1.
   return <RoomAudioRenderer volume={context ? 1 : callPlaybackGain(gain, callGainCeiling(false))} />;
@@ -209,19 +210,11 @@ export default function MediaPanel({
     refreshRef.current = refreshCredentials;
   });
   useEffect(() => {
-    // FR-CALL-009 / DEC-086: iOS/Android suspend the Web Audio graph when the
-    // tab is backgrounded, silencing the FR-CALL-008 boost chain entirely —
-    // on those browsers never create the AudioContext; plain <audio> playback
-    // (and the 100% ceiling fallback) keeps working. Desktop keeps the boost.
-    const mobile = isMobileBrowser(
-      navigator.userAgent,
-      navigator.maxTouchPoints,
-      navigator.platform,
-    );
+    // FR-CALL-008 / DEC-094: the boost AudioContext exists on every browser,
+    // phones included. When the OS suspends it in the background, BoostedAudio
+    // hands playback to the muted <audio> elements (FR-CALL-009).
     let context: AudioContext | null = null;
-    if (!mobile) {
-      try { context = new AudioContext(); } catch { /* Standard playback remains available. */ }
-    }
+    try { context = new AudioContext(); } catch { /* Standard playback remains available. */ }
     // Expose the browser resource created for this effect lifetime.
     // eslint-disable-next-line react/set-state-in-effect
     setAudioContext(context);
@@ -429,8 +422,8 @@ export default function MediaPanel({
       } else if (context && context.state !== "closed") void context.close();
     };
     ownDisconnect(disconnect);
-    // FR-CALL-009 (desktop only, where the boost AudioContext exists): resume
-    // an interrupted/suspended context once the page is visible again.
+    // FR-CALL-009: resume an interrupted/suspended context once the page is
+    // visible again.
     let resumeAudio: (() => void) | null = null;
     if (context) {
       const ctx = context;
