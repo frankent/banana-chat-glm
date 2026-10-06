@@ -23,17 +23,19 @@ interface Server {
   posts: Array<{ user_ids: string[] }>;
   postFailure: { status: number; code: string } | null;
   directoryFails: boolean;
+  postAborts: boolean;
+  memberCount: number;
 }
 
 async function addMembersFixture(page: Page, opts: { role?: 'owner' | 'admin' | 'member'; addPolicy?: 'admins' } = {}): Promise<Server> {
-  const server: Server = { directory: [], posts: [], postFailure: null, directoryFails: false };
+  const server: Server = { directory: [], posts: [], postFailure: null, directoryFails: false, postAborts: false, memberCount: 8 };
   await installChatFixture(page, { roomRole: opts.role ?? 'member' });
-  const room = {
+  const room = () => ({
     id: 'ui-design', workspace_id: 'ui-workspace', type: 'group' as const, name: 'Design studio', description: null,
     avatar_attachment_id: null, avatar: null, created_by: me.id, settings: opts.addPolicy ? { who_can_add_members: opts.addPolicy } : {},
-    last_seq: 40, member_count: 8, last_message_at: message(40).created_at,
-  };
-  const item = (): RoomListItem => ({ room, my_role: opts.role ?? 'member', other_user: null, last_message: message(40), unread_count: 0, muted: false });
+    last_seq: 40, member_count: server.memberCount, last_message_at: message(40).created_at,
+  });
+  const item = (): RoomListItem => ({ room: room(), my_role: opts.role ?? 'member', other_user: null, last_message: message(40), unread_count: 0, muted: false });
   await page.route(/\/api\/v1\/rooms\/ui-design$/, route => route.request().method() === 'GET'
     ? route.fulfill({ json: { data: { ...item(), members: [me] } } })
     : route.fallback());
@@ -41,7 +43,9 @@ async function addMembersFixture(page: Page, opts: { role?: 'owner' | 'admin' | 
     if (route.request().method() !== 'POST') return route.fallback();
     const body = route.request().postDataJSON() as { user_ids: string[] };
     server.posts.push(body);
+    if (server.postAborts) return route.abort('failed');
     if (server.postFailure) return route.fulfill({ status: server.postFailure.status, json: { error: { code: server.postFailure.code, message: 'Synthetic' } } });
+    server.memberCount += body.user_ids.length;
     return route.fulfill({ json: { data: { added: body.user_ids.length, already: 0 } } });
   });
   await page.route(/\/api\/v1\/directory\?/, route => {
@@ -138,9 +142,10 @@ test.describe('FR-ROOM-004 / DEC-096 add members to a group', () => {
     expect(server.posts).toEqual([{ user_ids: ['ui-p2', 'ui-p4'] }]);
     await expect(page.getByRole('status').filter({ hasText: 'เพิ่มสมาชิกเข้ากลุ่มแล้ว 2 คน' })).toBeVisible();
     await expect(menuToggle(page)).toBeFocused();
+    await expect(page.locator('.bc-chat-header')).toContainText('10 members');
   });
 
-  test('TC-WEB-ADDMEM-004 ROOM_FULL / 403 / network errors keep the dialog and the selection; retry succeeds', async ({ page }) => {
+  test('TC-WEB-ADDMEM-004 ROOM_FULL / network / 403 errors keep the dialog and the selection; retry succeeds', async ({ page }) => {
     const server = await addMembersFixture(page);
     await open(page);
     await page.getByTestId('add-members-row-p2').click();
@@ -150,6 +155,12 @@ test.describe('FR-ROOM-004 / DEC-096 add members to a group', () => {
     await expect(page.getByTestId('add-members-error')).toHaveText('กลุ่มเต็มแล้ว ไม่สามารถเพิ่มสมาชิกได้');
     await expect(page.getByTestId('add-members-count')).toContainText('เลือกแล้ว 1 คน');
 
+    server.postFailure = null;
+    server.postAborts = true;
+    await page.getByTestId('add-members-submit').click();
+    await expect(page.getByTestId('add-members-error')).toHaveText('เชื่อมต่อไม่ได้ ตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง');
+    server.postAborts = false;
+
     server.postFailure = { status: 403, code: 'ROOM_FORBIDDEN' };
     await page.getByTestId('add-members-submit').click();
     await expect(page.getByTestId('add-members-error')).toContainText('ไม่มีสิทธิ์');
@@ -157,7 +168,7 @@ test.describe('FR-ROOM-004 / DEC-096 add members to a group', () => {
     server.postFailure = null;
     await page.getByTestId('add-members-submit').click();
     await expect(dialog(page)).toHaveCount(0);
-    expect(server.posts).toHaveLength(3);
+    expect(server.posts).toHaveLength(4);
   });
 
   test('TC-WEB-ADDMEM-005 list load error is retryable; "load more" pages the directory; Escape closes', async ({ page }) => {

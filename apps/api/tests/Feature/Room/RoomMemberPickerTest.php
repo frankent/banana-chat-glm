@@ -53,6 +53,11 @@ test('TC-ROOM-097 room_id flags exactly the active room members as in_room; with
         ->and($rows['anna']['in_room'])->toBeFalse()
         ->and($rows['ghost']['in_room'])->toBeFalse();
 
+    // the UI pages through /directory, which wraps the same query
+    $viaDirectory = collect($this->getJson("/api/v1/directory?room_id={$this->room->id}", wsHeaders($token, 'acme'))
+        ->assertOk()->json('data.members'))->keyBy('username');
+    expect($viaDirectory['somchai']['in_room'])->toBeTrue()->and($viaDirectory['anna']['in_room'])->toBeFalse();
+
     $plain = collect($this->getJson('/api/v1/members', wsHeaders($token, 'acme'))->assertOk()->json('data'));
     expect($plain->every(fn ($row) => ! array_key_exists('in_room', $row)))->toBeTrue();
 });
