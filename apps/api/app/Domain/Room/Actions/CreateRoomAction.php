@@ -122,6 +122,8 @@ class CreateRoomAction
             }
         }
 
+        $invited = $memberIds === [] ? collect() : User::query()->whereIn('id', $memberIds)->get()->keyBy('id');
+
         $room = DB::transaction(function () use ($actor, $name, $description, $memberIds, $expiryDays): Room {
             $room = Room::query()->create([
                 'workspace_id' => $this->context->id(),
@@ -159,6 +161,9 @@ class CreateRoomAction
         // FR-ROOM-002: system message member_added is the first seq
         $this->systemMessages->write($room, $actor, 'member_added', [
             'user_ids' => [$actor->id, ...$memberIds],
+            'members' => SystemMessageWriter::memberStubs(
+                collect([$actor->id, ...$memberIds])->map(fn (string $id) => $id === $actor->id ? $actor : $invited[$id]),
+            ),
         ]);
         $room->refresh();
 

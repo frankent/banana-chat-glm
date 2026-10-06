@@ -64,6 +64,24 @@ class SystemMessageWriter
     }
 
     /**
+     * DEC-097 — `member_added` names the people it added, snapshotted at write
+     * time (id + display name only, never a URL) so the timeline can say who
+     * without a lookup per row.
+     *
+     * @param  iterable<User>  $users
+     * @return list<array{id: string, display_name: string}>
+     */
+    public static function memberStubs(iterable $users): array
+    {
+        $stubs = [];
+        foreach ($users as $user) {
+            $stubs[] = ['id' => $user->id, 'display_name' => $user->display_name];
+        }
+
+        return $stubs;
+    }
+
+    /**
      * Room-list preview for a system row — shared by the list (API-020) and
      * the realtime room.activity so both say the same thing.
      */

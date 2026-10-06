@@ -215,6 +215,25 @@ test.describe('FR-ROOM-004 / DEC-096 add members to a group', () => {
     expect(server.posts[0].user_ids).toHaveLength(99);
   });
 
+  test('TC-WEB-ADDMEM-008 the timeline says who was added: "{actor} added {name, name}", actor left out, old id-only rows fall back to a count', async ({ page }) => {
+    await addMembersFixture(page);
+    const system = (seq: number, sender: typeof me, system_event: Record<string, unknown>) => ({
+      ...message(seq), type: 'system' as const, body: null, sender, sender_id: sender.id, system_event,
+    });
+    const rows = [
+      system(41, me, { event: 'member_added', members: [{ id: 'ui-p2', display_name: 'Somchai Wong' }, { id: 'ui-p4', display_name: 'Anna Lee' }, { id: 'ui-p3', display_name: 'Minnie Park' }] }),
+      system(42, me, { event: 'member_added', members: [{ id: me.id, display_name: 'Alex Morgan' }, { id: 'ui-p5', display_name: 'Person 05' }] }),
+      system(43, me, { event: 'member_added', user_ids: ['ui-p6', 'ui-p7'] }),
+    ];
+    await page.route(/\/api\/v1\/rooms\/ui-design\/messages(\?|$)/, route => route.request().method() === 'GET'
+      ? route.fulfill({ json: { data: { messages: rows, has_more_before: false, has_more_after: false } } })
+      : route.fallback());
+    await page.goto('/rooms/ui-design');
+    await expect(page.getByText('Alex Morgan added Somchai Wong, Anna Lee, Minnie Park', { exact: true })).toBeVisible();
+    await expect(page.getByText('Alex Morgan added Person 05', { exact: true })).toBeVisible();
+    await expect(page.getByText('Alex Morgan added 2 members', { exact: true })).toBeVisible();
+  });
+
   for (const { width, height, name } of [
     { width: 390, height: 844, name: '390' },
     { width: 360, height: 740, name: '360x740' },

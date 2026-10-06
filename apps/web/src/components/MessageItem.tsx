@@ -32,8 +32,16 @@ function systemText(message: Message): string {
     // FR-PROF-008 — context is empty by design (no signed URLs in messages)
     case 'room_avatar_changed':
       return `${actor} changed the group photo`;
-    case 'member_added':
+    case 'member_added': {
+      // DEC-097 — "{actor} added {name, name, ...}"; the actor is left out of the
+      // list (group creation lists the creator too). Older rows carry only ids.
+      const members = Array.isArray(message.system_event?.members) ? (message.system_event.members as Array<{ id?: string; display_name?: string }>) : [];
+      const names = members.filter(m => m.id !== message.sender_id).map(m => m.display_name).filter((n): n is string => !!n);
+      if (names.length > 0) return `${actor} added ${names.join(', ')}`;
+      const ids = Array.isArray(message.system_event?.user_ids) ? (message.system_event.user_ids as string[]).filter(id => id !== message.sender_id) : [];
+      if (ids.length > 1) return `${actor} added ${ids.length} members`;
       return `${actor} added ${String(message.system_event?.username ?? 'a member')}`;
+    }
     case 'member_removed':
       return `${actor} removed ${String(message.system_event?.username ?? 'a member')}`;
     case 'member_left':

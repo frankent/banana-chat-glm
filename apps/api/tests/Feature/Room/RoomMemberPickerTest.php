@@ -1,13 +1,14 @@
 <?php
 
 use App\Enums\RoomRole;
+use App\Models\Message;
 use App\Models\Room;
 use App\Models\RoomMember;
 use App\Models\User;
 use App\Models\Workspace;
 
 /**
- * TC-ROOM-097..100 — GET /members?room_id= adds `in_room` so the add-members
+ * TC-ROOM-097..101 — GET /members?room_id= adds `in_room` so the add-members
  * picker can grey out people already in the group (FR-ROOM-004, DEC-096).
  * Helper names are unique: Pest helpers are global across test files.
  */
@@ -97,4 +98,24 @@ test('TC-ROOM-100 picker round trip: someone not in the group is found via searc
     $after = $this->getJson("/api/v1/members?room_id={$this->room->id}&q=ann", $h)->json('data');
     expect($after[0]['in_room'])->toBeTrue()
         ->and($this->room->refresh()->member_count)->toBe(3);
+});
+
+test('TC-ROOM-101 member_added snapshots who was added (id + display name) for add and for group creation; re-adding an existing member writes nothing', function () {
+    [, $token] = loginAs($this->tony);
+    $h = wsHeaders($token, 'acme');
+
+    $this->postJson("/api/v1/rooms/{$this->room->id}/members", ['user_ids' => [$this->anna->id, $this->ghost->id, $this->somchai->id]], $h)
+        ->assertOk()->assertJsonPath('data.added', 2)->assertJsonPath('data.already', 1);
+
+    $event = Message::query()->where('room_id', $this->room->id)->where('type', 'system')->sole()->system_event;
+    expect($event['event'])->toBe('member_added')
+        ->and($event['members'])->toBe([
+            ['id' => $this->anna->id, 'display_name' => 'Anna'],
+            ['id' => $this->ghost->id, 'display_name' => 'Ghost'],
+        ]);
+
+    $created = $this->postJson('/api/v1/rooms', ['type' => 'group', 'name' => 'Fresh', 'member_ids' => [$this->somchai->id, $this->anna->id]], $h)
+        ->assertStatus(201)->json('data.room.id');
+    $first = Message::query()->where('room_id', $created)->where('type', 'system')->sole()->system_event;
+    expect(collect($first['members'])->pluck('display_name')->all())->toBe(['Tony', 'Somchai', 'Anna']);
 });

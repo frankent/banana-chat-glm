@@ -375,6 +375,7 @@ class RoomController extends Controller
         if ($added > 0) {
             $this->systemMessages->write($room, $user, 'member_added', [
                 'user_ids' => array_map(fn (User $u) => $u->id, $addedUsers),
+                'members' => SystemMessageWriter::memberStubs($addedUsers),
             ]);
             broadcast(new RoomMemberAdded($room->refresh(), $addedUsers, $user->id));
 
