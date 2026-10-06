@@ -157,6 +157,10 @@ class FcmPushSender
         // read as a dead token and deleted.
         $collapseKey = (string) ($payload['collapse_key'] ?? 'message');
         $badge = (int) ($payload['badge'] ?? 0);
+        // FR-NOTI-010 / DEC-095: call pushes carry no unread count — omitting it
+        // keeps an iOS app badge from being reset to 0 by a ring.
+        $isCall = in_array($type, ['call', 'call_missed'], true);
+        $ringing = $type === 'call';
         $channel = match ($type) {
             'mention' => 'mentions',
             'ai_completed' => 'ai',
@@ -170,8 +174,7 @@ class FcmPushSender
                 'type' => $type,
                 'title' => $payload['title'],
                 'body' => $payload['body'],
-                'badge' => $badge,
-            ],
+            ] + ($isCall ? [] : ['badge' => $badge]),
         );
 
         // Web is deliberately data-only. A message carrying BOTH `notification` and
@@ -186,7 +189,7 @@ class FcmPushSender
             'token' => $device->push_token,
             'data' => $data,
             'android' => [
-                'priority' => $type === 'mention' ? 'high' : 'normal',
+                'priority' => in_array($type, ['mention', 'call'], true) ? 'high' : 'normal',
                 'collapse_key' => $collapseKey,
                 'notification' => [
                     'channel_id' => $channel,
@@ -201,11 +204,10 @@ class FcmPushSender
                 'payload' => [
                     'aps' => [
                         'alert' => ['title' => $payload['title'], 'body' => $payload['body']],
-                        'badge' => $badge,
                         'sound' => 'default',
                         'thread-id' => $collapseKey,
                         'mutable-content' => 1,
-                    ],
+                    ] + ($isCall ? [] : ['badge' => $badge]),
                 ],
             ],
             'webpush' => [
@@ -213,6 +215,13 @@ class FcmPushSender
                 'fcm_options' => ['link' => '/'],
             ],
         ];
+
+        if ($ringing) {
+            // A ring is worthless once the 60 s window is over: let a phone that
+            // reconnects later drop it instead of showing a dead "Incoming call".
+            $message['android']['ttl'] = '60s';
+            $message['apns']['headers']['apns-expiration'] = (string) (time() + 60);
+        }
 
         if ($isWeb) {
             // What actually renders a web push is `webpush.notification`, handled by
@@ -238,6 +247,22 @@ class FcmPushSender
                 ],
                 'fcm_options' => ['link' => $roomId !== '' ? $base.'/rooms/'.$roomId : $base.'/'],
             ];
+
+            if ($isCall) {
+                // FR-NOTI-010 / DEC-095. A web push cannot loop a ringtone, so the
+                // ring is the repeat: same tag + renotify re-alerts (sound and
+                // vibration) on every tick, requireInteraction keeps it on screen.
+                // The Firebase SDK spreads the whole `notification` object into
+                // showNotification(), so these options need no service-worker code.
+                // The missed-call phase reuses the tag to replace the ring quietly.
+                $message['webpush']['headers'] += $ringing
+                    ? ['TTL' => '60', 'Urgency' => 'high']
+                    : ['TTL' => '3600', 'Urgency' => 'normal'];
+                $message['webpush']['notification'] += [
+                    'requireInteraction' => $ringing,
+                    'renotify' => $ringing,
+                ] + ($ringing ? ['vibrate' => [400, 200, 400, 200, 400, 200, 400]] : []);
+            }
             unset($message['android'], $message['apns']);
 
             return $message;

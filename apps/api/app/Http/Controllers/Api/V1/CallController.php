@@ -83,7 +83,7 @@ class CallController extends Controller
         $c = $this->call($r, $id);
         abort_if($c->started_by === $r->user()->id, 422);
         if (Room::findOrFail($c->room_id)->isDm() && ! $c->connected_at) {
-            $this->calls->end($c);
+            $this->calls->end($c, $r->user()->id);
         }
 
         return response()->noContent();

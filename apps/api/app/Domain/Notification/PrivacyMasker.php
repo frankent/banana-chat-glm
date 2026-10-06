@@ -24,6 +24,7 @@ class PrivacyMasker
             'video' => 'วิดีโอใหม่',
             'file' => 'ไฟล์ใหม่',
             'call' => 'สายเรียกเข้า',
+            'missed_call' => 'สายที่ไม่ได้รับ',
             'mention' => 'มีการกล่าวถึงคุณ',
         ],
         'en' => [
@@ -32,6 +33,7 @@ class PrivacyMasker
             'video' => 'New video',
             'file' => 'New file',
             'call' => 'Incoming call',
+            'missed_call' => 'Missed call',
             'mention' => 'You were mentioned',
         ],
     ];

@@ -8,6 +8,8 @@ use App\Domain\Room\SystemMessageWriter;
 use App\Enums\NotificationMode;
 use App\Events\CallChanged;
 use App\Events\NotificationAlert;
+use App\Jobs\NotifyIncomingCall;
+use App\Jobs\NotifyMissedCall;
 use App\Models\Attachment;
 use App\Models\CallParticipant;
 use App\Models\Room;
@@ -138,6 +140,11 @@ class CallService
                     && ! app(PushDecisionService::class)->inDnd($setting, $recipient->timezone)
                     && $roomSetting?->mode !== NotificationMode::None && ! ($roomSetting?->muted_until?->isFuture() ?? false)) {
                     broadcast(new NotificationAlert($recipientId, $call->id, $room->id, $room->workspace_id, 'call'));
+                    // FR-NOTI-010 / DEC-095 — closed-app ringing, 1-to-1 only. Same
+                    // gates as the alert above (DND, mute, sound pref rides along).
+                    if ($room->isDm()) {
+                        NotifyIncomingCall::dispatch($call->id, $recipientId)->afterCommit();
+                    }
                 }
             }
 
@@ -177,13 +184,35 @@ class CallService
         });
     }
 
-    public function end(RoomCall $call): void
+    public function end(RoomCall $call, ?string $declinedBy = null): void
     {
         // Persist revocation first: the signaling gate fails closed even if SFU is unavailable.
         $call->update(['ended_at' => $call->ended_at ?? now()]);
         CallParticipant::where('call_id', $call->id)->whereNull('left_at')->update(['left_at' => now()]);
         $this->changed($call);
         $this->media->request('DeleteRoom', 'call-'.$call->id, ['room' => 'call-'.$call->id]);
+        $this->ringEnded($call, $declinedBy);
+    }
+
+    /**
+     * FR-NOTI-010 / DEC-095 — a 1-to-1 call that ended before anyone connected
+     * replaces the callee's ringing notification with "missed call", unless the
+     * callee is the one who declined it. The job re-checks everything (ring was
+     * actually pushed, callee never joined).
+     */
+    private function ringEnded(RoomCall $call, ?string $declinedBy): void
+    {
+        if ($call->connected_at !== null) {
+            return;
+        }
+        $room = Room::withoutGlobalScopes()->find($call->room_id);
+        if (! $room?->isDm()) {
+            return;
+        }
+        $recipient = DB::table('room_members')->where('room_id', $room->id)->whereNull('left_at')->where('user_id', '!=', $call->started_by)->value('user_id');
+        if ($recipient && $recipient !== $declinedBy) {
+            NotifyMissedCall::dispatch($call->id, $recipient)->delay(now()->addSeconds(3));
+        }
     }
 
     public function leave(RoomCall $call, string $uid, string $session): void
@@ -207,6 +236,9 @@ class CallService
         if ($action) {
             $this->media->request($action[0] ? 'DeleteRoom' : 'RemoveParticipant', 'call-'.$call->id,
                 $action[0] ? ['room' => 'call-'.$call->id] : ['room' => 'call-'.$call->id, 'identity' => $action[1]]);
+            if ($action[0]) {
+                $this->ringEnded($call->refresh(), null);
+            }
         }
     }
 }
