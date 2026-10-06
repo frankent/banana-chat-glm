@@ -236,6 +236,8 @@ test.describe('FR-ROOM-004 / DEC-096 add members to a group', () => {
       expect(box.x + box.width).toBeLessThanOrEqual(width + 0.5);
       expect(box.y + box.height).toBeLessThanOrEqual(height + 0.5);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      expect(Math.abs(box.y - (height - box.y - box.height))).toBeLessThanOrEqual(1);
+      expect(Math.abs(box.x - (width - box.x - box.width))).toBeLessThanOrEqual(1);
       const footerButtons = dialog(page).locator('.bc-ae-actions > button');
       await expect(footerButtons).toHaveCount(2);
       for (const button of await footerButtons.all()) {

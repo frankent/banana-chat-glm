@@ -135,6 +135,7 @@
   .bc-ae-actions .bc-ae-button.is-primary, .bc-ae-actions .bc-ae-button.is-secondary { flex: 1; }
   .bc-ae-confirm .bc-ae-button { flex: 1; }
 }
+@keyframes bc-ae-pop { from { transform: scale(.96); opacity: 0; } }
 @keyframes bc-ae-sheet { from { transform: translateY(24px); opacity: 0; } }
 
 @media (prefers-color-scheme: dark) {
@@ -201,8 +202,9 @@
 .bc-addmembers-count { margin-right: auto; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ae-ink); }
 .bc-addmembers-link { min-height: 32px; padding: 0 4px; border: 0; background: transparent; color: var(--ae-focus); font: inherit; font-size: 13px; text-decoration: underline; cursor: pointer; }
 @media (max-width: 520px) {
-  .bc-addmembers { overflow: hidden; gap: 12px; }
-  .bc-addmembers-list { min-height: 80px; max-height: min(46dvh, 340px); }
+  .bc-addmembers { overflow: hidden; gap: 12px; width: calc(100vw - 24px); max-width: 460px; max-height: calc(100dvh - 48px); margin: auto; padding: 18px 16px; border-radius: 22px; border-width: 1px; }
+  .bc-addmembers[open] { animation-name: bc-ae-pop; }
+  .bc-addmembers-list { min-height: min(46dvh, 340px); max-height: min(46dvh, 340px); }
   .bc-addmembers-search input { font-size: 16px; }
   .bc-addmembers-count { flex: 1 0 100%; justify-content: space-between; gap: 6px; margin: 0; min-width: 0; }
   .bc-addmembers-count > span { min-width: 0; overflow-wrap: anywhere; }
@@ -210,6 +212,7 @@
   .bc-addmembers .bc-ae-actions { gap: 8px; }
   .bc-addmembers .bc-ae-actions > .bc-ae-button { min-height: 44px; flex: 1 1 calc(50% - 4px); }
 }
+@media (max-width: 520px) and (max-height: 700px) { .bc-addmembers-list { min-height: 80px; } }
 @media (max-height: 520px) {
   .bc-addmembers { max-height: calc(100dvh - 8px); overflow: hidden; gap: 8px; padding-top: 12px; padding-bottom: max(10px, env(safe-area-inset-bottom)); }
   .bc-addmembers-list { min-height: 48px; max-height: min(28dvh, 120px); }
