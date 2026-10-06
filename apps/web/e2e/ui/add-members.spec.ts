@@ -215,8 +215,15 @@ test.describe('FR-ROOM-004 / DEC-096 add members to a group', () => {
     expect(server.posts[0].user_ids).toHaveLength(99);
   });
 
-  for (const { width, height } of [{ width: 390, height: 844 }, { width: 1280, height: 800 }]) {
-    test(`TC-WEB-ADDMEM-007 geometry fits the viewport and screenshots ${width}x${height}`, async ({ page }) => {
+  for (const { width, height, name } of [
+    { width: 390, height: 844, name: '390' },
+    { width: 360, height: 740, name: '360x740' },
+    { width: 320, height: 568, name: '320x568' },
+    { width: 844, height: 390, name: '844x390' },
+    { width: 390, height: 380, name: '390x380-keyboard' },
+    { width: 1280, height: 800, name: '1280' },
+  ]) {
+    test(`TC-WEB-ADDMEM-007 dialog geometry, 44px footer targets and screenshot ${width}x${height}`, async ({ page }) => {
       await mkdir(shots, { recursive: true });
       await page.setViewportSize({ width, height });
       await addMembersFixture(page);
@@ -225,13 +232,27 @@ test.describe('FR-ROOM-004 / DEC-096 add members to a group', () => {
       await page.getByTestId('add-members-row-p3').click();
       const box = (await dialog(page).boundingBox())!;
       expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.y).toBeGreaterThanOrEqual(0);
       expect(box.x + box.width).toBeLessThanOrEqual(width + 0.5);
       expect(box.y + box.height).toBeLessThanOrEqual(height + 0.5);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-      await page.screenshot({ path: `${shots}/picker-${width}.png` });
+      const footerButtons = dialog(page).locator('.bc-ae-actions > button');
+      await expect(footerButtons).toHaveCount(2);
+      for (const button of await footerButtons.all()) {
+        const buttonBox = (await button.boundingBox())!;
+        expect(buttonBox.height).toBeGreaterThanOrEqual(44);
+        expect(buttonBox.y).toBeGreaterThanOrEqual(box.y);
+        expect(buttonBox.y + buttonBox.height).toBeLessThanOrEqual(height + 0.5);
+        await button.click({ trial: true });
+      }
+      if (width <= 520 || height <= 520) {
+        expect(await page.getByTestId('add-members-search').evaluate(el => getComputedStyle(el).fontSize)).toBe('16px');
+        await expect(page.getByTestId('add-members-search')).not.toBeFocused();
+      }
+      await page.screenshot({ path: `${shots}/picker-${name}.png` });
       await page.getByTestId('add-members-search').fill('min');
       await expect(page.getByTestId('add-members-row-p2')).toHaveCount(0);
-      await page.screenshot({ path: `${shots}/picker-search-${width}.png` });
+      await page.screenshot({ path: `${shots}/picker-search-${name}.png` });
     });
   }
 });

@@ -37,7 +37,13 @@ export function AddMembersDialog({ roomId, onClose, onDone }: { roomId: string; 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<AddMembersTextKey | null>(null);
 
-  useEffect(() => { dialogRef.current?.showModal(); inputRef.current?.focus(); }, []);
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    dialog.showModal();
+    if (window.matchMedia('(max-width: 520px), (max-height: 520px)').matches) dialog.focus();
+    else inputRef.current?.focus();
+  }, []);
   useEffect(() => { const timer = window.setTimeout(() => setQ(value.trim()), 250); return () => window.clearTimeout(timer); }, [value]);
 
   const list = useInfiniteQuery({
@@ -87,6 +93,7 @@ export function AddMembersDialog({ roomId, onClose, onDone }: { roomId: string; 
       aria-labelledby={titleId}
       aria-busy={busy}
       lang={locale}
+      tabIndex={-1}
       onCancel={event => { event.preventDefault(); if (!busy) close(); }}
     >
       <header className="bc-ae-header">
@@ -154,7 +161,7 @@ export function AddMembersDialog({ roomId, onClose, onDone }: { roomId: string; 
       <footer className="bc-ae-actions">
         {picked.size > 0 && (
           <span className="bc-addmembers-count" data-testid="add-members-count">
-            {text.selected.replace('{n}', String(picked.size))}
+            <span>{text.selected.replace('{n}', String(picked.size))}</span>
             <button type="button" className="bc-addmembers-link" disabled={busy} onClick={() => setPicked(new Map())}>{text.clear}</button>
           </span>
         )}
