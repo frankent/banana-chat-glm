@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Domain\Media\AvatarUrls;
+use App\Domain\Room\RoomPolicy;
 use App\Domain\Workspace\WorkspaceSummaryBuilder;
 use App\Enums\UserStatus;
 use App\Enums\WorkspaceRole;
@@ -31,6 +32,7 @@ class WorkspaceController extends Controller
         private readonly WorkspaceContext $context,
         private readonly SettingsService $settings,
         private readonly AuditLogger $audit,
+        private readonly RoomPolicy $roomPolicy,
     ) {}
 
     /**
@@ -50,7 +52,21 @@ class WorkspaceController extends Controller
         $request->validate([
             'q' => ['nullable', 'string', 'max:100'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:50'],
+            'room_id' => ['nullable', 'ulid'],
         ]);
+
+        // FR-ROOM-004 / DEC-096 — with room_id the caller (an active member of that
+        // room) gets an `in_room` flag per row, so the add-members picker can grey
+        // out people already inside without paging the whole roster.
+        $roomId = $request->query('room_id');
+        if ($roomId !== null && $roomId !== '') {
+            $room = Room::query()->whereNull('deleted_at')->findOrFail($roomId);
+            if ($this->roomPolicy->membership($room, $request->user()) === null) {
+                throw ApiException::roomNotMember();
+            }
+        } else {
+            $roomId = null;
+        }
 
         $q = trim((string) $request->query('q', ''));
         $limit = (int) $request->query('limit', 50);
@@ -76,6 +92,13 @@ class WorkspaceController extends Controller
 
         $members = $query->cursorPaginate($limit);
 
+        $inRoom = $roomId === null ? collect() : RoomMember::query()
+            ->where('room_id', $roomId)
+            ->whereNull('left_at')
+            ->whereIn('user_id', collect($members->items())->pluck('id'))
+            ->pluck('user_id')
+            ->flip();
+
         $offlineAfter = $this->settings->int('presence.offline_after_seconds');
 
         // FR-PROF-006 — one batched avatar query for the whole page (join
@@ -83,12 +106,13 @@ class WorkspaceController extends Controller
         $avatars = AvatarUrls::mapFor(collect($members->items())->pluck('avatar_attachment_id'));
 
         return response()->json([
-            'data' => collect($members->items())->map(function ($m) use ($offlineAfter, $avatars) {
+            'data' => collect($members->items())->map(function ($m) use ($offlineAfter, $avatars, $roomId, $inRoom) {
                 $lastSeen = $m->last_seen_at !== null
                     ? Carbon::parse($m->last_seen_at)
                     : null;
 
                 return [
+                    ...($roomId !== null ? ['in_room' => $inRoom->has($m->id)] : []),
                     'id' => $m->id,
                     'username' => $m->username,
                     'display_name' => $m->display_name,

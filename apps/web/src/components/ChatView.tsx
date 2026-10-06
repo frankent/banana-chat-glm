@@ -21,6 +21,8 @@ import { ReadReceiptTrigger, ReadReceiptDialog } from './ReadReceipt';
 import { Avatar, Icon } from './Visual';
 import { AvatarEditor } from './AvatarEditor';
 import { RenameGroupDialog } from './RenameGroupDialog';
+import { AddMembersDialog } from './AddMembersDialog';
+import { addMembersText } from '../lib/add-members-text';
 import { renameText } from '../lib/rename-text';
 import { avatarText, roomAvatarText } from '../lib/avatar-text';
 import { Composer } from './Composer';
@@ -62,8 +64,9 @@ export function ChatView() {
   // FR-PROF-008 — group photo editor; `returnTo` is whatever opened it, refocused on close.
   const [photoOpen, setPhotoOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
+  const [addMembersOpen, setAddMembersOpen] = useState(false);
   const photoReturn = useRef<HTMLElement | null>(null);
-  useEffect(() => {setForward(null);setForwardStatus('');setSecretChatFor(null);setReply(null);setNotesOpen(false);setMediaOpen(false);setToolError('');setReadListFor(null);setPhotoOpen(false);setRenameOpen(false);}, [roomId, slug]);
+  useEffect(() => {setForward(null);setForwardStatus('');setSecretChatFor(null);setReply(null);setNotesOpen(false);setMediaOpen(false);setToolError('');setReadListFor(null);setPhotoOpen(false);setRenameOpen(false);setAddMembersOpen(false);}, [roomId, slug]);
   const listRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const visible = useRef(false);
@@ -347,6 +350,8 @@ export function ChatView() {
   // FR-ROOM-007 / FR-PROF-008 / DEC-092 — any member may rename the group and change its photo,
   // unless the room opted into who_can_edit_info=admins (then room/workspace admins only).
   const canEditGroupInfo = room?.room.type === 'group' && (room.room.settings?.who_can_edit_info !== 'admins' || canModerate);
+  // FR-ROOM-004 / DEC-096 — add members: everyone unless the room set who_can_add_members=admins (server is the gate).
+  const canAddMembers = room?.room.type === 'group' && (room.room.settings?.who_can_add_members !== 'admins' || canModerate);
   const renameLabel = renameText[locale].menu;
   const photoText = { ...avatarText[locale], ...roomAvatarText[locale] };
   const openPhoto = (trigger: HTMLElement | null) => { photoReturn.current = trigger; setPhotoOpen(true); };
@@ -390,6 +395,9 @@ export function ChatView() {
               <div className="bc-mobile-calls">{room && (room.room.type === 'dm' || room.room.type === 'group') && <CallButtons roomId={roomId} type={room.room.type} />}</div>
               <button onClick={() => {setNotesOpen(!notesOpen);setMediaOpen(false);}} aria-label="Room notes"><Icon name="notes" size={18} />{text('chat.notes')}</button>
               <button onClick={() => {setMediaOpen(v => !v);setNotesOpen(false);}} aria-pressed={mediaOpen} aria-label="Media and files" data-testid="room-media-toggle"><Icon name="files" size={18} />{text('chat.files')}</button>
+              {canAddMembers && (
+                <button type="button" aria-haspopup="dialog" data-testid="room-add-members-menu" onClick={event => { photoReturn.current = event.currentTarget.closest('details')?.querySelector('summary') ?? null; setAddMembersOpen(true); }}><Icon name="users" size={18} />{addMembersText[locale].menu}</button>
+              )}
               {canEditGroupInfo && (
                 <button type="button" aria-haspopup="dialog" data-testid="room-rename-menu" onClick={event => { photoReturn.current = event.currentTarget.closest('details')?.querySelector('summary') ?? null; setRenameOpen(true); }}><Icon name="edit" size={18} />{renameLabel}</button>
               )}
@@ -418,6 +426,14 @@ export function ChatView() {
           roomId={roomId}
           currentName={room.room.name ?? ''}
           onClose={() => { setRenameOpen(false); const back = photoReturn.current; photoReturn.current = null; window.requestAnimationFrame(() => back?.focus()); }}
+        />
+      )}
+      {addMembersOpen && canAddMembers && room && (
+        <AddMembersDialog
+          key={`${slug}:${roomId}`}
+          roomId={roomId}
+          onDone={count => setForwardStatus(addMembersText[locale].done.replace('{n}', String(count)))}
+          onClose={() => { setAddMembersOpen(false); const back = photoReturn.current; photoReturn.current = null; window.requestAnimationFrame(() => back?.focus()); }}
         />
       )}
       {secretChatFor === roomId && room?.room.type === 'dm' && !secretActive && peerId && (

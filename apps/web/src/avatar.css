@@ -180,3 +180,24 @@
 .bc-rename-input:focus-visible { outline: 2px solid var(--ae-focus); outline-offset: 1px; }
 .bc-rename-counter { align-self: flex-end; font-size: 12px; line-height: 16px; color: var(--ae-muted); }
 .bc-rename-form .bc-ae-actions { margin-top: 8px; }
+
+/* FR-ROOM-004 / DEC-096 — add members to a group (reuses the editor shell above). */
+.bc-addmembers { width: min(460px, calc(100vw - 32px)); }
+.bc-addmembers-search { display: flex; flex-direction: column; gap: 6px; }
+.bc-addmembers-search label { font-size: 13px; line-height: 20px; font-weight: 600; color: var(--ae-ink); }
+.bc-addmembers-list { display: flex; flex-direction: column; gap: 8px; min-height: 120px; max-height: min(46dvh, 340px); overflow-y: auto; overscroll-behavior: contain; }
+.bc-addmembers-list ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.bc-addmembers-row { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 6px 8px; border-radius: 12px; cursor: pointer; }
+.bc-addmembers-row:hover { background: var(--ae-surface); }
+.bc-addmembers-row:has(input:focus-visible) { outline: 2px solid var(--ae-focus); outline-offset: -2px; }
+.bc-addmembers-row.is-in { cursor: default; opacity: .7; }
+.bc-addmembers-row.is-in:hover { background: transparent; }
+.bc-addmembers-row input { width: 20px; height: 20px; margin: 0; flex: 0 0 auto; accent-color: #376fb0; }
+.bc-addmembers-name { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.bc-addmembers-name strong { font-size: 14px; line-height: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bc-addmembers-name small { font-size: 12px; line-height: 16px; color: var(--ae-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bc-addmembers-badge { flex: 0 0 auto; padding: 2px 8px; border-radius: 999px; background: var(--ae-surface); color: var(--ae-muted); font-size: 12px; line-height: 16px; }
+.bc-addmembers-note { margin: 0; padding: 12px 4px; font-size: 13px; line-height: 20px; color: var(--ae-muted); }
+.bc-addmembers-count { margin-right: auto; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ae-ink); }
+.bc-addmembers-link { min-height: 32px; padding: 0 4px; border: 0; background: transparent; color: var(--ae-focus); font: inherit; font-size: 13px; text-decoration: underline; cursor: pointer; }
+@media (max-width: 480px) { .bc-addmembers-list { max-height: 40dvh; } }

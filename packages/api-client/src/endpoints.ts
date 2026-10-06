@@ -171,8 +171,10 @@ export class Endpoints {
   deleteBoardLane(slug: string,id: string) { return this.api.request<void>(`/api/v1/board/lanes/${id}`, {method:'DELETE',workspaceSlug:slug}); }
 
 
-  directoryPage(slug: string, q = '', cursor = '') {
-    return this.api.request<{members: UserStub[]; next_cursor: string | null}>(`/api/v1/directory?q=${encodeURIComponent(q)}&cursor=${encodeURIComponent(cursor)}`, {workspaceSlug: slug});
+  /** `roomId` (FR-ROOM-004 / DEC-096) adds `in_room` to every row; the caller must be in that room. */
+  directoryPage(slug: string, q = '', cursor = '', roomId = '') {
+    const room = roomId !== '' ? `&room_id=${encodeURIComponent(roomId)}` : '';
+    return this.api.request<{members: Array<UserStub & {in_room?: boolean}>; next_cursor: string | null}>(`/api/v1/directory?q=${encodeURIComponent(q)}&cursor=${encodeURIComponent(cursor)}${room}`, {workspaceSlug: slug});
   }
   notes(roomId: string, slug: string, before = '') {
     return this.api.request<{notes: RoomNote[]; has_more: boolean}>(`/api/v1/rooms/${roomId}/notes${before ? '?before='+before : ''}`, {workspaceSlug: slug});
@@ -312,6 +314,15 @@ export class Endpoints {
     return this.api.request<{ room: Pick<Room, 'id' | 'name' | 'description' | 'avatar_attachment_id' | 'member_count'> & { avatar?: Room['avatar'] } }>(`/api/v1/rooms/${roomId}`, {
       method: 'PATCH',
       body: input,
+      workspaceSlug: slug,
+    });
+  }
+
+  /** API-023 — add workspace members to a group; `added` = new/rejoined, `already` = were in. 403 ROOM_FORBIDDEN / 422 ROOM_FULL. */
+  addRoomMembers(roomId: string, slug: string, userIds: string[]) {
+    return this.api.request<{ added: number; already: number }>(`/api/v1/rooms/${roomId}/members`, {
+      method: 'POST',
+      body: { user_ids: userIds },
       workspaceSlug: slug,
     });
   }
