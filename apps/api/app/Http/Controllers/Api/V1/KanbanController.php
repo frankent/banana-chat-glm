@@ -71,6 +71,18 @@ class KanbanController extends Controller
         return response()->json(['data' => ['tickets' => $rows->take(100)->map(fn ($t) => $this->serialize($t))->values(), 'next_cursor' => $rows->count() > 100 ? $rows[99]->id : null]]);
     }
 
+    /**
+     * API-240 / FR-KAN-007 — slim, read-only ticket card for chat links.
+     * Workspace comes ONLY from the X-Workspace-Id context (same scoping as ticket());
+     * never initialises the board and never ships description/comments/history/attachments/labels/reporter.
+     */
+    public function card(Request $request, string $id)
+    {
+        $ticket = $this->ticket($id)->load(['assignee:id,display_name', 'lane:id,name,color,is_done']);
+
+        return response()->json(['data' => $this->serializeCard($ticket)])->header('Cache-Control', 'no-store');
+    }
+
     public function show(Request $request, string $id)
     {
         $ticket = $this->ticket($id)->load(['assignee', 'reporter', 'attachments']);
@@ -103,6 +115,14 @@ class KanbanController extends Controller
         broadcast(new BoardChanged($this->context->id()));
 
         return response()->json(['data' => $comment], 201);
+    }
+
+    private function serializeCard(KanbanTicket $ticket): array
+    {
+        return array_merge($ticket->only(['id', 'workspace_id', 'number', 'title', 'type', 'priority', 'due_at', 'version', 'updated_at']), [
+            'assignee' => $ticket->assignee?->only(['id', 'display_name']),
+            'lane' => $ticket->lane ? ['id' => $ticket->lane->id, 'name' => $ticket->lane->name, 'color' => $ticket->lane->color, 'is_done' => (bool) $ticket->lane->is_done] : null,
+        ]);
     }
 
     private function serialize(KanbanTicket $ticket): array

@@ -58,3 +58,6 @@ Schedule::call(fn () => app()->call([new ReconcileMeetings, 'handle']))->name('m
 // FR-ROOM-012 / DEC-056 — purge expired secret rooms (access already denies
 // at secret_expires_at; this reclaims rows, messages and upload objects).
 Schedule::job(new ExpireSecretRooms)->everyMinute()->onOneServer()->withoutOverlapping();
+
+// FR-MSG-013 / DEC-100 — external link previews (+ our re-encoded image copies) older than 7 days.
+Schedule::command('link-previews:prune')->dailyAt('03:30')->onOneServer();

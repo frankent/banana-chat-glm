@@ -8,6 +8,7 @@ import { MediaViewer } from './MediaViewer';
 import { Markdown } from './ai/Markdown';
 import { Avatar, Icon } from './Visual';
 import { CallStartedCard } from './calls/CallStartedCard';
+import { MessageLinkCard, hiddenBodyRef, messageCardInfo } from './links/MessageLinkCard';
 import { REACTION_PRESETS, type Attachment, type Message, type ReactionCount, type ReactionUsers } from '@banana-chat/shared';
 import { ApiError } from '@banana-chat/api-client';
 import { reactToMessage, sortReactions, type MessageStore } from '@banana-chat/chat-core';
@@ -392,6 +393,7 @@ export function MessageItem({ message, mine, canModerate = false, grouped = fals
 
   const pending = message.id.startsWith('optimistic-');
   const deleted = message.deleted_at !== null;
+  const linkCard = deleted || pending ? { card: null, hideBody: false } : messageCardInfo(message.body);
   const mayEdit = mine && !message.forwarded_from && !deleted && !pending && onEdit !== undefined;
   const mayDelete = !pending && !deleted && (mine || canModerate) && onDelete !== undefined;
   const mayForward = !pending && !deleted && !secretActive && onForward !== undefined;
@@ -479,7 +481,8 @@ export function MessageItem({ message, mine, canModerate = false, grouped = fals
                 ))}
               </div>
             )}
-            {message.body !== null && <div className="bc-markdown"><Markdown content={message.body} /></div>}
+            {message.body !== null && <div ref={linkCard.hideBody ? hiddenBodyRef : undefined} className={linkCard.hideBody ? 'bc-markdown bc-link-body-hidden' : 'bc-markdown'}><Markdown content={message.body} /></div>}
+            {linkCard.card !== null && <MessageLinkCard card={linkCard.card} />}
           </>
         )}
         {mayReact && reactions.length > 0 && <div className="bc-reaction-area" data-testid={`reaction-area-${message.id}`}>

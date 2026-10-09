@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import type { WorkspaceInvite } from '@banana-chat/shared';
+import { ticketReturnPath } from '@banana-chat/chat-core';
 import { useSession } from '../state/session';
 import { useChatText } from '../lib/use-chat-text';
 import { ConnectionBanner } from './ConnectionBanner';
@@ -108,7 +109,11 @@ export function AppShell() {
     return <div className="flex min-h-full items-center justify-center text-sm text-slate-400">Loading…</div>;
   }
   if (status === 'anonymous') {
-    return <Navigate to="/login" replace state={{ from: location }} />;
+    // FR-KAN-007 — only whitelisted deep links (ticket/meeting) survive login; never an arbitrary returnTo.
+    const back = location.pathname + location.search;
+    const safe = ticketReturnPath(back);
+    const to = safe !== null ? `/login?returnTo=${encodeURIComponent(safe)}` : '/login';
+    return <Navigate to={to} replace state={{ from: location }} />;
   }
   if (me !== null && me.must_change_password === true) {
     return <Navigate to="/change-password" replace />;

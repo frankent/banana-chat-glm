@@ -1,6 +1,6 @@
 import type { PublicMeeting, MeetingLobby, MeetingJoin } from '@banana-chat/shared';
 import type { RoomCall, CallJoin } from '@banana-chat/shared';
-import type { KanbanLane, KanbanTicket, TicketDetail, TicketInput } from '@banana-chat/shared';
+import type { KanbanLane, KanbanTicket, LinkPreview, TicketCard, TicketDetail, TicketInput } from '@banana-chat/shared';
 import type { ReactionState, ReactionUsers } from '@banana-chat/shared';
 import type {
   RoomNote,
@@ -165,6 +165,10 @@ export class Endpoints {
     return this.api.request<{tickets: KanbanTicket[]; next_cursor: string | null}>(`/api/v1/board/tickets?${new URLSearchParams(filters)}`, {workspaceSlug:slug});
   }
   boardTicket(slug: string, id: string, before = '') { return this.api.request<TicketDetail>(`/api/v1/board/tickets/${id}${before ? `?before=${before}` : ''}`, {workspaceSlug:slug}); }
+  /** API-240 — slim read-only card; X-Workspace-Id is the link's `ws` slug (never derived from the ticket). */
+  ticketCard(slug: string, id: string) { return this.api.request<TicketCard>(`/api/v1/board/tickets/${id}/card`, {workspaceSlug:slug}); }
+  /** API-241 — external link preview (202 pending is polled by the caller). */
+  linkPreview(slug: string, url: string) { return this.api.request<LinkPreview>(`/api/v1/link-preview?${new URLSearchParams({url})}`, {workspaceSlug:slug}); }
   createTicket(slug: string, input: TicketInput) { return this.api.request<KanbanTicket>('/api/v1/board/tickets', {method:'POST',workspaceSlug:slug,body:input}); }
   updateTicket(slug: string, id: string, input: Partial<TicketInput> & {version: number}) { return this.api.request<KanbanTicket>(`/api/v1/board/tickets/${id}`, {method:'PATCH',workspaceSlug:slug,body:input}); }
   commentTicket(slug: string, id: string, body: string) { return this.api.request(`/api/v1/board/tickets/${id}/comments`, {method:'POST',workspaceSlug:slug,body:{body}}); }

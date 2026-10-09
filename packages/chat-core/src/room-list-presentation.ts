@@ -4,6 +4,7 @@
  * chat-core). Pure functions only; DOM/layout stays in the web/mobile adapter.
  */
 import type { RoomListItem } from '@banana-chat/shared';
+import { extractLinkCards } from './link-cards.js';
 
 export interface RoomListTime {
   /** compact row label, e.g. "14:30", "เมื่อวาน", "จันทร์", "19 ก.ย." */
@@ -61,7 +62,24 @@ function stripMarkdown(text: string): string {
  * body, and "ยังไม่มีข้อความ" when the room has no messages at all. Never uses
  * a bare "…" to stand in for an attachment.
  */
-export function roomPreviewText(lastMessage: RoomListItem['last_message'], myUserId: string): string {
+export interface RoomPreviewOptions {
+  /** FR-MSG-013 — app origins; when given, ticket/meeting URLs become a label */
+  appOrigins?: readonly string[];
+  /** localized labels (i18n `room.previewTicket` / `room.previewMeeting`) */
+  labels?: { ticket: string; meeting: string };
+}
+
+/** FR-MSG-013 — swap the first ticket/meeting URL for its label (no ticket content ever). */
+function labelLinks(body: string, options: RoomPreviewOptions | undefined): string {
+  if (options?.appOrigins === undefined || options.appOrigins.length === 0) return body;
+  const [card] = extractLinkCards(body, options.appOrigins, 1);
+  if (card === undefined || (card.kind !== 'ticket' && card.kind !== 'meeting')) return body;
+  const labels = options.labels ?? { ticket: '🎫 Ticket', meeting: '📹 Meeting' };
+  const at = body.indexOf(card.href);
+  return at < 0 ? body : body.slice(0, at) + labels[card.kind] + body.slice(at + card.href.length);
+}
+
+export function roomPreviewText(lastMessage: RoomListItem['last_message'], myUserId: string, options?: RoomPreviewOptions): string {
   if (lastMessage === null) {
     return 'ยังไม่มีข้อความ';
   }
@@ -72,7 +90,7 @@ export function roomPreviewText(lastMessage: RoomListItem['last_message'], myUse
   const prefix = mine ? 'คุณ: ' : '';
   const body = lastMessage.body?.trim();
   if (body !== undefined && body !== '') {
-    return prefix + stripMarkdown(body);
+    return prefix + stripMarkdown(labelLinks(body, options));
   }
   if (lastMessage.type === 'image') return prefix + 'รูปภาพ';
   if (lastMessage.type === 'video') return prefix + 'วิดีโอ';

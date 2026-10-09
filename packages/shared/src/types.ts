@@ -548,6 +548,20 @@ export interface TicketComment { id: string; body: string; author: TicketPerson 
 export interface TicketHistory { id: string; actor: TicketPerson | null; changes: Record<string,{from:unknown;to:unknown}>; created_at: string }
 export interface TicketDetail extends KanbanTicket { comments: TicketComment[]; comments_cursor: string | null; history: TicketHistory[] }
 export interface TicketInput { attachment_ids?: string[]; title: string; description?: string | null; lane_id: string; type?: TicketType; priority?: TicketPriority; assignee_id?: string | null; due_at?: string | null; labels?: string[] }
+/** FR-KAN-007 / API-240 — slim, read-only ticket card (no description/comments/history/attachments). */
+export interface TicketCard {
+  id: string; workspace_id: string; number: number; title: string; type: TicketType; priority: TicketPriority;
+  due_at: string | null; version: number; updated_at: string;
+  assignee: Pick<TicketPerson, 'id' | 'display_name'> | null;
+  lane: { id: string; name: string; color: string; is_done: boolean };
+}
+/** FR-MSG-013 / API-241 — external link preview; every field is plain text (never HTML). */
+export type LinkPreview =
+  | { status: 'pending' | 'none'; url: string }
+  | {
+      status: 'ready'; url: string; title: string | null; description: string | null; site_name: string | null;
+      image_url: string | null; image_expires_at: string | null; fetched_at: string;
+    };
 
 /** FR-CALL-001..004 / API-150..155 */
 export interface RoomCall {

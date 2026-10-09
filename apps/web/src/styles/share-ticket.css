@@ -1,0 +1,39 @@
+/* FR-KAN-007 — ticket link row, share dialog, deep-link notice. */
+.bc-ticket-link { --st-ink: #202b36; --st-muted: #526170; --st-line: #dfe5d7; --st-bg: #fff; --st-hover: #f2f5f4; --st-sel: #fff4ce; --st-err: #a13530;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: -8px 0 18px; min-width: 0; }
+.bc-ticket-link-field { flex: 1 1 180px; min-width: 0; }
+.bc-ticket-link-field input { width: 100%; font-size: 12px; text-overflow: ellipsis; }
+.bc-ticket-link button { min-height: 36px; flex-shrink: 0; }
+.bc-ticket-link-status { flex-basis: 100%; margin: 0; font-size: 12px; color: var(--st-muted); }
+
+.bc-share-dialog { --st-ink: #202b36; --st-muted: #526170; --st-line: #dfe5d7; --st-bg: #fff; --st-hover: #f2f5f4; --st-sel: #fff4ce; --st-err: #a13530;
+  inset: 50% auto auto 50%; transform: translate(-50%, -50%); width: min(420px, calc(100vw - 24px)); max-height: calc(100dvh - 24px);
+  padding: 12px; display: flex; flex-direction: column; overflow: hidden; background: var(--st-bg); color: var(--st-ink); border: 1px solid var(--st-line); border-radius: 14px; }
+.bc-share-dialog::backdrop { background: #26322566; }
+.bc-share-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-shrink: 0; }
+.bc-share-head strong { font-size: 16px; font-weight: 600; }
+.bc-share-ticket { margin: 8px 4px 10px; padding-left: 10px; border-left: 2px solid #a39764; color: var(--st-muted); font-size: 13px; overflow-wrap: anywhere; flex-shrink: 0; }
+.bc-share-search { display: block; margin: 0 0 8px; flex-shrink: 0; }
+.bc-share-search input, .bc-share-note textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--st-line); border-radius: 8px; padding: 10px; font-size: 14px; background: inherit; color: inherit; }
+.bc-share-note { display: block; margin: 8px 0; font-size: 12px; flex-shrink: 0; }
+.bc-share-note textarea { margin-top: 4px; resize: vertical; min-height: 56px; }
+.bc-share-rooms { min-height: 0; max-height: 34dvh; overflow-y: auto; overscroll-behavior: contain; }
+.bc-share-room { display: flex; align-items: center; gap: 12px; padding: 8px 10px; min-height: 48px; border-radius: 10px; cursor: pointer; }
+.bc-share-room:hover { background: var(--st-hover); }
+.bc-share-room:has(input:checked) { background: var(--st-sel); }
+.bc-share-room:has(input:focus-visible) { outline: 2px solid #526744; outline-offset: -2px; }
+.bc-share-room input { width: 18px; height: 18px; flex-shrink: 0; accent-color: #526744; }
+.bc-share-room .bc-avatar { width: 32px; height: 32px; flex-shrink: 0; }
+.bc-share-room-name { min-width: 0; font-size: 14px; overflow-wrap: anywhere; }
+.bc-share-hint { margin: 8px 6px; font-size: 12px; color: var(--st-muted); }
+.bc-share-error { color: var(--st-err); }
+.bc-share-submit { flex-shrink: 0; min-height: 44px; margin-top: 8px; }
+.bc-share-submit:disabled { opacity: .55; }
+
+.bc-board-notice { max-width: 480px; margin: 48px auto; padding: 0 16px; text-align: center; overflow-wrap: anywhere; }
+.bc-board-notice p { margin: 0 0 16px; font-size: 15px; }
+
+@media (prefers-color-scheme: dark) {
+  .bc-ticket-link, .bc-share-dialog { --st-ink: #e8ecf0; --st-muted: #b4c0cb; --st-line: #3a4a40; --st-bg: #1f2923; --st-hover: #2a362f; --st-sel: #4a4120; --st-err: #ff9a94; }
+  .bc-share-dialog::backdrop { background: #000a; }
+}

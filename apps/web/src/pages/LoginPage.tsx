@@ -1,4 +1,4 @@
-import { meetingReturnPath } from '@banana-chat/chat-core';
+import { meetingReturnPath, ticketReturnPath } from '@banana-chat/chat-core';
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -23,7 +23,7 @@ export function LoginPage() {
     setError(null);
     try {
       const result = await login(username.trim(), password);
-      navigate(result === 'must_change_password' ? '/change-password' : (meetingReturnPath(params.get('returnTo')) ?? '/'), { replace: true });
+      navigate(result === 'must_change_password' ? '/change-password' : (meetingReturnPath(params.get('returnTo')) ?? ticketReturnPath(params.get('returnTo')) ?? '/'), { replace: true });
     } catch (e) {
       setError(e instanceof ApiError ? e.message : `${e instanceof Error ? e.message : String(e)}`);
     } finally {

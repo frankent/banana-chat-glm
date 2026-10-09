@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\CallController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\InviteRedemptionController;
 use App\Http\Controllers\Api\V1\KanbanController;
+use App\Http\Controllers\Api\V1\LinkPreviewController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\MeetingController;
 use App\Http\Controllers\Api\V1\MessageController;
@@ -212,8 +213,13 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/board/tickets', [KanbanController::class, 'tickets']);
         Route::post('/board/tickets', [KanbanController::class, 'create']);
         Route::get('/board/tickets/{id}', [KanbanController::class, 'show'])->whereUlid('id');
+        // API-240 / FR-KAN-007 — slim, read-only ticket card for chat (no description/comments/history)
+        Route::get('/board/tickets/{id}/card', [KanbanController::class, 'card'])->whereUlid('id')->middleware('throttle:board-card');
         Route::patch('/board/tickets/{id}', [KanbanController::class, 'update'])->whereUlid('id');
         Route::post('/board/tickets/{id}/comments', [KanbanController::class, 'comment'])->whereUlid('id');
+
+        // API-241 / FR-MSG-013 / DEC-100 — external link preview (auth + workspace member; SSRF-guarded fetch)
+        Route::get('/link-preview', [LinkPreviewController::class, 'show'])->middleware('throttle:link-preview');
 
         Route::get('/workspace', [WorkspaceController::class, 'show']);
         Route::patch('/workspace', [WorkspaceController::class, 'update']); // API-013 / FR-WS-004

@@ -40,6 +40,13 @@ services:
     environment:
       APP_NAME: "Banana Chat (Staging)"
 
+  previews-worker:
+    volumes: !override
+      - ../apps/api/.env.staging:/app/.env
+      - api-storage:/app/storage
+    environment:
+      APP_NAME: "Banana Chat (Staging)"
+
   scheduler:
     volumes: !override
       - ../apps/api/.env.staging:/app/.env

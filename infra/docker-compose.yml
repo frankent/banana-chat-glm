@@ -220,6 +220,39 @@ services:
       redis:
         condition: service_healthy
 
+  # FR-MSG-013 / DEC-100 — external link-preview fetcher. Its OWN worker (not
+  # Horizon) so egress can be firewalled separately: deny RFC1918, link-local
+  # (169.254.0.0/16) and the docker bridge from this container, e.g. on the host
+  # `iptables -I DOCKER-USER -s <previews-worker ip> -d 10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,169.254.0.0/16 -j DROP`.
+  # SafeUrlFetcher already refuses private targets; the firewall is defence in depth.
+  previews-worker:
+    profiles: ["full"]
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    command: php artisan queue:work redis --queue=previews --tries=1 --timeout=30 --sleep=3 --max-time=3600
+    environment:
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: orgchat
+      DB_USERNAME: orgchat
+      DB_PASSWORD: orgchat
+      DB_SSLMODE: disable
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CACHE_STORE: redis
+      QUEUE_CONNECTION: redis
+    volumes:
+      - ../apps/api:/app
+      - worker-vendor:/app/vendor
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
   # TASK-INF-014 — mock OpenAI-compatible provider for dev/CI/load:
   # point the default AiProvider at http://mock-ai:8787/v1 (dev override:
   # http://localhost:8787/v1). Failure knobs via env or per-request query

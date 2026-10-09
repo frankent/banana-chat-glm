@@ -7,6 +7,7 @@ import { useSession } from '../state/session';
 import { useChatText } from '../lib/use-chat-text';
 import { Avatar, Icon } from './Visual';
 import { NewRoomDialog } from './NewRoomDialog';
+import { appOrigins } from './links/MessageLinkCard';
 
 export function roomTitle(item: RoomListItem) {
   return item.room.type === 'dm' ? item.other_user?.display_name ?? 'Direct message' : item.room.name ?? 'Room';
@@ -22,7 +23,7 @@ function RoomRow({ item, myUserId }: { item: RoomListItem; myUserId: string }) {
       <span className="bc-room-avatar"><Avatar name={roomTitle(item)} avatar={item.room.type === 'dm' ? item.other_user?.avatar : item.room.avatar} />{item.room.type !== 'dm' && <span className="bc-room-kind"><Icon name={item.room.is_secret ? 'lock' : 'users'} size={11} /></span>}</span>
       <span className="bc-room-main">
         <span className="bc-room-line1"><span className={`bc-room-name ${unread ? 'unread' : ''}`}>{roomTitle(item)}</span>{time && <time className="bc-room-time" dateTime={lastAt!} title={time.full}>{time.short}</time>}</span>
-        <span className="bc-room-line2"><span className="bc-room-preview">{roomPreviewText(item.last_message, myUserId)}</span><span className="bc-room-badges">
+        <span className="bc-room-line2"><span className="bc-room-preview">{roomPreviewText(item.last_message, myUserId, { appOrigins: appOrigins(), labels: { ticket: text('room.previewTicket'), meeting: text('room.previewMeeting') } })}</span><span className="bc-room-badges">
           {item.muted && <span className="bc-room-muted" title={text('chat.muted')} aria-label={text('chat.muted')}><Icon name="mute" size={14} /></span>}
           {secretBadge && <span className="bc-room-secret" title="Secret room — auto-deletes at expiry; not end-to-end encrypted" data-testid="secret-room-badge"><Icon name="lock" size={11} />{secretBadge}</span>}
           {unread && <span className="bc-room-unread" aria-label={`${item.unread_count} ${text('chat.unread')}`}>{item.unread_count > 99 ? '99+' : item.unread_count}</span>}

@@ -274,3 +274,153 @@ export async function openChat(page: Page) {
   await expect(page.locator('.bc-chat-header')).toContainText('Design studio');
   await page.getByTestId('message-list').evaluate(el => { el.scrollTop = el.scrollHeight; });
 }
+
+// ---------------------------------------------------------------------------------------------
+// FR-KAN-007 / FR-MSG-013 — ticket share, link cards, external preview. Layered ON TOP of
+// installChatFixture: Playwright runs the newest page.route first, and `route.fallback()` hands
+// anything not handled here to the base fixture (whose catch-all answers 204 to every non-GET,
+// so no write can ever leave the page). Everything that is not the Vite origin is blocked.
+// ---------------------------------------------------------------------------------------------
+export const T_ORIGIN = 'http://127.0.0.1:5180';
+/** Real ticket ids are LOWERCASE ULIDs (HasUlid::strtolower). The mock compares case-SENSITIVELY, like Postgres. */
+export const TICKET_A = '01hx5k8m3p9q2r7s4t6v1w0yza';
+export const TICKET_B = '01hx5k8m3p9q2r7s4t6v1w0yzb';
+export const TICKET_OTHER = '01hx5k8m3p9q2r7s4t6v1w0yzc';
+export const TICKET_ARCHIVED = '01hx5k8m3p9q2r7s4t6v1w0yzd';
+export const TICKET_MISSING = '01hx5k8m3p9q2r7s4t6v1w0yze';
+export const MEET_LIVE = 'a'.repeat(64);
+export const MEET_ENDED = 'b'.repeat(64);
+export const MEET_MISSING = 'c'.repeat(64);
+export const MEET_503 = 'd'.repeat(64);
+export const SECRET_TITLE = 'Quarterly payroll leak SECRET-TITLE-42';
+export const workspaceList = [
+  { workspace: { id: 'ui-workspace', slug: 'ui-studio', name: 'Banana Studio', status: 'active' }, role: 'member', unread_rooms_count: 2, total_unread: 128 },
+  { workspace: { id: 'other-workspace', slug: 'other-team', name: 'Other Team', status: 'active' }, role: 'member', unread_rooms_count: 0, total_unread: 0 },
+  { workspace: { id: 'arch-workspace', slug: 'old-team', name: 'Old Team', status: 'archived' }, role: 'member', unread_rooms_count: 0, total_unread: 0 },
+];
+interface MockTicket { id: string; wsId: string; number: number; title: string; lane: { id: string; name: string; color: string; is_done: boolean }; priority: 'low' | 'medium' | 'high' | 'urgent'; assignee: boolean; due_at: string | null }
+const lane = (id: string, name: string, is_done = false) => ({ id, name, color: '#2563eb', is_done });
+export const LANES = { todo: lane('lane-todo', 'To do'), doing: lane('lane-doing', 'Doing'), done: lane('lane-done', 'Done', true) };
+export type LinkPreviewMock = { status: 'ready'; url: string; title: string | null; description: string | null; site_name: string | null; image_url: string | null; image_expires_at: string | null; fetched_at: string } | { status: 'pending' | 'none'; url: string };
+export type CardsOptions = NonNullable<Parameters<typeof installChatFixture>[1]> & {
+  /** seq -> partial message override (ui-design room); body is what the cards are made from. */
+  messages?: Record<number, Partial<Message>>;
+  /** workspace the viewer starts in (localStorage lastWorkspace) */
+  startWorkspace?: 'ui-studio' | 'other-team' | 'old-team';
+  anonymous?: boolean;
+};
+export async function installCardsFixture(page: Page, opts: CardsOptions = {}) {
+  const blocked: string[] = [];
+  // Lowest priority: anything that is not our Vite origin (or the harness ws) never leaves the machine.
+  await page.route(u => new URL(u.toString()).origin !== T_ORIGIN && !/^wss?:/.test(u.protocol), route => { if (!/fonts\.(googleapis|gstatic)\.com/.test(route.request().url())) blocked.push(route.request().url()); return route.abort('blockedbyclient'); });
+  const base = await installChatFixture(page, opts);
+  if (opts.startWorkspace) await page.addInitScript(slug => localStorage.setItem('orgchat.lastWorkspace', slug), opts.startWorkspace);
+  if (opts.anonymous) await page.addInitScript(() => localStorage.removeItem('orgchat.refresh'));
+  const tickets = new Map<string, MockTicket>([
+    [TICKET_A, { id: TICKET_A, wsId: 'ui-workspace', number: 7, title: SECRET_TITLE, lane: LANES.todo, priority: 'high', assignee: true, due_at: '2026-10-20T00:00:00Z' }],
+    [TICKET_B, { id: TICKET_B, wsId: 'ui-workspace', number: 8, title: '<img src=x onerror="window.__xss=1"> second', lane: LANES.doing, priority: 'low', assignee: false, due_at: null }],
+    [TICKET_OTHER, { id: TICKET_OTHER, wsId: 'other-workspace', number: 3, title: 'Other workspace ticket', lane: LANES.todo, priority: 'medium', assignee: true, due_at: null }],
+    [TICKET_ARCHIVED, { id: TICKET_ARCHIVED, wsId: 'arch-workspace', number: 1, title: 'Archived ticket', lane: LANES.done, priority: 'low', assignee: false, due_at: null }],
+  ]);
+  const forbidden = new Set<string>();
+  const cardRequests: Array<{ id: string; slug: string | undefined }> = [];
+  const ticketDetailRequests: Array<{ id: string; slug: string | undefined }> = [];
+  const previewRequests: string[] = [];
+  const lobbyRequests: string[] = [];
+  const sendRequests: Array<{ roomId: string; body: string; client_message_id: string; slug: string | undefined }> = [];
+  const previews = new Map<string, LinkPreviewMock[]>();
+  const state = { sendFailure: null as null | { status: number; code: string }, sendGate: null as null | Promise<void>, offline: false, previewsEnabled: true, openedLoginUsers: 0 };
+  const bySlug = (slug: string | undefined) => workspaceList.find(w => w.workspace.slug === slug)?.workspace;
+  const card = (t: MockTicket) => ({ id: t.id, workspace_id: t.wsId, number: t.number, title: t.title, type: 'task', priority: t.priority, due_at: t.due_at, version: 1, updated_at: '2026-10-10T00:00:00Z', assignee: t.assignee ? { id: 'ui-peer', display_name: 'มินตรา Chen' } : null, lane: t.lane });
+  const detail = (t: MockTicket) => ({ ...card(t), description: null, lane_id: t.lane.id, assignee_id: t.assignee ? 'ui-peer' : null, reporter_id: me.id, assignee: t.assignee ? { id: 'ui-peer', username: 'ui-peer', display_name: 'มินตรา Chen' } : null, reporter: me, labels: [], attachments: [], comments: [], comments_cursor: null, history: [], created_at: '2026-10-01T00:00:00Z' });
+  const msgs = () => Array.from({ length: 40 }, (_, i) => ({ ...message(i + 1), ...(opts.messages?.[i + 1] ?? {}) }));
+  const err = (route: import('@playwright/test').Route, status: number, code: string) => route.fulfill({ status, json: { error: { code, message: `Synthetic ${code}` } } });
+
+  await page.route('**/__ui-img/**', route => route.fulfill({ status: 200, contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64') }));
+  await page.route('**/api/**', async route => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const path = url.pathname.replace('/api/v1', '');
+    const slug = request.headers()['x-workspace-id'];
+    const json = (data: unknown, status = 200) => route.fulfill({ status, json: { data } });
+    if (path === '/auth/login' && request.method() === 'POST') {
+      state.openedLoginUsers++;
+      return json({ access_token: 'synthetic-access', refresh_token: 'synthetic-ui-token', user: { ...me, locale: 'th', is_system_admin: false, must_change_password: false }, workspaces: workspaceList });
+    }
+    if (path === '/me/workspaces') return json(workspaceList);
+    if (path === '/board') return json({ lanes: Object.values(LANES).map((l, position) => ({ ...l, workspace_id: 'ui-workspace', position })), can_manage: false });
+    if (path === '/board/tickets') return json({ tickets: [...tickets.values()].filter(t => t.wsId === bySlug(slug)?.id).map(t => ({ ...detail(t), lane_id: t.lane.id })), next_cursor: null });
+    const cardMatch = path.match(/^\/board\/tickets\/([^/]+)\/card$/);
+    if (cardMatch) {
+      cardRequests.push({ id: process.env.LINK_MOCK_CI ? cardMatch[1]!.toLowerCase() : cardMatch[1]!, slug });
+      if (state.offline) return route.abort('internetdisconnected');
+      // DIAGNOSTIC ONLY: LINK_MOCK_CI=1 makes the mock case-insensitive to look past the uppercase-id defect.
+      const t = tickets.get(process.env.LINK_MOCK_CI ? cardMatch[1]!.toLowerCase() : cardMatch[1]!);
+      const ws = bySlug(slug);
+      if (!ws) return err(route, 403, 'WS_FORBIDDEN');
+      if (forbidden.has(cardMatch[1]!)) return err(route, 403, 'WS_FORBIDDEN');
+      if (!t || t.wsId !== ws.id) return err(route, 404, 'NOT_FOUND');
+      return route.fulfill({ status: 200, headers: { 'Cache-Control': 'no-store' }, json: { data: card(t) } });
+    }
+    const ticketMatch = path.match(/^\/board\/tickets\/([^/]+)$/);
+    if (ticketMatch && request.method() === 'GET') {
+      ticketDetailRequests.push({ id: ticketMatch[1]!, slug });
+      const t = tickets.get(ticketMatch[1]!); const ws = bySlug(slug);
+      if (!t || !ws || t.wsId !== ws.id) return err(route, 404, 'NOT_FOUND');
+      return json(detail(t));
+    }
+    if (path === '/link-preview') {
+      const target = url.searchParams.get('url') ?? '';
+      previewRequests.push(target);
+      if (!state.previewsEnabled) return json({ status: 'none', url: target });
+      const queue = previews.get(target) ?? [{ status: 'none', url: target } as LinkPreviewMock];
+      return json(queue.length > 1 ? queue.shift() : queue[0]);
+    }
+    const lobby = path.match(/^\/public-meetings\/([0-9a-f]{64})$/);
+    if (lobby) {
+      lobbyRequests.push(lobby[1]!);
+      if (lobby[1] === MEET_ENDED) return err(route, 410, 'MEETING_ENDED');
+      if (lobby[1] === MEET_MISSING) return err(route, 404, 'NOT_FOUND');
+      if (lobby[1] === MEET_503) return err(route, 503, 'CALLS_DISABLED');
+      return json({ title: 'Sprint planning <b>x</b>', expires_at: '2099-01-01T10:00:00Z', capacity: 12, identity: null });
+    }
+    if (/^\/rooms\/[^/]+\/messages$/.test(path) && request.method() === 'POST') {
+      const input = request.postDataJSON() as { body: string; client_message_id: string };
+      sendRequests.push({ roomId: path.split('/')[2]!, body: input.body, client_message_id: input.client_message_id, slug });
+      if (state.sendGate) await state.sendGate;
+      if (state.sendFailure) { const f = state.sendFailure; return err(route, f.status, f.code); }
+      return route.fallback();
+    }
+    if (/^\/rooms\/ui-design\/messages$/.test(path) && request.method() === 'GET' && opts.messages) {
+      const before = Number(url.searchParams.get('before_seq') ?? 0);
+      const all = msgs();
+      const list = before ? all.filter(m => m.seq < before) : all.slice(20);
+      return route.fulfill({ json: { data: { messages: list, has_more_before: !before, has_more_after: false } } });
+    }
+    if (path === '/rooms' && request.method() === 'GET' && opts.messages) {
+      const last = msgs()[39]!;
+      return json(rooms.map((r, i) => i === 0 ? { ...r, last_message: last } : r));
+    }
+    return route.fallback();
+  });
+  return {
+    ...base, blocked, cardRequests, ticketDetailRequests, previewRequests, lobbyRequests, sendRequests, tickets, forbidden,
+    setPreviews: (u: string, queue: LinkPreviewMock[]) => { previews.set(u, queue); },
+    failSend: (f: { status: number; code: string } | null) => { state.sendFailure = f; },
+    holdSend: () => { let release!: () => void; state.sendGate = new Promise<void>(r => { release = r; }); return () => { release(); state.sendGate = null; }; },
+    setOffline: (v: boolean) => { state.offline = v; },
+    disablePreviews: () => { state.previewsEnabled = false; },
+    logins: () => state.openedLoginUsers,
+    moveTicket: (id: string, laneKey: keyof typeof LANES) => { tickets.get(id)!.lane = LANES[laneKey]; },
+    async boardChanged() { await base.emit('board.changed', {}, 'private-workspace.ui-workspace'); },
+    ticketUrl: (id: string, ws: string | null = 'ui-studio') => `${T_ORIGIN}/board/${id}${ws ? `?ws=${ws}` : ''}`,
+  };
+}
+export const luminanceRatio = (a: string, b: string) => {
+  const lum = (rgb: string) => rgb.match(/[\d.]+/g)!.slice(0, 3).map(Number).map(v => { const s = v / 255; return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; }).reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i]!, 0);
+  const [lo, hi] = [lum(a), lum(b)].sort((x, y) => x - y);
+  return (hi! + 0.05) / (lo! + 0.05);
+};
+export async function noHorizontalScroll(page: Page) {
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
+}

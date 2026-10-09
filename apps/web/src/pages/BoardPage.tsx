@@ -4,7 +4,8 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { ApiError } from "@banana-chat/api-client";
 import type {
   KanbanLane,
   KanbanTicket,
@@ -15,7 +16,7 @@ import type {
   TicketPerson,
   TicketComment,
 } from "@banana-chat/shared";
-import { ticketKey, deadlineState } from "@banana-chat/chat-core";
+import { ticketKey, deadlineState, ticketLinkUrl } from "@banana-chat/chat-core";
 import { endpoints } from "../lib/api";
 import { useSession } from "../state/session";
 import { useEcho } from "../echo/EchoProvider";
@@ -25,29 +26,81 @@ import { MarkdownEditor } from "../components/MarkdownEditor";
 import { MediaViewer } from "../components/MediaViewer";
 import { AttachmentView } from "../components/MessageItem";
 import { Markdown } from "../components/ai/Markdown";
+import { ShareTicketDialog } from "../components/ShareTicketDialog";
+import { useChatText } from "../lib/use-chat-text";
+import "../styles/share-ticket.css";
 
 /** TASK-WEB-041: shared workspace board; remount drafts at the workspace boundary. */
 export function BoardPage() {
   const workspace = useSession((s) => s.currentWorkspace);
-  return workspace ? (
+  const workspaces = useSession((s) => s.workspaces);
+  const switchWorkspace = useSession((s) => s.switchWorkspace);
+  const { ticketId } = useParams();
+  const [params] = useSearchParams();
+  const navigate = useNavigate();
+  const { text } = useChatText();
+  // FR-KAN-007: deep link gate for /board/:ticketId?ws=slug. The workspace comes
+  // from the slug only; a non-member slug never reaches the Board (no request).
+  const ws = ticketId ? params.get("ws") : null;
+  const handled = useRef("");
+  const gateKey = `${ticketId ?? ""}|${ws ?? ""}`;
+  const mismatch =
+    ws !== null &&
+    workspace !== null &&
+    ws !== workspace.workspace.slug &&
+    handled.current !== gateKey;
+  const member = ws !== null && workspaces.some((w) => w.workspace.slug === ws);
+  // A URL without ?ws= forgets the last handled link, so re-opening the same
+  // link later is a new visit; a later manual switch is never overridden
+  // because handled stays set for the current (ticketId, ws) URL.
+  useEffect(() => {
+    if (ws === null) handled.current = "";
+  }, [ws]);
+  useEffect(() => {
+    if (mismatch && member && ws !== null) {
+      handled.current = gateKey;
+      switchWorkspace(ws);
+    }
+  }, [mismatch, member, ws, gateKey, switchWorkspace]);
+  if (!workspace) return null;
+  if (mismatch) {
+    if (member) return null;
+    return (
+      <section className="bc-board-notice" data-testid="board-no-access">
+        <p role="alert">{text("board.noAccess")}</p>
+        <button
+          className="bc-board-secondary"
+          data-testid="board-back"
+          onClick={() => navigate("/board", { replace: true })}
+        >
+          {text("board.backToBoard")}
+        </button>
+      </section>
+    );
+  }
+  return (
     <Board
       key={workspace.workspace.id}
       slug={workspace.workspace.slug}
       name={workspace.workspace.name}
       wid={workspace.workspace.id}
+      archived={workspace.workspace.status === "archived"}
     />
-  ) : null;
+  );
 }
 function Board({
   slug,
   name,
   wid,
+  archived,
 }: {
   slug: string;
   name: string;
   wid: string;
+  archived: boolean;
 }) {
   const me = useSession((s) => s.me)!;
+  const { text } = useChatText();
   const navigate = useNavigate(),
     { ticketId } = useParams();
   const qc = useQueryClient(),
@@ -347,7 +400,12 @@ function Board({
             {detail.isLoading ? (
               <p>Loading ticket…</p>
             ) : detail.error ? (
-              <p role="alert">{detail.error.message}</p>
+              <p role="alert" data-testid="ticket-not-found">
+                {detail.error instanceof ApiError &&
+                (detail.error.status === 404 || detail.error.status === 403)
+                  ? text("board.ticketNotFound")
+                  : detail.error.message}
+              </p>
             ) : (
               detail.data && (
                 <TicketDetails
@@ -362,6 +420,7 @@ function Board({
                       : undefined
                   }
                   refresh={refresh}
+                  archived={archived}
                 />
               )
             )}
@@ -735,7 +794,9 @@ function TicketDetails({
   members,
   refresh,
   morePeople,
+  archived,
 }: {
+  archived: boolean;
   ticket: TicketDetail;
   slug: string;
   lanes: KanbanLane[];
@@ -747,6 +808,22 @@ function TicketDetails({
     [body, setBody] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const { text } = useChatText();
+  const [sharing, setSharing] = useState(false),
+    [note, setNote] = useState(""),
+    shareBtn = useRef<HTMLButtonElement>(null),
+    linkInput = useRef<HTMLInputElement>(null);
+  const link = ticketLinkUrl(window.location.origin, ticket.id, slug);
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(link);
+      setNote(text("board.copied"));
+      setTimeout(() => setNote(""), 1500);
+    } catch {
+      linkInput.current?.focus();
+      linkInput.current?.select();
+    }
+  }
   const [older, setOlder] = useState<TicketComment[]>([]),
     [cursor, setCursor] = useState<string | null | undefined>(undefined);
   if (editing)
@@ -777,6 +854,53 @@ function TicketDetails({
           Edit ticket
         </button>
       </div>
+      <div className="bc-ticket-link" data-testid="ticket-link">
+        <div className="bc-ticket-link-field">
+          <input
+            ref={linkInput}
+            readOnly
+            value={link}
+            aria-label={text("board.ticketLink")}
+            data-testid="ticket-link-input"
+            onFocus={(e) => e.currentTarget.select()}
+          />
+        </div>
+        <button
+          type="button"
+          className="bc-board-secondary"
+          data-testid="ticket-copy-link"
+          onClick={() => void copyLink()}
+        >
+          {text("board.copyLink")}
+        </button>
+        <button
+          type="button"
+          ref={shareBtn}
+          className="bc-board-secondary"
+          data-testid="ticket-share"
+          disabled={archived}
+          title={archived ? text("board.shareArchived") : undefined}
+          onClick={() => setSharing(true)}
+        >
+          {text("board.share")}
+        </button>
+        <p className="bc-ticket-link-status" role="status" data-testid="ticket-link-status">
+          {note}
+        </p>
+      </div>
+      {sharing && (
+        <ShareTicketDialog
+          slug={slug}
+          ticketId={ticket.id}
+          ticketLabel={`${ticketKey(slug, ticket.number)} · ${ticket.title}`}
+          archived={archived}
+          returnFocus={shareBtn.current}
+          onClose={() => setSharing(false)}
+          onDone={(room) =>
+            setNote(text("board.shareDone").replace("{room}", room))
+          }
+        />
+      )}
       <dl>
         <dt>Assignee</dt>
         <dd>{ticket.assignee?.display_name ?? "Unassigned"}</dd>

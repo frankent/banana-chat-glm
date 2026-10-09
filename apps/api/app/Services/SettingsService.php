@@ -96,6 +96,11 @@ class SettingsService
         'push.suppress_if_focused_seconds' => 30,
         'storage.quota_per_workspace_gb' => null,
         'app.min_supported_version' => '', // TASK-BE-025: '' = gate off
+        // FR-MSG-013 / DEC-100 — external link previews. enabled=false is the kill
+        // switch (API-241 answers {status:none}, nothing is fetched); blocked_hosts
+        // is an ops-editable extra deny list on top of the SSRF guard.
+        'link_preview.enabled' => true,
+        'link_preview.blocked_hosts' => [],
         'ai.enabled' => true,
         'ai.memory.enabled' => true,
         'ai.memory.max_per_user' => 200,

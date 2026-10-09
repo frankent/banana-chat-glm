@@ -178,3 +178,22 @@ it('TC-CORE-REACT-004 reaction endpoints use PUT/DELETE/GET on the message react
     ['GET', 'http://x/api/v1/rooms/r1/messages/m1/reactions', undefined],
   ]);
 });
+
+// TC-API-CLIENT-CARD-001 — FR-KAN-007 / FR-MSG-013: card + preview endpoints
+it('TC-API-CLIENT-CARD-001 ticketCard and linkPreview hit API-240/241 with the workspace header', async () => {
+  const { Endpoints } = await import('../src/endpoints.js');
+  const tokens = new TokenManager('/api/v1/auth/refresh', memoryStore());
+  tokens.setTokens('a', 'r');
+  const fetchImpl = vi.fn().mockImplementation(() => Promise.resolve(jsonResponse(200, { data: { status: 'none', url: 'u' } })));
+  const api = new Endpoints(new ApiClient('http://x', tokens, fetchImpl as unknown as typeof fetch));
+
+  await api.ticketCard('acme', '01HZX3K9QW8N5T2V7B4C6D0EFH');
+  const external = 'https://news.example.org/a?b=1&c=ä';
+  await api.linkPreview('acme', external);
+
+  const calls = fetchImpl.mock.calls.map(([url, init]) => [init.method ?? 'GET', url, new Headers(init.headers).get('X-Workspace-Id')]);
+  expect(calls).toEqual([
+    ['GET', 'http://x/api/v1/board/tickets/01HZX3K9QW8N5T2V7B4C6D0EFH/card', 'acme'],
+    ['GET', `http://x/api/v1/link-preview?url=${encodeURIComponent(external).replace(/%20/g, '+')}`, 'acme'],
+  ]);
+});

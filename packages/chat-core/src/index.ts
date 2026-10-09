@@ -34,7 +34,7 @@ export { TypingState, TypingPublisher } from './typing.js';
 
 export { continuesMessage } from './message-layout.js';
 export { roomListTime, roomPreviewText } from './room-list-presentation.js';
-export type { RoomListTime } from './room-list-presentation.js';
+export type { RoomListTime, RoomPreviewOptions } from './room-list-presentation.js';
 export { NotificationGate, DesktopNotificationGate, desktopNotificationBody, unreadTitle } from './notification.js';
 export type { AlertKind } from './notification.js';
 export { PrivacyLock, PRIVACY_MODE_STORAGE_KEY, MAX_PRIVACY_SUSPENSION_MS, parsePrivacyModeMirror, privacyModeMirrorValue } from './privacy-lock.js';
@@ -53,6 +53,9 @@ export {
 } from './call-reconnect.js';
 export type { CallDisconnectAction } from './call-reconnect.js';
 export { meetingGuestName, meetingReturnPath } from './meeting.js';
+// FR-MSG-013 / FR-KAN-007 / DEC-100 — ticket / meeting / external link cards.
+export { classifyLink, extractLinkCards, linkPreviewLabel, ticketLinkUrl, ticketReturnPath } from './link-cards.js';
+export type { LinkCard, LinkClass } from './link-cards.js';
 export { editMarkdown } from './markdown-editor.js';
 export type { MarkdownAction } from './markdown-editor.js';
 export {

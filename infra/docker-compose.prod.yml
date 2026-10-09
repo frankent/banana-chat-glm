@@ -171,6 +171,33 @@ services:
     restart: unless-stopped
     logging: *logging
 
+  # FR-MSG-013 / DEC-100 — external link-preview fetcher: its own worker (not
+  # Horizon) so egress can be firewalled apart from the rest of the stack. Deny
+  # this container RFC1918 + 169.254.0.0/16 + the docker bridge (host
+  # DOCKER-USER rule); SafeUrlFetcher already refuses private targets, the
+  # firewall is defence in depth.
+  previews-worker:
+    <<: *api-image
+    command: php artisan queue:work redis --queue=previews --tries=1 --timeout=30 --sleep=3 --max-time=3600
+    volumes:
+      - ../apps/api/.env:/app/.env
+      - api-storage:/app/storage
+    environment: *api-env
+    healthcheck:
+      test: ["CMD-SHELL", "pidof php || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *logging
+
   scheduler:
     <<: *api-image
     command: php artisan schedule:work

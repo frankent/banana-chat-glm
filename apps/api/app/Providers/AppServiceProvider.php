@@ -88,6 +88,17 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(120)->by('react:'.$request->user()?->id);
         });
 
+        // FR-KAN-007 / API-240: a room can hold many ticket cards; viewport-lazy hydration
+        // and react-query dedupe keep real usage low, this is only the ceiling
+        RateLimiter::for('board-card', function (Request $request) {
+            return Limit::perMinute(240)->by('board-card:'.$request->user()?->id);
+        });
+
+        // FR-MSG-013 / API-241: every uncached call can cause an outbound fetch
+        RateLimiter::for('link-preview', function (Request $request) {
+            return Limit::perMinute(60)->by('link-preview:'.$request->user()?->id);
+        });
+
         /*
         |------------------------------------------------------------------
         | FR-PCHAT-031 — PUBLIC CHAT LIMITERS. NAMED, NEVER numeric.

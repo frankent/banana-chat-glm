@@ -54,6 +54,14 @@ return [
 
     'url' => env('APP_URL', 'http://localhost'),
 
+    // DEC-100 link preview: extra hostnames of THIS app (aliases / CDN names), comma separated.
+    // Treated as internal (never fetched). NOT a SettingsService key.
+    'web_origins' => env('APP_WEB_ORIGINS', ''),
+
+    // DEC-100 link preview: this server's own public/egress IPs, comma separated. Never fetched
+    // even though public (hairpin to our own edge). APP_URL's resolved addresses are added at runtime.
+    'own_ips' => env('LINK_PREVIEW_OWN_IPS', ''),
+
     /*
     |--------------------------------------------------------------------------
     | Application Timezone
