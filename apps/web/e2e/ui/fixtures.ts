@@ -43,7 +43,7 @@ const aiConversation = { id: 'ui-ai', title: 'AI composer layout', title_source:
 // aiConsented defaults to true so the 19 pre-existing tests are untouched; TC-UI-013
 // flips it to assert the composer's consent-required label, which is the only way to
 // catch a regression back to a FIXED aria-label (a fixed one is still non-empty).
-export async function installChatFixture(page: Page, opts: { aiConsented?: boolean; aiConfigured?: boolean; aiAllowedInWorkspace?: boolean; systemAdmin?: boolean; aiStatusDelayMs?: number; forwarding?: boolean; roomRole?: RoomListItem['my_role']; locale?: 'th' | 'en' } = {}) {
+export async function installChatFixture(page: Page, opts: { aiConsented?: boolean; aiConfigured?: boolean; aiAllowedInWorkspace?: boolean; systemAdmin?: boolean; aiStatusDelayMs?: number; forwarding?: boolean; roomRole?: RoomListItem['my_role']; locale?: 'th' | 'en'; uploads?: boolean } = {}) {
   // Forward fixtures are opt-in: established layout/read tests rely on 3 rooms and seq 39/40.
   const fixtureRooms: RoomListItem[] = opts.forwarding ? [...rooms,
     { ...rooms[0], room: { ...room, id: 'ui-secret', name: 'Secret project', is_secret: true, secret_expires_at: '2099-01-01T00:00:00Z' }, unread_count: 0 },
@@ -64,6 +64,19 @@ export async function installChatFixture(page: Page, opts: { aiConsented?: boole
   const reactionCountOverrides = new Map<string, Array<{ emoji: string; count: number }>>();
   let reactionLimitFailure = false;
   const reactionRequests: Array<{ method: string; messageId: string; emoji?: string }> = [];
+  // FR-MEDIA-001 — opt-in (`uploads: true`) mock of the whole upload pipeline, so a staged chip can
+  // really reach `ready` and a test can read back exactly what the page asked for and sent.
+  const uploadRequests: Array<{ kind: string; filename: string; mime_type: string; size_bytes: number }> = [];
+  const storagePuts: Array<{ attachmentId: string; bytes: number }> = [];
+  const completeRequests: string[] = [];
+  const sentMessages: Array<Record<string, unknown>> = [];
+  if (opts.uploads) {
+    await page.route('**/__ui-storage/**', async route => {
+      const attachmentId = new URL(route.request().url()).pathname.split('/').pop() ?? '';
+      storagePuts.push({ attachmentId, bytes: route.request().postDataBuffer()?.length ?? 0 });
+      await route.fulfill({ status: 200, headers: { ETag: '"ui-etag"', 'Access-Control-Expose-Headers': 'ETag' }, body: '' });
+    });
+  }
   let reactionPutGate: Promise<void> | null = null;
   let releaseReactionPut: (() => void) | undefined;
   const reactionMembers = [me, peer];
@@ -188,8 +201,22 @@ export async function installChatFixture(page: Page, opts: { aiConsented?: boole
       if (loseForwardResponse) return route.abort('failed');
       return route.fulfill({ status: created ? 201 : 200, json: { data: response } });
     }
+    if (opts.uploads && path === '/uploads' && request.method() === 'POST') {
+      const input = request.postDataJSON() as { kind: string; filename: string; mime_type: string; size_bytes: number };
+      uploadRequests.push(input);
+      const attachmentId = `ui-att-${uploadRequests.length}`;
+      return respond({ attachment_id: attachmentId, put_url: `${url.origin}/__ui-storage/${attachmentId}`, headers: { 'Content-Type': input.mime_type }, expires_at: '2099-01-01T00:00:00Z' });
+    }
+    const completeMatch = path.match(/^\/uploads\/([^/]+)\/complete$/);
+    if (opts.uploads && completeMatch && request.method() === 'POST') {
+      const attachmentId = completeMatch[1]!;
+      completeRequests.push(attachmentId);
+      const upload = uploadRequests[Number(attachmentId.replace('ui-att-', '')) - 1]!;
+      return respond({ attachment: { id: attachmentId, kind: upload.kind, status: 'ready', original_name: upload.filename, mime_type: upload.mime_type, size_bytes: upload.size_bytes, width: null, height: null, duration_ms: null, urls: { original: null, thumb_sm: null, thumb_md: null, poster: null }, urls_expire_at: '2099-01-01T00:00:00Z' } });
+    }
     if (path.endsWith('/messages') && request.method() === 'POST') {
       const input = request.postDataJSON();
+      sentMessages.push(input);
       return respond({ message: { ...message(41, input.body), room_id: path.split('/')[2], sender_id: me.id, sender: me, client_message_id: input.client_message_id } });
     }
     if (path.endsWith('/messages')) {
@@ -209,6 +236,10 @@ export async function installChatFixture(page: Page, opts: { aiConsented?: boole
     return respond([]);
   });
   return {
+    uploadRequests,
+    storagePuts,
+    completeRequests,
+    sentMessages,
     forwardRequests,
     forwardedCopies,
     roomRequests: () => roomRequests,

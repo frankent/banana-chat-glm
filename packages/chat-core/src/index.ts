@@ -134,3 +134,5 @@ export {
   zoomCrop,
 } from './avatar.js';
 export type { AvatarCrop, AvatarFileCheck, AvatarImageSize, AvatarMimeType } from './avatar.js';
+export { pastedImageName, selectPastedImages } from './paste.js';
+export type { PastedImageNameInput, PasteImageSelection, PasteItemLike, PasteSnapshot } from './paste.js';

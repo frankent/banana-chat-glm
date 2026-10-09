@@ -1,7 +1,7 @@
 import { suspendPrivacyLock } from '../lib/privacy';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { KeyboardEvent } from 'react';
-import { TypingPublisher } from '@banana-chat/chat-core';
+import type { ClipboardEvent, KeyboardEvent } from 'react';
+import { TypingPublisher, pastedImageName, selectPastedImages } from '@banana-chat/chat-core';
 import { endpoints } from '../lib/api';
 import type { Message } from '@banana-chat/shared';
 import { DEFAULT_SETTINGS } from '@banana-chat/shared';
@@ -48,6 +48,36 @@ export function Composer({ roomId, workspaceId, slug, senderId, members = [], re
   const draftKey = `orgchat.draft.${senderId}.${workspaceId}.${roomId}`;
   const maxLength = DEFAULT_SETTINGS['message.max_length'];
   const { staged, addFiles, remove, clear } = useUploader(slug);
+
+  // FR-MEDIA-001 / DEC-099 — paste images from the clipboard. React's onPaste on the composer root
+  // hears pastes that bubble up from the textarea and nothing else: no document listener, no
+  // reaching into other fields. When the clipboard also carries real text (a spreadsheet, a Word
+  // selection) the text wins and the browser pastes it as usual — see selectPastedImages.
+  const onPaste = (event: ClipboardEvent<HTMLDivElement>) => {
+    const data = event.clipboardData;
+    const items = Array.from(data.items);
+    const { fileIndices, intercept } = selectPastedImages({
+      items: items.map((item) => ({ kind: item.kind, type: item.type })),
+      plain: data.getData('text/plain'),
+    });
+    if (!intercept) return;
+
+    // getAsFile() is only valid while the event is dispatching — read every file before anything else.
+    const now = new Date();
+    const taken = staged.map((s) => s.filename);
+    const files: File[] = [];
+    for (const index of fileIndices) {
+      const file = items[index]?.getAsFile();
+      if (file == null) continue;
+      const name = pastedImageName({ name: file.name, mime: file.type, now, taken });
+      taken.push(name);
+      files.push(name === file.name ? file : new File([file], name, { type: file.type, lastModified: file.lastModified }));
+    }
+    if (files.length === 0) return;
+
+    event.preventDefault();
+    addFiles(files);
+  };
 
   useEffect(() => {
     setBody(window.sessionStorage.getItem(draftKey) ?? '');
@@ -164,7 +194,7 @@ export function Composer({ roomId, workspaceId, slug, senderId, members = [], re
   };
 
   return (
-    <div className="bc-composer relative">
+    <div className="bc-composer relative" onPaste={onPaste}>
       {reply && <div className="bc-reply-compose"><span><strong>Reply to {reply.sender?.display_name ?? 'message'}</strong><small>{reply.body ?? reply.attachments[0]?.original_name}</small></span><button aria-label="Cancel reply" onClick={onReplyClear}>✕</button></div>}
       {sendError && <p role="alert" className="text-sm text-red-600">{sendError}</p>}
       {staged.length > 0 && (
@@ -181,7 +211,7 @@ export function Composer({ roomId, workspaceId, slug, senderId, members = [], re
               ) : (
                 <span className="text-lg">{s.kind === 'video' ? '🎬' : '📎'}</span>
               )}
-              <span className="max-w-40 truncate">
+              <span className="max-w-40 truncate" title={s.filename}>
                 {s.filename}
                 <span className="block text-[10px] text-slate-400">
                   {s.status === 'error' ? s.error : s.status === 'ready' ? 'พร้อมส่ง' : STATUS_LABEL[s.status]}
