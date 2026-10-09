@@ -83,6 +83,11 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(20)->by('forward:'.$request->user()?->id);
         });
 
+        // FR-MSG-012: reactions are cheap taps, but still bounded per user
+        RateLimiter::for('message-react', function (Request $request) {
+            return Limit::perMinute(120)->by('react:'.$request->user()?->id);
+        });
+
         /*
         |------------------------------------------------------------------
         | FR-PCHAT-031 — PUBLIC CHAT LIMITERS. NAMED, NEVER numeric.

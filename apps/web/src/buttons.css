@@ -15,6 +15,10 @@
   .bc-ai-entry, .bc-search, .bc-reply-quote, .bc-file-preview,
   [data-testid="attachment-file"], [data-testid="search-result-message"],
   [data-testid="search-result-file"], [class~="text-left"],
+  /* Reactions own compact visuals and accessible hit areas. */
+  .bc-reaction-open, .bc-reaction-chip, .bc-quick-reactions button,
+  .bc-menu-reaction-row button, .bc-emoji-picker header button,
+  .bc-emoji-grid button, .bc-reactors button, .bc-reactor-tabs button,
   .bc-people > button, .bc-ticket-image-grid > button, button:has(> img),
   .bc-account-menu button, .bc-account-trigger, .bc-conversations .bc-room-row
 )) {

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Message } from '@banana-chat/shared';
-import { MemoryCacheAdapter, Outbox, type OutboxSendFn } from '../src/index.js';
+import { MemoryCacheAdapter, MessageStore, Outbox, type OutboxSendFn } from '../src/index.js';
 
 /**
  * TASK-CORE-007 (FR-OFF-002) — outbox behavior, TC-CORE-025..032.
@@ -92,6 +92,27 @@ describe('Outbox', () => {
 
     expect(outbox.get(entry.id)).toBeNull();
     expect(delivered[0]?.message.seq).toBe(42);
+  });
+
+  it('TC-CORE-REACT-005 (FR-MSG-012) a send confirmed after a reaction landed keeps the newer summary', async () => {
+    const store = new MessageStore('room-1');
+    const stale = (cid: string) => ({ ...confirmed(cid, 42), reactions: [], my_reaction: null });
+    const { outbox } = makeOutbox({
+      sender: async (entry) => {
+        store.add(stale(entry.client_message_id)); // message.created arrives while the POST is in flight
+        vi.setSystemTime(Date.now() + 10);
+        store.setReactions('server-42', [{ emoji: '👍', count: 1 }], '👍'); // the sender reacts to it
+        vi.setSystemTime(Date.now() + 10);
+        return { ok: true, message: stale(entry.client_message_id) }; // the POST response predates the reaction
+      },
+    });
+    outbox.onDelivered = (_entry, message, fetchedAt) => store.add(message, fetchedAt);
+    await outbox.enqueue({ roomId: 'room-1', workspaceId: 'ws-1', body: 'x' });
+
+    outbox.setOnline(true);
+    await vi.waitFor(() => expect(outbox.all()).toHaveLength(0));
+
+    expect(store.getMessage('server-42')).toMatchObject({ reactions: [{ emoji: '👍', count: 1 }], my_reaction: '👍' });
   });
 
   it('TC-CORE-028 a 4xx failure fails immediately without retry', async () => {

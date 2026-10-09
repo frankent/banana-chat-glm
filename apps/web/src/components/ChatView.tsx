@@ -5,9 +5,9 @@ import {CallButtons} from './calls/CallProvider';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { EventEnvelope, Message, ReadStatusEntry } from '@banana-chat/shared';
+import type { EventEnvelope, Message, ReadStatusEntry, ReactionsChangedEvent } from '@banana-chat/shared';
 import { ApiError } from '@banana-chat/api-client';
-import { SECRET_EXPIRY_MIN_DAYS, SECRET_EXPIRY_MAX_DAYS, continuesMessage, RoomSync, ReadReceiptReporter, secretExpiryAbsolute, secretExpiryState, isSecretRoomActive, type OutboxEntry } from '@banana-chat/chat-core';
+import { SECRET_EXPIRY_MIN_DAYS, SECRET_EXPIRY_MAX_DAYS, continuesMessage, RoomSync, ReadReceiptReporter, secretExpiryAbsolute, secretExpiryState, isSecretRoomActive, applyRoomEvent, type OutboxEntry } from '@banana-chat/chat-core';
 import { sessionOutbox } from '../lib/outbox';
 import { endpoints } from '../lib/api';
 import { evictRoom } from '../lib/room-eviction';
@@ -185,6 +185,10 @@ export function ChatView() {
       }
     };
 
+    const onReactionsChanged = (envelope: EventEnvelope<ReactionsChangedEvent>) => {
+      if (envelope.data) applyRoomEvent(store, 'message.reactions_changed', envelope.data, me.id);
+    };
+
     // EVT-012 delete — tombstone keeps seq, drops body (FR-MSG-006)
     const onDeleted = (envelope: EventEnvelope<{ message_id: string; delete_reason: string | null }>) => {
       const data = envelope.data;
@@ -196,6 +200,7 @@ export function ChatView() {
 
     channel.listen('.message.created', onMessage).listen('.room.read', onRead)
       .listen('.message.updated', onUpdated)
+      .listen('.message.reactions_changed', onReactionsChanged)
       .listen('.message.deleted', onDeleted)
       .listen('.room.updated', onRoomUpdated);
 
@@ -213,6 +218,7 @@ export function ChatView() {
       channel.stopListening('.message.created');
       channel.stopListening('.room.read');
       channel.stopListening('.message.updated');
+      channel.stopListening('.message.reactions_changed', onReactionsChanged);
       channel.stopListening('.message.deleted');
       channel.stopListening('.room.updated');
       channel.stopListening('.room.deleted');
@@ -356,8 +362,9 @@ export function ChatView() {
   const photoText = { ...avatarText[locale], ...roomAvatarText[locale] };
   const openPhoto = (trigger: HTMLElement | null) => { photoReturn.current = trigger; setPhotoOpen(true); };
   const editMessage = async (messageId: string, body: string) => {
+    const startedAt = Date.now();
     const response = await endpoints.editMessage(messageId, slug, body);
-    roomStore(roomId).add(response.message);
+    roomStore(roomId).add(response.message, startedAt);
     void queryClient.invalidateQueries({ queryKey: ['rooms', slug] });
   };
   const deleteMessage = async (messageId: string) => {
@@ -486,6 +493,13 @@ export function ChatView() {
                 onReply={setReply}
                 onJump={jumpTo}
                 onPin={async message => {try {await endpoints.pin(roomId, slug, message.id, true);void pinsQuery.refetch();}catch(e){setToolError(e instanceof Error ? e.message : 'Unable to pin');}}}
+                reactionStore={roomStore(roomId)}
+                reactionApi={{
+                  set: async emoji => endpoints.setReaction(roomId, slug, message.id, emoji),
+                  clear: async () => endpoints.clearReaction(roomId, slug, message.id),
+                  users: async () => endpoints.reactionUsers(roomId, slug, message.id),
+                  counts: async () => (await endpoints.reactionUsers(roomId, slug, message.id)).reactions.map(({ emoji, count }) => ({ emoji, count })),
+                }}
               />
               {/* FR-READ-002 — read receipt sits under our own latest message,
                   not detached in the header where it wasn't tied to what was

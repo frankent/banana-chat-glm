@@ -1,6 +1,7 @@
 import type { PublicMeeting, MeetingLobby, MeetingJoin } from '@banana-chat/shared';
 import type { RoomCall, CallJoin } from '@banana-chat/shared';
 import type { KanbanLane, KanbanTicket, TicketDetail, TicketInput } from '@banana-chat/shared';
+import type { ReactionState, ReactionUsers } from '@banana-chat/shared';
 import type {
   RoomNote,
   AiConversationSummary,
@@ -191,6 +192,18 @@ export class Endpoints {
   pins(roomId: string, slug: string) { return this.api.request<Message[]>(`/api/v1/rooms/${roomId}/pins`, {workspaceSlug:slug}); }
   pin(roomId: string, slug: string, id: string, pinned: boolean) {
     return this.api.request<void>(`/api/v1/rooms/${roomId}/pins/${id}`, {method:pinned ? 'PUT' : 'DELETE', workspaceSlug:slug});
+  }
+  /** API-237 (FR-MSG-012) — set/replace the caller's reaction; idempotent. */
+  setReaction(roomId: string, slug: string, messageId: string, emoji: string) {
+    return this.api.request<ReactionState>(`/api/v1/rooms/${roomId}/messages/${messageId}/reactions`, {method:'PUT', workspaceSlug:slug, body:{emoji}});
+  }
+  /** API-238 — remove the caller's reaction; idempotent, returns the same shape as API-237. */
+  clearReaction(roomId: string, slug: string, messageId: string) {
+    return this.api.request<ReactionState>(`/api/v1/rooms/${roomId}/messages/${messageId}/reactions`, {method:'DELETE', workspaceSlug:slug});
+  }
+  /** API-239 — who reacted with what (≤100 users per emoji). */
+  reactionUsers(roomId: string, slug: string, messageId: string) {
+    return this.api.request<ReactionUsers>(`/api/v1/rooms/${roomId}/messages/${messageId}/reactions`, {workspaceSlug:slug});
   }
   typing(roomId: string, slug: string, typing: boolean) { return this.api.request<void>(`/api/v1/rooms/${roomId}/typing`, {method:'POST', workspaceSlug:slug, body:{typing}}); }
 

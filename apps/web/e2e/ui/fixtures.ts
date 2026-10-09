@@ -43,7 +43,7 @@ const aiConversation = { id: 'ui-ai', title: 'AI composer layout', title_source:
 // aiConsented defaults to true so the 19 pre-existing tests are untouched; TC-UI-013
 // flips it to assert the composer's consent-required label, which is the only way to
 // catch a regression back to a FIXED aria-label (a fixed one is still non-empty).
-export async function installChatFixture(page: Page, opts: { aiConsented?: boolean; aiConfigured?: boolean; aiAllowedInWorkspace?: boolean; systemAdmin?: boolean; aiStatusDelayMs?: number; forwarding?: boolean; roomRole?: RoomListItem['my_role'] } = {}) {
+export async function installChatFixture(page: Page, opts: { aiConsented?: boolean; aiConfigured?: boolean; aiAllowedInWorkspace?: boolean; systemAdmin?: boolean; aiStatusDelayMs?: number; forwarding?: boolean; roomRole?: RoomListItem['my_role']; locale?: 'th' | 'en' } = {}) {
   // Forward fixtures are opt-in: established layout/read tests rely on 3 rooms and seq 39/40.
   const fixtureRooms: RoomListItem[] = opts.forwarding ? [...rooms,
     { ...rooms[0], room: { ...room, id: 'ui-secret', name: 'Secret project', is_secret: true, secret_expires_at: '2099-01-01T00:00:00Z' }, unread_count: 0 },
@@ -60,6 +60,13 @@ export async function installChatFixture(page: Page, opts: { aiConsented?: boole
   let olderRequests = 0;
   const reads: Array<{ roomId: string; seq: number }> = [];
   let olderGate: Promise<void> | null = null;
+  const reactionState = new Map<string, Map<string, Map<string, string>>>();
+  const reactionCountOverrides = new Map<string, Array<{ emoji: string; count: number }>>();
+  let reactionLimitFailure = false;
+  const reactionRequests: Array<{ method: string; messageId: string; emoji?: string }> = [];
+  let reactionPutGate: Promise<void> | null = null;
+  let releaseReactionPut: (() => void) | undefined;
+  const reactionMembers = [me, peer];
   let releaseOlder: (() => void) | undefined;
   const sockets = new Set<WebSocketRoute>();
   const channels = new Set<string>();
@@ -82,9 +89,40 @@ export async function installChatFixture(page: Page, opts: { aiConsented?: boole
     const url = new URL(request.url());
     const path = url.pathname.replace('/api/v1', '');
     const respond = (data: unknown) => route.fulfill({ json: { data } });
+    const reactionMatch = path.match(/^\/rooms\/[^/]+\/messages\/([^/]+)\/reactions$/);
+    if (reactionMatch) {
+      const messageId = reactionMatch[1]!;
+      let byEmoji = reactionState.get(messageId);
+      if (!byEmoji) { byEmoji = new Map(); reactionState.set(messageId, byEmoji); }
+      const snapshot = () => ({ message_id: messageId, reactions: [...byEmoji!.entries()].map(([emoji, users]) => ({ emoji, count: users.size })), my_reaction: [...byEmoji!.entries()].find(([, users]) => users.has(me.id))?.[0] ?? null });
+      if (request.method() === 'PUT') {
+        const emoji = (request.postDataJSON() as { emoji: string }).emoji;
+        reactionRequests.push({ method: 'PUT', messageId, emoji });
+        if (reactionPutGate) await reactionPutGate;
+        if (reactionLimitFailure) { reactionLimitFailure = false; return route.fulfill({ status: 422, json: { error: { code: 'REACTION_LIMIT', message: 'Synthetic reaction limit' } } }); }
+        for (const [oldEmoji, users] of byEmoji) { users.delete(me.id); if (!users.size) byEmoji.delete(oldEmoji); }
+        if (!byEmoji.has(emoji) && byEmoji.size >= 20) return route.fulfill({ status: 422, json: { error: { code: 'REACTION_LIMIT', message: 'Synthetic reaction limit' } } });
+        if (!byEmoji.has(emoji)) byEmoji.set(emoji, new Map());
+        byEmoji.get(emoji)!.set(me.id, emoji);
+        return respond(snapshot());
+      }
+      if (request.method() === 'DELETE') {
+        reactionRequests.push({ method: 'DELETE', messageId });
+        for (const [emoji, users] of byEmoji) { users.delete(me.id); if (!users.size) byEmoji.delete(emoji); }
+        return respond(snapshot());
+      }
+      reactionRequests.push({ method: 'GET', messageId });
+      const users = [...byEmoji.entries()].map(([emoji, members]) => ({ emoji, count: members.size, users: [...members.keys()].map(id => reactionMembers.find(member => member.id === id) ?? { id, username: id, display_name: id, avatar_attachment_id: null }) }));
+      for (const override of reactionCountOverrides.get(messageId) ?? []) {
+        const found = users.find(item => item.emoji === override.emoji);
+        if (found) found.count = override.count;
+        else users.push({ ...override, users: [] });
+      }
+      return respond({ message_id: messageId, reactions: users });
+    }
     if (path === '/broadcasting/auth') return route.fulfill({ json: { auth: 'synthetic:signature' } });
     if (path === '/auth/refresh') return respond({ access_token: 'synthetic-access', refresh_token: 'synthetic-ui-token' });
-    if (path === '/me') return respond({ user: { ...me, locale: 'th', is_system_admin: opts.systemAdmin ?? false }, settings: { locale: 'th', timezone: 'Asia/Bangkok', notification: null } });
+    if (path === '/me') return respond({ user: { ...me, locale: opts.locale ?? 'th', is_system_admin: opts.systemAdmin ?? false }, settings: { locale: opts.locale ?? 'th', timezone: 'Asia/Bangkok', notification: null } });
     if (path === '/me/workspaces') return respond([{ workspace: { id: 'ui-workspace', slug: 'ui-studio', name: 'Banana Studio', status: 'active' }, role: 'member', unread_rooms_count: 2, total_unread: 128 }]);
     if (path === '/rooms') {
       roomRequests++;
@@ -185,6 +223,16 @@ export async function installChatFixture(page: Page, opts: { aiConsented?: boole
     async emit(event: string, data: unknown, channel = 'private-room.ui-design') {
       await expect.poll(() => channels.has(channel)).toBe(true);
       for (const socket of sockets) socket.send(JSON.stringify({ event, channel, data: JSON.stringify({ workspace_id: 'ui-workspace', data }) }));
+    },
+    reactionRequests,
+    failNextReactionLimit: () => { reactionLimitFailure = true; },
+    holdReactionPut: () => { reactionPutGate = new Promise<void>(resolve => { releaseReactionPut = resolve; }); },
+    releaseReactionPut: () => { releaseReactionPut?.(); reactionPutGate = null; },
+    setReactionCountOverride: (messageId: string, counts: Array<{ emoji: string; count: number }>) => { reactionCountOverrides.set(messageId, counts); },
+    seedReaction: (messageId: string, emoji: string, user = peer.id) => {
+      let byEmoji = reactionState.get(messageId); if (!byEmoji) { byEmoji = new Map(); reactionState.set(messageId, byEmoji); }
+      let users = byEmoji.get(emoji); if (!users) { users = new Map(); byEmoji.set(emoji, users); }
+      users.set(user, emoji);
     },
   };
 }

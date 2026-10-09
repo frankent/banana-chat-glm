@@ -1,4 +1,4 @@
-import type { Message, UserStub } from '@banana-chat/shared';
+import type { Message, ReactionCount, UserStub } from '@banana-chat/shared';
 
 export interface GapFillRequest {
   roomId: string;
@@ -37,6 +37,10 @@ export class MessageStore {
   private seeded = false;
   private state: MessageStoreState = { messages: [], needsFill: null, fillTimedOut: false, prependCount: 0 };
   private fillTimer: ReturnType<typeof setTimeout> | null = null;
+  private reactionPending = new Set<string>();
+  private reactionDirty = new Map<string, ReactionCount[][]>();
+  private reactionTouched = new Map<string, number>();
+  private reactionVersions = new Map<string, number>();
 
   constructor(
     public readonly roomId: string,
@@ -57,11 +61,22 @@ export class MessageStore {
     return this.state.messages.map((m) => m.seq);
   }
 
-  /** Replace everything (initial page load) — page itself must be contiguous. */
-  replace(messages: Message[]): MessageStoreState {
+  /**
+   * Replace everything (initial page load) — page itself must be contiguous.
+   * A row that was already loaded merges through the same rule as insert()
+   * (mergeExisting: no undelete, no older edit, FR-MSG-012 summary freshness).
+   */
+  replace(messages: Message[], fetchedAt?: number): MessageStoreState {
+    const previous = new Map(this.byId);
     this.byId.clear();
     for (const message of messages) {
-      this.byId.set(message.id, message);
+      const before = previous.get(message.id);
+      if (before === undefined) {
+        this.byId.set(message.id, message);
+        this.bumpReactionVersion(message.id);
+      } else {
+        this.byId.set(message.id, this.mergeExisting(before, message, fetchedAt));
+      }
     }
     this.seeded = true;
     this.clearTimer();
@@ -75,17 +90,22 @@ export class MessageStore {
     return this.state;
   }
 
-  /** FR-MSG-009: preserve live deliveries while merging a fresh history page. */
-  mergePage(messages: Message[]): void {
-    for (const message of messages) this.insert(message);
+  /**
+   * FR-MSG-009: preserve live deliveries while merging a fresh history page.
+   * `fetchedAt` (ms, taken BEFORE the request; also accepted by add/fillDelivered
+   * for older-page and gap-fill REST pages) lets a page that raced a reaction
+   * change keep the newer local summary (FR-MSG-012).
+   */
+  mergePage(messages: Message[], fetchedAt?: number): void {
+    for (const message of messages) this.insert(message, fetchedAt);
     this.seeded = true;
     this.recompute();
   }
 
-  add(incoming: Message | Message[]): MessageStoreState {
+  add(incoming: Message | Message[], fetchedAt?: number): MessageStoreState {
     const prepended = this.countPrepended(() => {
       for (const message of Array.isArray(incoming) ? incoming : [incoming]) {
-        this.insert(message);
+        this.insert(message, fetchedAt);
       }
     });
     this.recompute(prepended);
@@ -93,20 +113,20 @@ export class MessageStore {
   }
 
   /** Optimistic send keyed by client_message_id; server confirm replaces it. */
-  confirmClientMessage(clientMessageId: string, confirmed: Message): void {
+  confirmClientMessage(clientMessageId: string, confirmed: Message, fetchedAt?: number): void {
     const optimistic = [...this.byId.values()].find((m) => m.client_message_id === clientMessageId);
     if (optimistic !== undefined) {
       this.byId.delete(optimistic.id);
     }
-    this.add(confirmed);
+    this.add(confirmed, fetchedAt);
   }
 
   /** A gap fill arrived — merge, clear flags. */
-  fillDelivered(messages: Message[]): void {
+  fillDelivered(messages: Message[], fetchedAt?: number): void {
     this.clearTimer();
     const prepended = this.countPrepended(() => {
       for (const message of messages) {
-        this.insert(message);
+        this.insert(message, fetchedAt);
       }
     });
     this.recompute(prepended);
@@ -119,9 +139,71 @@ export class MessageStore {
   markDeleted(messageId: string, deletedAt: string, deleteReason: string): MessageStoreState {
     const existing = this.byId.get(messageId);
     if (existing !== undefined) {
-      this.byId.set(messageId, { ...existing, body: null, attachments: [], deleted_at: deletedAt, delete_reason: deleteReason });
+      this.byId.set(messageId, { ...existing, body: null, attachments: [], reactions: [], my_reaction: null, deleted_at: deletedAt, delete_reason: deleteReason });
+      this.bumpReactionVersion(messageId);
       this.recompute();
     }
+    return this.state;
+  }
+
+  getMessage(messageId: string): Message | undefined {
+    return this.byId.get(messageId);
+  }
+
+  /** FR-MSG-012 — a reaction request is in flight; REST/events must not clobber the optimistic state. */
+  isReactionPending(messageId: string): boolean {
+    return this.reactionPending.has(messageId);
+  }
+
+  beginReaction(messageId: string): boolean {
+    if (this.reactionPending.has(messageId)) return false;
+    this.reactionPending.add(messageId);
+    return true;
+  }
+
+  /**
+   * An event for this message was withheld while our request was in flight.
+   * Its counts are kept so the caller can skip the refetch when every withheld
+   * event already equals the response (our own echo).
+   */
+  markReactionDirty(messageId: string, snapshot: ReactionCount[]): void {
+    if (!this.reactionPending.has(messageId)) return;
+    this.reactionDirty.set(messageId, [...(this.reactionDirty.get(messageId) ?? []), snapshot]);
+  }
+
+  /** Ends the in-flight guard; returns the snapshots of events withheld meanwhile (null = none). */
+  endReaction(messageId: string): ReactionCount[][] | null {
+    this.reactionPending.delete(messageId);
+    const withheld = this.reactionDirty.get(messageId) ?? null;
+    this.reactionDirty.delete(messageId);
+    return withheld;
+  }
+
+  /** Bumps on every summary write; a REST snapshot taken at version N is stale once this moves past N. */
+  reactionVersion(messageId: string): number {
+    return this.reactionVersions.get(messageId) ?? 0;
+  }
+
+  private bumpReactionVersion(messageId: string): void {
+    this.reactionVersions.set(messageId, this.reactionVersion(messageId) + 1);
+  }
+
+  /**
+   * FR-MSG-012 — overwrite the reaction summary of one loaded message.
+   * `myReaction === undefined` keeps the viewer's own pick (events carry none).
+   * Tombstones never carry reactions.
+   */
+  setReactions(messageId: string, reactions: ReactionCount[], myReaction?: string | null): MessageStoreState {
+    const existing = this.byId.get(messageId);
+    if (existing === undefined || existing.deleted_at) return this.state;
+    this.reactionTouched.set(messageId, Date.now());
+    this.bumpReactionVersion(messageId);
+    this.byId.set(messageId, {
+      ...existing,
+      reactions,
+      ...(myReaction === undefined ? {} : { my_reaction: myReaction }),
+    });
+    this.recompute();
     return this.state;
   }
 
@@ -154,12 +236,28 @@ export class MessageStore {
     this.clearTimer();
   }
 
-  private insert(message: Message): void {
-    if (this.byId.has(message.id)) {
-      const previous = this.byId.get(message.id)!;
-      if (previous.deleted_at && !message.deleted_at) return;
-      if (previous.edit_count > message.edit_count) return;
-      this.byId.set(message.id, { ...previous, ...message });
+  /** The one place a loaded row absorbs an incoming copy; used by insert() and replace(). */
+  private mergeExisting(previous: Message, message: Message, fetchedAt?: number): Message {
+    if (previous.deleted_at && !message.deleted_at) return previous;
+    if (message.deleted_at) {
+      if (!previous.deleted_at) this.bumpReactionVersion(message.id);
+      return { ...previous, ...message, reactions: [], my_reaction: null };
+    }
+    if (previous.edit_count > message.edit_count) return previous;
+    const touched = this.reactionTouched.get(message.id);
+    const staleSummary = fetchedAt !== undefined && touched !== undefined && fetchedAt <= touched;
+    if (this.reactionPending.has(message.id) || staleSummary) {
+      const { reactions: _r, my_reaction: _m, ...rest } = message;
+      return { ...previous, ...rest };
+    }
+    if (message.reactions !== undefined || message.my_reaction !== undefined) this.bumpReactionVersion(message.id);
+    return { ...previous, ...message };
+  }
+
+  private insert(message: Message, fetchedAt?: number): void {
+    const previous = this.byId.get(message.id);
+    if (previous !== undefined) {
+      this.byId.set(message.id, this.mergeExisting(previous, message, fetchedAt));
       return;
     }
     if (message.client_message_id !== null) {
@@ -170,6 +268,7 @@ export class MessageStore {
       }
     }
     this.byId.set(message.id, message);
+    this.bumpReactionVersion(message.id);
   }
 
   /**

@@ -1,5 +1,6 @@
-import type { MessagePage } from '@banana-chat/shared';
+import type { MessagePage, ReactionsChangedEvent } from '@banana-chat/shared';
 import type { MessageStore } from './message-store.js';
+import { applyReactionsChanged } from './reactions.js';
 
 /** FR-RT-002: catch up the loaded window (including missed edits/deletions). */
 export class RoomSync {
@@ -15,9 +16,10 @@ export class RoomSync {
     let after: number | undefined = this.store.getState().messages.at(0)?.seq;
     after = after === undefined ? undefined : Math.max(0, after - 1);
     while (this.active()) {
+      const startedAt = Date.now();
       const page = await this.fetchPage({ after_seq: after, limit: 100 });
       if (!this.active()) return;
-      this.store.mergePage(page.messages);
+      this.store.mergePage(page.messages, startedAt);
       const tail = page.messages.at(-1)?.seq;
       if (!page.has_more_after || tail === undefined || (after !== undefined && tail <= after)) return;
       after = tail;
@@ -48,7 +50,14 @@ export class ReadReceiptReporter {
 }
 
 /** EVT-010/011/012: identical room-message interpretation on every platform. */
-export function applyRoomEvent(store: MessageStore, event: string, data: { message?: import('@banana-chat/shared').Message; message_id?: string; delete_reason?: string | null }) {
+export function applyRoomEvent(
+  store: MessageStore,
+  event: string,
+  data: { message?: import('@banana-chat/shared').Message; message_id?: string; delete_reason?: string | null } | ReactionsChangedEvent,
+  meId?: string,
+) {
+  if (event === 'message.reactions_changed') { applyReactionsChanged(store, data as ReactionsChangedEvent, meId); return; }
+  data = data as { message?: import('@banana-chat/shared').Message; message_id?: string; delete_reason?: string | null };
   if (event === 'message.deleted' && data.message_id) store.markDeleted(data.message_id, new Date().toISOString(), data.delete_reason ?? 'sender');
   else if (data.message && (event === 'message.created' || event === 'message.updated')) store.add(data.message);
 }

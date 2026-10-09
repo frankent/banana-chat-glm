@@ -112,10 +112,67 @@
 .bc-chat-shell .bc-day-divider::before, .bc-chat-shell .bc-day-divider::after { display: none; }
 .bc-chat-shell .bc-day-divider { justify-content: center; }
 .bc-chat-shell .bc-day-divider > span { border-radius: 12px; padding: 4px 11px; background: #e9edf1; color: #5d6b78; font-size: 11px; }
-.bc-chat-shell .bc-message { gap: 8px; margin: 12px 0 0; align-items: flex-start; }
+.bc-chat-shell .bc-message { position: relative; gap: 8px; margin: 12px 0 0; align-items: flex-start; }
 .bc-chat-shell .bc-message[data-grouped=true] { margin-top: 4px; }
 .bc-chat-shell .bc-message-avatar { width: 30px; height: 30px; border-radius: 50%; font-size: 10px; margin-top: 0; }
 .bc-chat-shell .bc-message-bubble { position: relative; width: fit-content; min-width: 64px; max-width: min(72%,560px); padding: 8px 13px 5px; border: 1px solid #eaf0ec; background: #fff; color: #202b36; border-radius: 6px 18px 18px 18px; box-shadow: none; }
+.bc-chat-shell .bc-reaction-area { display: flex; flex-direction: column; gap: 2px; max-width: 100%; margin: 3px 0 1px; }
+.bc-chat-shell .bc-reaction-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; max-width: 100%; }
+.bc-chat-shell .bc-reaction-chip-wrap { box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; gap: 4px; height: 28px; min-height: 28px; padding: 0 9px; border: 1px solid #dce4ea; border-radius: 999px; background: #f7fafc; color: #263440; font-size: 12px; font-weight: 600; line-height: 1; white-space: nowrap; }
+.bc-chat-shell .bc-reaction-chip-wrap > span:first-child { font-size: 16px; }
+.bc-chat-shell .bc-reaction-chip[aria-pressed=true] .bc-reaction-chip-wrap { border-color: #d9aa23; background: #ffe78a; color: #332800; }
+.bc-chat-shell .bc-reaction-chip { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: auto; min-width: 44px; height: 28px; min-height: 28px; padding: 0; border: 0; border-radius: 999px; background: transparent; color: inherit; line-height: 1.2; }
+.bc-chat-shell .bc-reaction-chip::after { position: absolute; z-index: 1; inset: -8px 0; content: ''; }
+.bc-chat-shell .bc-reaction-chip:focus-visible .bc-reaction-chip-wrap { outline: 2px solid #8a6a00; outline-offset: 1px; }
+.bc-chat-shell .bc-reaction-chip:focus-visible, .bc-chat-shell .bc-quick-reactions button:focus-visible, .bc-chat-shell .bc-menu-reaction-row button:focus-visible, .bc-chat-shell .bc-emoji-grid button:focus-visible { outline: 2px solid #8a6a00; outline-offset: 1px; }
+.bc-chat-shell .bc-quick-reactions { position: absolute; z-index: 40; top: auto; bottom: calc(100% + 4px); display: flex; flex-wrap: nowrap; align-items: center; gap: 0; width: max-content; max-width: calc(100vw - 24px); padding: 3px; border: 1px solid #cbd5dc; border-radius: 999px; background: #fff; box-shadow: 0 5px 16px #17202a30; opacity: 1; transform-origin: center bottom; animation: none; }
+.bc-chat-shell [data-mine=false] .bc-quick-reactions { left: 0; }
+.bc-chat-shell [data-mine=true] .bc-quick-reactions { right: 0; }
+.bc-chat-shell .bc-quick-reactions.is-below { top: calc(100% + 4px); bottom: auto; transform-origin: center top; }
+.bc-chat-shell .bc-quick-reactions button { flex: 0 0 40px; width: 40px; min-width: 40px; height: 40px; min-height: 40px; padding: 0; border: 0; border-radius: 50%; background: transparent; font-size: 19px; }
+.bc-chat-shell .bc-quick-reactions button:hover { background: #eef2f5; }
+.bc-chat-shell .bc-reaction-open { position: absolute; z-index: 3; top: 50%; width: 30px; min-width: 30px; height: 30px; min-height: 30px; padding: 0; border: 1px solid var(--chat-line); border-radius: 50%; background: white; color: #667381; opacity: 0; transform: translateY(-50%); transition: opacity 100ms ease, transform 100ms ease; }
+.bc-chat-shell [data-mine=false] .bc-reaction-open { right: -67px; }
+.bc-chat-shell [data-mine=true] .bc-reaction-open { left: -67px; }
+.bc-chat-shell .bc-message:hover .bc-reaction-open, .bc-chat-shell .bc-message:focus-within .bc-reaction-open { opacity: 1; }
+.bc-chat-shell .bc-reaction-open:focus-visible { opacity: 1; outline: 2px solid #8a6a00; outline-offset: 2px; }
+.bc-menu-reaction-row { display: flex; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 0; padding: 3px 0 8px; border-bottom: 1px solid var(--chat-line); }
+.bc-chat-shell .bc-menu-reaction-row button { flex: 0 0 40px; width: 40px; min-width: 40px; height: 40px; min-height: 40px; padding: 0; border: 0; border-radius: 50%; background: transparent; font-size: 20px; }
+.bc-chat-shell .bc-menu-reaction-row button:hover { background: #eef2f5; }
+.bc-message-menu .bc-menu-reaction-row { display: none; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 0; }
+.bc-message-menu .bc-menu-reaction-row button { flex: 0 0 40px; width: 40px; min-width: 40px; height: 40px; min-height: 40px; padding: 0; justify-content: center; border-radius: 50%; font-size: 20px; }
+.bc-message-menu > button[aria-label*="reacted"], .bc-message-menu > button[aria-label*="รีแอ็กชัน"] { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 0 10px; border: 0; background: transparent; text-align: left; }
+.bc-message-menu > button[aria-label*="reacted"]:hover, .bc-message-menu > button[aria-label*="รีแอ็กชัน"]:hover { background: #f2f5f4; }
+.bc-chat-shell .bc-reaction-note { margin: 3px 0; color: #a44420; font-size: 11px; }
+.bc-emoji-backdrop { position: fixed; z-index: 1100; inset: 0; display: grid; place-items: center; padding: 12px; background: #17202a66; }
+.bc-emoji-picker, .bc-reaction-picker-fallback, .bc-reactors { box-sizing: border-box; width: min(360px, calc(100vw - 24px)); max-height: min(520px, calc(100dvh - 24px)); overflow: auto; padding: 12px; border: 1px solid var(--chat-line, #e8ecf0); border-radius: 16px; background: var(--chat-surface, #fff); color: var(--chat-ink, #202b36); box-shadow: 0 16px 50px #17202a35; }
+.bc-emoji-picker, .bc-reaction-picker-fallback { height: min(520px, calc(100dvh - 24px)); }
+.bc-emoji-picker header, .bc-reactors header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.bc-emoji-picker header button, .bc-reactors header button { width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 8px; background: transparent; font-size: 22px; }
+.bc-emoji-search { display: grid; gap: 4px; font-size: 12px; }
+.bc-emoji-search input { box-sizing: border-box; width: 100%; min-width: 0; min-height: 38px; border: 1px solid var(--chat-line); border-radius: 9px; padding: 6px 9px; background: transparent; color: inherit; }
+.bc-emoji-picker h4 { margin: 10px 0 4px; font-size: 11px; color: var(--chat-muted); }
+.bc-emoji-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(44px, 1fr)); gap: 2px; }
+.bc-emoji-grid button { min-width: 44px; height: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 8px; background: transparent; font-size: 22px; }
+.bc-emoji-grid button:hover { background: #f0f3f5; }
+.bc-reactors ul { display: grid; gap: 8px; margin: 8px 0 0; padding: 0; list-style: none; }
+.bc-reactor-tabs { display: flex; gap: 4px; overflow-x: auto; margin: 4px -4px 8px; padding: 2px 4px 6px; }
+.bc-reactor-tabs button { flex: 0 0 auto; min-height: 38px; padding: 0 10px; border: 1px solid var(--chat-line); border-radius: 999px; background: #f7fafc; color: inherit; font: inherit; font-size: 12px; }
+.bc-reactor-tabs button[aria-selected=true] { border-color: #9aa997; background: #e8eee9; }
+.bc-reactor-tabs button:focus-visible, .bc-reactors button:focus-visible, .bc-emoji-picker button:focus-visible { outline: 2px solid #376fb0; outline-offset: 2px; }
+.bc-reactors [role=tabpanel] { outline: none; }
+.bc-reactors li { display: flex; align-items: center; gap: 9px; font-size: 14px; }
+.bc-reactors button { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: 0 12px; border: 1px solid var(--chat-line, #e8ecf0); border-radius: 8px; background: transparent; color: inherit; font-size: 13px; }
+.bc-reactors li .bc-avatar { width: 32px; height: 32px; }
+@media (hover: hover) and (pointer: fine) { .bc-chat-shell .bc-reaction-open { display: block; } }
+@media (hover: none), (pointer: coarse) { .bc-chat-shell .bc-reaction-open, .bc-chat-shell .bc-quick-reactions { display: none !important; } .bc-message-menu .bc-menu-reaction-row { display: flex; } }
+@media (pointer: coarse) { .bc-chat-shell .bc-quick-reactions button, .bc-message-menu .bc-menu-reaction-row button { flex-basis: 44px; width: 44px; min-width: 44px; height: 44px; min-height: 44px; } }
+@media (max-width: 767px) { .bc-chat-shell [data-mine=false] .bc-reaction-open { right: -78px; } .bc-chat-shell [data-mine=true] .bc-reaction-open { left: -78px; } }
+@media (max-width: 640px) { .bc-message-menu .bc-menu-reaction-row { display: flex; } }
+/* Below 600px the side gutter only fits the 44px actions toggle; the ☺ hover button would be clipped, so reactions go through the actions sheet. */
+@media (max-width: 600px) { .bc-chat-shell .bc-reaction-open { display: none !important; } }
+@media (max-width: 420px) { .bc-chat-shell .bc-message-bubble { max-width: min(84vw, calc(100vw - 72px)); } .bc-chat-shell .bc-reaction-area { max-width: 100%; } }
+@media (prefers-reduced-motion: reduce) { .bc-chat-shell .bc-quick-reactions, .bc-chat-shell .bc-reaction-open, .bc-emoji-picker, .bc-reactors { scroll-behavior: auto; animation: none; transition: none; } }
 .bc-chat-shell .bc-message[data-mine=true] .bc-message-bubble { border-radius: 18px 6px 18px 18px; background: #fff3c4; border-color: #f5ebc9; }
 .bc-chat-shell .bc-message[data-grouped=true][data-mine=false] .bc-message-bubble { border-top-left-radius: 6px; }
 .bc-chat-shell .bc-message[data-grouped=true][data-mine=true] .bc-message-bubble { border-top-right-radius: 6px; border-top-left-radius: 18px; }
@@ -268,6 +325,9 @@
      come within a fraction of a px of the target above it at the default
      4px grouped margin; a coarse pointer needs a bit more breathing room. */
   .bc-chat-shell .bc-message[data-grouped=true] { margin-top: 6px; }
+}
+@media (hover: none), (pointer: coarse) {
+  .bc-message-menu { left: 50% !important; right: auto; top: auto !important; bottom: 0; transform: translateX(-50%); width: min(100vw, 460px); max-width: 460px; max-height: 80dvh; overflow-y: auto; border-radius: 22px 22px 0 0; padding: 10px 12px max(14px, env(safe-area-inset-bottom)); }
 }
 @media (prefers-reduced-motion: reduce) {
   .bc-chat-shell *, .bc-message-menu * { scroll-behavior: auto; transition: none; animation: none; }

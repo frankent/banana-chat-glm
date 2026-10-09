@@ -15,6 +15,7 @@ export function useMessagePage(roomId: string | undefined, slug: string | undefi
   const query = useQuery({
     queryKey: ['messages', roomId, me?.id, currentWorkspace?.workspace.id, aroundSeq ?? 'latest'],
     queryFn: async () => {
+      const startedAt = Date.now();
       const page = await endpoints.messages(roomId!, slug!, aroundSeq !== undefined ? { around_seq: aroundSeq } : {});
       fetched.current = true;
       // FR-ROOM-012 — a request that resolved after the room was evicted
@@ -22,7 +23,7 @@ export function useMessagePage(roomId: string | undefined, slug: string | undefi
       if (scope !== null && isRoomEvicted(scope, roomId!)) {
         return page;
       }
-      store!.mergePage(page.messages);
+      store!.mergePage(page.messages, startedAt);
       // FR-PROF-006 / EVT-087 — carry fresh sender stubs (new photo/name) to
       // every older loaded row by the same people, not just this page's rows.
       store!.updateSenders(page.messages.map(m => m.sender));
@@ -57,9 +58,10 @@ export function useMessagePage(roomId: string | undefined, slug: string | undefi
     const requestGeneration = generation.current;
     setLoadingOlder(true);
     setOlderError(false);
+    const startedAt = Date.now();
     const request = endpoints.messages(roomId, slug, { before_seq: oldest, limit: 50 }).then(page => {
       if (generation.current !== requestGeneration || (scope && isRoomEvicted(scope, roomId))) return false;
-      store.add(page.messages);
+      store.add(page.messages, startedAt);
       setOlderRemaining(page.has_more_before);
       return page.has_more_before;
     }).catch(() => {
@@ -73,8 +75,9 @@ export function useMessagePage(roomId: string | undefined, slug: string | undefi
   }, [roomId, slug, store, me?.id, currentWorkspace?.workspace.id]);
   const fillGap = useCallback(async (afterSeq: number, beforeSeq: number) => {
     if (!roomId || !slug || !store) return;
+    const startedAt = Date.now();
     const page = await endpoints.messages(roomId, slug, { after_seq: afterSeq, limit: Math.min(100, beforeSeq - afterSeq - 1) });
-    store.fillDelivered(page.messages);
+    store.fillDelivered(page.messages, startedAt);
   }, [roomId, slug, store]);
   return { query, loadOlder, fillGap, loadingOlder, olderError, olderRemaining };
 }

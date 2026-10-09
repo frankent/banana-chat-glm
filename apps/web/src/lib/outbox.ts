@@ -32,9 +32,9 @@ export function sessionOutbox() {
         return { ok: false, retryable: !(e instanceof ApiError && e.status < 500), error: e instanceof Error ? e.message : 'Send failed' };
       }
     },
-    onDelivered: (entry, message) => {
+    onDelivered: (entry, message, fetchedAt) => {
       const store = stores.get(entry.room_id);
-      store?.add(message);
+      store?.add(message, fetchedAt);
       if (store) void cache.saveMessages(entry.room_id, store.getState().messages);
       void queryClient.invalidateQueries({ queryKey: ['rooms'] });
       void queryClient.invalidateQueries({ queryKey: ['workspaces'] });

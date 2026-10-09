@@ -185,6 +185,18 @@ class ApiException extends RuntimeException
         return new self('MSG_FORWARD_INVALID', 'ส่งต่อข้อความนี้ไม่ได้', 422, ['reason' => $reason]);
     }
 
+    /** FR-MSG-012 — not a single emoji, or the message cannot be reacted to (system). */
+    public static function reactionInvalid(): self
+    {
+        return new self('REACTION_INVALID', 'ใช้อีโมจินี้ไม่ได้', 422);
+    }
+
+    /** FR-MSG-012 — ≤ 20 distinct emoji per message. */
+    public static function reactionLimit(int $max): self
+    {
+        return new self('REACTION_LIMIT', 'ข้อความนี้มีอีโมจิครบจำนวนสูงสุดแล้ว', 422, ['max' => $max]);
+    }
+
     // ---- Media errors (FR-MEDIA-001, §7.1) ----
 
     public static function mediaTooLarge(int $maxBytes): self

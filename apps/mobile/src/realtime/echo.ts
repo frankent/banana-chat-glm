@@ -41,7 +41,7 @@ export function watchRoomList(callback: () => void) { listWatchers.add(callback)
 function bindRoom(watcher: RoomWatcher) {
   if (!echo) return;
   const channel = echo.private(`room.${watcher.roomId}`);
-  for (const name of ['message.created', 'message.updated', 'message.deleted', 'room.read', 'room.deleted', 'room.member_removed']) {
+  for (const name of ['message.created', 'message.updated', 'message.deleted', 'message.reactions_changed', 'room.read', 'room.deleted', 'room.member_removed']) {
     channel.listen(`.${name}`, (envelope: EventEnvelope<Record<string, unknown>>) => watcher.event(name, envelope.data ?? {}));
   }
   watcher.connection(realtimeConnected());

@@ -29,8 +29,12 @@ export interface OutboxDraft {
 
 export interface OutboxOptions {
   sender?: OutboxSendFn;
-  /** called with the confirmed server message so the UI can replace the optimistic row */
-  onDelivered?: (entry: OutboxEntry, message: Message) => void;
+  /**
+   * called with the confirmed server message so the UI can replace the optimistic row;
+   * `fetchedAt` is taken BEFORE the send request so MessageStore.add can keep a newer
+   * local reaction summary (FR-MSG-012).
+   */
+  onDelivered?: (entry: OutboxEntry, message: Message, fetchedAt: number) => void;
   maxAttempts?: number;
   /** backoff base for retryable failures: base * 2^(attempt-1) */
   baseRetryMs?: number;
@@ -63,7 +67,7 @@ export class Outbox {
   private nextOrder = 1;
 
   sender: OutboxSendFn | null;
-  onDelivered: ((entry: OutboxEntry, message: Message) => void) | null;
+  onDelivered: ((entry: OutboxEntry, message: Message, fetchedAt: number) => void) | null;
   private readonly maxAttempts: number;
   private readonly baseRetryMs: number;
 
@@ -230,6 +234,7 @@ export class Outbox {
           if (this.disposed) return;
 
           let result: OutboxSendResult;
+          const startedAt = Date.now();
           try {
             result = await this.sender(entry);
           } catch (error) {
@@ -240,7 +245,7 @@ export class Outbox {
           if (result.ok) {
             // TC-CORE-027 — optimistic row is replaced by the confirmed message
             this.entries = this.entries.filter((e) => e.id !== entry.id);
-            this.onDelivered?.(entry, result.message);
+            this.onDelivered?.(entry, result.message, startedAt);
           } else if (result.retryable) {
             entry.attempts += 1;
             entry.last_error = result.error;

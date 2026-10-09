@@ -113,7 +113,46 @@ export interface Message {
   attachments: Attachment[];
   /** FR-MSG-011 — set when this message is a forwarded copy; always the ORIGINAL author */
   forwarded_from?: ForwardedFrom | null;
+  /**
+   * FR-MSG-012 — reaction counts, ordered count DESC then code-point ASC.
+   * OPTIONAL: undefined on broadcast frames (EVT-010/011) and search results,
+   * so `?? []` before reading. Only viewer-scoped REST responses carry it.
+   */
+  reactions?: ReactionCount[];
+  /** FR-MSG-012 — the viewer's own emoji (viewer-scoped REST only; never in events). */
+  my_reaction?: string | null;
 }
+
+/** FR-MSG-012 / DEC-098 */
+export interface ReactionCount {
+  emoji: string;
+  count: number;
+}
+
+/** FR-MSG-012 — API-237/238 response and the EVT-089 snapshot minus actor fields. */
+export interface ReactionState {
+  message_id: string;
+  reactions: ReactionCount[];
+  my_reaction: string | null;
+}
+
+/** FR-MSG-012 — API-239 */
+export interface ReactionUsers {
+  message_id: string;
+  reactions: { emoji: string; count: number; users: UserStub[] }[];
+}
+
+/** EVT-089 message.reactions_changed — `actor_emoji` is the ACTOR's emoji after the change (null = removed). */
+export interface ReactionsChangedEvent {
+  room_id: string;
+  message_id: string;
+  reactions: ReactionCount[];
+  actor_id: string;
+  actor_emoji: string | null;
+}
+
+/** FR-MSG-012 / DEC-098 — the five quick reactions; any other Unicode emoji comes from the picker. */
+export const REACTION_PRESETS = ['👍', '❤️', '😂', '😮', '🙏'] as const;
 
 /** FR-MSG-011 / DEC-083 — display_name is a snapshot taken at forward time */
 export interface ForwardedFrom {
@@ -277,6 +316,7 @@ export type RealtimeEventName =
   | 'message.created'
   | 'message.updated'
   | 'message.deleted'
+  | 'message.reactions_changed'
   | 'room.created'
   | 'room.updated'
   | 'room.deleted'
@@ -362,6 +402,9 @@ export const ERROR_CODES = {
   // FR-PROF-006 (DEC-088) — PATCH /me avatar id not an own, ready kind=avatar upload.
   AVATAR_INVALID: 422,
   MEDIA_TOO_LARGE: 422,
+  // FR-MSG-012 (DEC-098) — API-237: not one emoji / system message; 20 distinct emoji per message.
+  REACTION_INVALID: 422,
+  REACTION_LIMIT: 422,
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_CODES;

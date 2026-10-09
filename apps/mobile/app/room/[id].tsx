@@ -103,9 +103,9 @@ export default function RoomScreen() {
     const unsub = outbox.subscribe(() => rebuild());
     outbox.setSender(createOutboxSender({ endpoints, uploadFile, uploadPart, fileExists }));
     // TC-CORE-027 — confirmed server message replaces the optimistic row
-    outbox.onDelivered = (_entry, message) => {
+    outbox.onDelivered = (_entry, message, fetchedAt) => {
       if (!active || message.room_id !== roomId) return;
-      store.add(message);
+      store.add(message, fetchedAt);
       void cache?.saveMessages(roomId, store.getState().messages);
     };
 
@@ -135,13 +135,14 @@ export default function RoomScreen() {
       rebuild();
       // 2. network sync — FR-SRCH-001 jump-to-result seeds around the hit
       try {
+        const startedAt = Date.now();
         const page = await endpoints.messages(
           roomId,
           slug,
           aroundSeq !== undefined && Number.isFinite(aroundSeq) ? { around_seq: aroundSeq } : {},
         );
         if (storeRef.current === store) {
-          store.mergePage(page.messages);
+          store.mergePage(page.messages, startedAt);
           void cache?.saveMessages(roomId, store.getState().messages);
           const last = page.messages.at(-1);
           if (last !== undefined && me !== null && last.seq > 0) {
@@ -188,8 +189,9 @@ export default function RoomScreen() {
       const target = editing;
       setBusy(true);
       try {
+        const startedAt = Date.now();
         const { message: updated } = await endpoints.editMessage(target.id, slug, body);
-        storeRef.current?.add(updated);
+        storeRef.current?.add(updated, startedAt);
         setEditing(null);
         setDraft('');
       } catch {
@@ -276,7 +278,7 @@ export default function RoomScreen() {
         onEndReached={() => {
           const store = storeRef.current;
           const oldest = store?.getState().messages.at(0)?.seq;
-          if (store && workspace && oldest && oldest > 1) void endpoints.messages(roomId, workspace.workspace.slug, { before_seq: oldest }).then(page => { if (storeRef.current === store) store.add(page.messages); }).catch(() => undefined);
+          if (store && workspace && oldest && oldest > 1) { const startedAt = Date.now(); void endpoints.messages(roomId, workspace.workspace.slug, { before_seq: oldest }).then(page => { if (storeRef.current === store) store.add(page.messages, startedAt); }).catch(() => undefined); }
         }}
         renderItem={({ item }) => {
           if (item.outbox !== null) {

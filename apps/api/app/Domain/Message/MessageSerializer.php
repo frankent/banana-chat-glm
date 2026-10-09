@@ -17,9 +17,12 @@ class MessageSerializer
     ) {}
 
     /**
+     * FR-MSG-012: `$reactions` is the viewer overlay (MessageReactions::overlay). null OMITS
+     * both keys — events and bot frames must never carry them.
+     *
      * @return array<string, mixed>
      */
-    public function toArray(Message $message): array
+    public function toArray(Message $message, ?array $reactions = null): array
     {
         $deleted = $message->deleted_at !== null;
 
@@ -48,7 +51,7 @@ class MessageSerializer
             'avatar' => AvatarUrls::for($message->sender->avatarAttachment),
         ] : null;
 
-        return [
+        $row = [
             'id' => $message->id,
             'room_id' => $message->room_id,
             'workspace_id' => $message->workspace_id,
@@ -71,6 +74,28 @@ class MessageSerializer
                 : []),
             'attachments' => $deleted ? [] : $this->serializeAttachments($message),
         ];
+
+        if ($reactions !== null) {
+            $row['reactions'] = $deleted ? [] : $reactions['reactions'];
+            $row['my_reaction'] = $deleted ? null : $reactions['my_reaction'];
+        }
+
+        return $row;
+    }
+
+    /**
+     * FR-MSG-012 — viewer-scoped list/response shape: toArray + reactions in
+     * ONE grouped query for the whole page.
+     *
+     * @param  iterable<Message>  $messages
+     * @return list<array<string, mixed>>
+     */
+    public function toViewerArrays(iterable $messages, ?string $viewerId): array
+    {
+        $messages = collect($messages);
+        $overlay = MessageReactions::overlay($messages->pluck('id'), $viewerId);
+
+        return $messages->map(fn (Message $m) => $this->toArray($m, $overlay[$m->id]))->values()->all();
     }
 
     /**

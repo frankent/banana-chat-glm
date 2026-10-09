@@ -143,7 +143,7 @@ class MessageController extends Controller
 
         return response()->json([
             'data' => [
-                'messages' => $messages->map(fn (Message $m) => $this->serializer->toArray($m))->values(),
+                'messages' => $this->serializer->toViewerArrays($messages, $request->user()->id),
                 'has_more_before' => $hasMoreBefore,
                 'has_more_after' => $hasMoreAfter,
             ],
@@ -191,7 +191,7 @@ class MessageController extends Controller
         ]);
 
         return response()->json([
-            'data' => ['message' => $this->serializer->toArray($message)],
+            'data' => ['message' => $this->serializer->toViewerArrays([$message], $user->id)[0]],
         ], $created ? 201 : 200);
     }
 
@@ -210,7 +210,7 @@ class MessageController extends Controller
         $message = $this->editor->edit($message, $request->user(), $data['body']);
 
         return response()->json([
-            'data' => ['message' => $this->serializer->toArray($message)],
+            'data' => ['message' => $this->serializer->toViewerArrays([$message], $request->user()->id)[0]],
         ]);
     }
 

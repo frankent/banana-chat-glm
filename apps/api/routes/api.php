@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\KanbanController;
 use App\Http\Controllers\Api\V1\MeController;
 use App\Http\Controllers\Api\V1\MeetingController;
 use App\Http\Controllers\Api\V1\MessageController;
+use App\Http\Controllers\Api\V1\MessageReactionController;
 use App\Http\Controllers\Api\V1\NotificationController;
 use App\Http\Controllers\Api\V1\PublicChatAgentController;
 use App\Http\Controllers\Api\V1\PublicChatPartnerController;
@@ -245,6 +246,11 @@ Route::prefix('v1')->group(function (): void {
         Route::put('/rooms/{roomId}/pins/{messageId}', [RoomToolsController::class, 'pin'])->whereUlid('roomId');
         Route::delete('/rooms/{roomId}/pins/{messageId}', [RoomToolsController::class, 'unpin'])->whereUlid('roomId');
         Route::post('/rooms/{roomId}/typing', [RoomToolsController::class, 'typing'])->whereUlid('roomId');
+
+        // FR-MSG-012 / DEC-098 — message reactions (API-237..239)
+        Route::get('/rooms/{roomId}/messages/{messageId}/reactions', [MessageReactionController::class, 'index'])->whereUlid(['roomId', 'messageId']);
+        Route::put('/rooms/{roomId}/messages/{messageId}/reactions', [MessageReactionController::class, 'put'])->whereUlid(['roomId', 'messageId'])->middleware('throttle:message-react');
+        Route::delete('/rooms/{roomId}/messages/{messageId}/reactions', [MessageReactionController::class, 'destroy'])->whereUlid(['roomId', 'messageId'])->middleware('throttle:message-react');
 
         // ---- TIER 3 — support agents (FR-PCHAT-004/005/006/009/010) --------
         // Authorisation is Decision A: active WorkspaceMember of X-Workspace-Id,

@@ -157,3 +157,24 @@ it('TC-AUTH-013 ignores an in-flight response after logout/account change', asyn
   finish(jsonResponse(200, { data: { private: 'old account' } }));
   await expect(pending).rejects.toThrow('Session changed');
 });
+
+// TC-CORE-REACT-004 — FR-MSG-012 endpoints hit the right verb/path/body
+it('TC-CORE-REACT-004 reaction endpoints use PUT/DELETE/GET on the message reactions path', async () => {
+  const { Endpoints } = await import('../src/endpoints.js');
+  const tokens = new TokenManager('/api/v1/auth/refresh', memoryStore());
+  tokens.setTokens('a', 'r');
+  const state = { message_id: 'm1', reactions: [{ emoji: '👍', count: 1 }], my_reaction: '👍' };
+  const fetchImpl = vi.fn().mockImplementation(() => Promise.resolve(jsonResponse(200, { data: state })));
+  const api = new Endpoints(new ApiClient('http://x', tokens, fetchImpl as unknown as typeof fetch));
+
+  await expect(api.setReaction('r1', 'acme', 'm1', '👍')).resolves.toEqual(state);
+  await api.clearReaction('r1', 'acme', 'm1');
+  await api.reactionUsers('r1', 'acme', 'm1');
+
+  const calls = fetchImpl.mock.calls.map(([url, init]) => [init.method ?? 'GET', url, init.body]);
+  expect(calls).toEqual([
+    ['PUT', 'http://x/api/v1/rooms/r1/messages/m1/reactions', JSON.stringify({ emoji: '👍' })],
+    ['DELETE', 'http://x/api/v1/rooms/r1/messages/m1/reactions', undefined],
+    ['GET', 'http://x/api/v1/rooms/r1/messages/m1/reactions', undefined],
+  ]);
+});

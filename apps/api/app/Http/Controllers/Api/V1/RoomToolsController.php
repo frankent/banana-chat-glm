@@ -104,7 +104,15 @@ class RoomToolsController
         $ids = DB::table('room_pins')->where('room_id', $room->id)->pluck('message_id');
         $messages = Message::where('room_id', $room->id)->whereIn('id', $ids)->whereNull('deleted_at')->orderByDesc('seq')->get();
 
-        return response()->json(['data' => $messages->map(fn ($m) => MessageSerializer::forEvent($m))]);
+        $messages->loadMissing([
+            'sender:id,username,display_name,avatar_attachment_id',
+            'sender.avatarAttachment',
+            'replyTo:id,room_id,seq,sender_id,body,deleted_at',
+            'attachments',
+            'mentions:id',
+        ]);
+
+        return response()->json(['data' => app(MessageSerializer::class)->toViewerArrays($messages, $r->user()->id)]);
     }
 
     public function pin(Request $r, string $roomId, string $messageId)

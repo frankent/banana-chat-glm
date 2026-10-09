@@ -26,6 +26,9 @@ export { RoomSync, ReadReceiptReporter } from './room-sync.js';
 export { uploadTicket } from './upload.js';
 export type { CompletedPart } from './upload.js';
 export { applyRoomEvent } from './room-sync.js';
+// FR-MSG-012 / DEC-098 — message reactions (optimistic toggle, realtime merge).
+export { applyReactionsChanged, compareEmoji, reactToMessage, sortReactions, toggleReaction } from './reactions.js';
+export type { ReactionApi } from './reactions.js';
 
 export { TypingState, TypingPublisher } from './typing.js';
 
