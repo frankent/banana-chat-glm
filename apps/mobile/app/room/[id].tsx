@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, Image, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
-import { useLocalSearchParams } from 'expo-router';
-import { MessageStore, Outbox, RoomSync, ReadReceiptReporter, applyRoomEvent, type OutboxEntry } from '@banana-chat/chat-core';
-import type { Message } from '@banana-chat/shared';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { MessageStore, Outbox, RoomSync, ReadReceiptReporter, applyRoomEvent, isAiBotUsername, type OutboxEntry } from '@banana-chat/chat-core';
+import type { Message, RoomRosterMember, UserStub } from '@banana-chat/shared';
 import { roomCache, scopedOutbox, useSession } from '../../src/auth/session';
 import { endpoints } from '../../src/lib/api';
+import { ProfileSheet } from '../../src/profile/ProfileSheet';
+import { SenderAvatar } from '../../src/profile/SenderAvatar';
+import { resolveRoomType } from '../../src/profile/dm-flow';
 import { parseAroundSeq } from '../../src/lib/search-utils';
 import { createOutboxSender } from '../../src/offline/outbox-flusher';
 import { fileExists, uploadFile, uploadPart } from '../../src/offline/upload';
@@ -32,8 +35,46 @@ export default function RoomScreen() {
   const { id, around_seq: aroundSeqParam } = useLocalSearchParams<{ id: string; around_seq?: string }>();
   const roomId = typeof id === 'string' ? id : '';
   const aroundSeq = parseAroundSeq(typeof aroundSeqParam === 'string' ? aroundSeqParam : undefined);
+  const router = useRouter();
   const me = useSession((s) => s.me);
   const workspace = useSession((s) => s.currentWorkspace);
+
+  const slug = workspace?.workspace.slug;
+  const profileRoomId = useRef<string | null>(null);
+  const [profile, setProfile] = useState<{ user: UserStub; slug: string } | null>(null);
+  const [resolvedRoom, setResolvedRoom] = useState<{ roomId: string; slug: string; type: string | null } | null>(null);
+  const roomType = resolvedRoom?.roomId === roomId && resolvedRoom.slug === slug ? resolvedRoom.type : null;
+  const [roster, setRoster] = useState<RoomRosterMember[]>([]);
+  const rosterFetch = useRef({ lastFetch: 0 });
+
+  useEffect(() => {
+    let active = true;
+    setResolvedRoom(null);
+    setRoster([]);
+    rosterFetch.current = { lastFetch: 0 };
+    if (roomId && slug) {
+      void resolveRoomType(roomId, () => roomCache()?.loadRooms() ?? Promise.resolve(null), () => endpoints.room(roomId, slug))
+        .then(type => { if (active) setResolvedRoom({ roomId, slug, type }); });
+    }
+    return () => { active = false; rosterFetch.current = { lastFetch: 0 }; };
+  }, [roomId, slug]);
+
+  // A room/workspace switch dismisses the sheet (not `me` churn, so this is its own effect).
+  useEffect(() => { setProfile(null); }, [roomId, slug]);
+  // Another room pushed on top (notification tap) leaves this screen mounted: blur dismisses the sheet and disposes its DM flow.
+  useFocusEffect(useCallback(() => () => setProfile(null), []));
+
+  const openProfile = (user: UserStub) => {
+    if (!slug) return;
+    profileRoomId.current = roomId;
+    setProfile({ user, slug });
+    const fetchScope = rosterFetch.current;
+    if (fetchScope.lastFetch !== 0 && Date.now() - fetchScope.lastFetch <= 30_000) return;
+    fetchScope.lastFetch = Date.now();
+    void endpoints.roomMembers(roomId, slug).then(members => {
+      if (rosterFetch.current === fetchScope) setRoster(members);
+    }).catch(() => undefined);
+  };
 
   const storeRef = useRef<MessageStore | null>(null);
   const outboxRef = useRef<Outbox | null>(null);
@@ -269,6 +310,7 @@ export default function RoomScreen() {
       {!online && <Text style={styles.offlineBanner}>{t('offline.banner')}</Text>}
       <FlashList
         data={rows}
+        extraData={roomType}
         keyExtractor={(item: Row) => item.key}
         inverted
         onViewableItemsChanged={({ viewableItems }) => {
@@ -307,13 +349,20 @@ export default function RoomScreen() {
           const m = item.message!;
           const mine = m.sender_id === me?.id;
           const gone = m.deleted_at !== null;
-          return (
+          const showProfile = roomType !== null && roomType !== 'dm' && !mine && m.type !== 'system' && m.sender != null && !isAiBotUsername(m.sender.username);
+          const profileLabel = t('profile.open').replace('{name}', m.sender?.display_name || m.sender?.username || m.sender_id);
+          const bubble = (
             <Pressable
               onLongPress={() => { if (!gone) setActionsFor(m); }}
               delayLongPress={300}
-              style={[styles.bubble, mine ? styles.mine : styles.theirs]}
+              accessible={showProfile ? false : undefined}
+              style={[styles.bubble, mine ? styles.mine : styles.theirs, showProfile && styles.profileBubble]}
             >
-              {!mine && <Text style={styles.sender}>{m.sender?.display_name ?? m.sender_id}</Text>}
+              {showProfile ? (
+                <Pressable accessibilityRole="button" accessibilityLabel={profileLabel} style={styles.senderTrigger} onPress={() => openProfile(m.sender!)} onLongPress={() => { if (!gone) setActionsFor(m); }} delayLongPress={300}>
+                  <Text style={styles.sender}>{m.sender?.display_name ?? m.sender_id}</Text>
+                </Pressable>
+              ) : !mine && <Text style={styles.sender}>{m.sender?.display_name ?? m.sender_id}</Text>}
               {!gone && m.type !== 'system' && m.forwarded_from && <Text style={[styles.forwarded, mine && styles.forwardedMine]}>{m.forwarded_from.display_name ? t('message.forwardedFrom').replace('{name}', m.forwarded_from.display_name) : t('message.forwardedUnknown')}</Text>}
               {m.reply_to !== null && (
                 <View style={styles.replyQuote}>
@@ -344,6 +393,14 @@ export default function RoomScreen() {
               </View>
             </Pressable>
           );
+          return showProfile ? (
+            <View style={styles.senderRow}>
+              <Pressable accessibilityRole="button" accessibilityLabel={profileLabel} style={styles.avatarTrigger} onPress={() => openProfile(m.sender!)}>
+                <SenderAvatar user={m.sender!} />
+              </Pressable>
+              {bubble}
+            </View>
+          ) : bubble;
         }}
       />
       {(replyTo !== null || editing !== null) && (
@@ -386,6 +443,18 @@ export default function RoomScreen() {
         </Pressable>
       </View>
 
+      {profile !== null && profile.slug === slug && profileRoomId.current === roomId && (
+        <ProfileSheet
+          key={`${slug}:${roomId}:${profile.user.id}`}
+          user={profile.user}
+          slug={profile.slug}
+          roster={roster.find(member => member.id === profile.user.id)}
+          isSelf={profile.user.id === me?.id}
+          onClose={() => setProfile(null)}
+          onNavigate={id => { setProfile(null); router.push(`/room/${id}`); }}
+        />
+      )}
+
       {/* Long-press action sheet. Edit and Delete are offered only for your own
           messages -- the server enforces it too, but showing an action that is
           guaranteed to 403 is worse than not showing it. */}
@@ -422,6 +491,10 @@ const styles = StyleSheet.create({
   mine: { alignSelf: 'flex-end', backgroundColor: theme.colors.primary },
   theirs: { alignSelf: 'flex-start', backgroundColor: theme.colors.surface },
   failed: { backgroundColor: theme.colors.surfaceAlt, borderWidth: 1, borderColor: theme.colors.danger },
+  profileBubble: { flexShrink: 1 },
+  senderRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  avatarTrigger: { width: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  senderTrigger: { minHeight: 44, minWidth: 44, justifyContent: 'center' },
   sender: { color: theme.colors.primary, fontSize: 12, marginBottom: 2 },
   forwarded: { color: '#b8c6d9', fontSize: 12, marginBottom: 4 },
   forwardedMine: { color: '#394638' },

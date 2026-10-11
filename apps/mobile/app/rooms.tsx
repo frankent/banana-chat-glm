@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import type { RoomListItem } from '@banana-chat/shared';
 import { useSession, roomCache } from '../src/auth/session';
 import { endpoints } from '../src/lib/api';
@@ -43,6 +43,13 @@ export default function RoomsScreen() {
       await sync();
     })();
   }, [sync, me?.id]);
+
+  // Coming back from a room (e.g. after Chat 1-1 created a DM while realtime was down) re-syncs the list; the first focus is covered by the mount effect above.
+  const focusedOnce = useRef(false);
+  useFocusEffect(useCallback(() => {
+    if (focusedOnce.current) void sync();
+    focusedOnce.current = true;
+  }, [sync]));
 
   useEffect(() => watchRoomList(() => { void sync(); }), [sync]);
 

@@ -73,6 +73,11 @@
             "esModuleInterop": true,
             "resolveJsonModule": true,
             "jsx": "react-jsx"
+          },
+          "diagnostics": {
+            "ignoreCodes": [
+              2823
+            ]
           }
         }
       ]
