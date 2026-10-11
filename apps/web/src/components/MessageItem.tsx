@@ -7,9 +7,10 @@ import { useSession } from '../state/session';
 import { MediaViewer } from './MediaViewer';
 import { Markdown } from './ai/Markdown';
 import { Avatar, Icon } from './Visual';
+import { ProfileAvatarButton } from './ProfileAvatarButton';
 import { CallStartedCard } from './calls/CallStartedCard';
 import { MessageLinkCard, hiddenBodyRef, messageCardInfo } from './links/MessageLinkCard';
-import { REACTION_PRESETS, type Attachment, type Message, type ReactionCount, type ReactionUsers } from '@banana-chat/shared';
+import { REACTION_PRESETS, type UserStub, type Attachment, type Message, type ReactionCount, type ReactionUsers } from '@banana-chat/shared';
 import { ApiError } from '@banana-chat/api-client';
 import { reactToMessage, sortReactions, type MessageStore } from '@banana-chat/chat-core';
 import { reactionsText } from '../lib/reactions-text';
@@ -253,6 +254,8 @@ export interface MessageItemProps {
   replySender?: string;
   secretActive?: boolean;
   onForward?: (message: Message, trigger: HTMLButtonElement | null) => void;
+  /** FR-PROF-009 — sender avatar/name click; absent => plain avatar/name as before */
+  onOpenProfile?: (sender: UserStub, trigger: HTMLButtonElement) => void;
   /** sender may edit+delete; room owner/admin may delete as moderator (FR-MSG-005/006) */
   canModerate?: boolean;
   onReply?: (message: Message) => void;
@@ -269,7 +272,7 @@ export interface MessageItemProps {
   };
 }
 
-export function MessageItem({ message, mine, canModerate = false, grouped = false, showSender = true, replySender, secretActive = false, onForward, onEdit, onDelete, onReply, onPin, onJump, reactionStore, reactionApi }: MessageItemProps) {
+export function MessageItem({ message, mine, canModerate = false, grouped = false, showSender = true, replySender, secretActive = false, onForward, onOpenProfile, onEdit, onDelete, onReply, onPin, onJump, reactionStore, reactionApi }: MessageItemProps) {
   const { text, locale } = useChatText();
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -429,11 +432,13 @@ export function MessageItem({ message, mine, canModerate = false, grouped = fals
 
   return (
     <div className={`bc-message group flex ${mine ? 'justify-end' : 'justify-start'}`} data-testid="message" data-mine={mine} data-grouped={grouped}>
-      {!mine && showSender && <Avatar name={message.sender?.display_name ?? 'Member'} avatar={message.sender?.avatar} className="bc-message-avatar" />}
+      {!mine && showSender && (onOpenProfile && message.sender
+        ? <ProfileAvatarButton variant="avatar" sender={message.sender} hidden={grouped} label={text('profile.open').replace('{name}', message.sender.display_name)} onOpen={onOpenProfile} />
+        : <Avatar name={message.sender?.display_name ?? 'Member'} avatar={message.sender?.avatar} className="bc-message-avatar" />)}
       <div ref={bubbleRef} tabIndex={-1} data-compact={compactText} className={`bc-message-bubble ${pending ? 'is-pending' : ''}`}>
         {mayReact && <button ref={reactionOpenRef} type="button" className="bc-reaction-open" aria-label={reactionCopy.react} title={reactionCopy.react} onClick={toggleQuick}>☺</button>}
         {!mine && showSender && message.sender !== null && (
-          <p className="text-xs font-semibold text-slate-600">{message.sender.display_name}</p>
+          <p className="text-xs font-semibold text-slate-600">{onOpenProfile ? <ProfileAvatarButton variant="name" sender={message.sender} hidden={grouped} label={text('profile.open').replace('{name}', message.sender.display_name)} onOpen={onOpenProfile} /> : message.sender.display_name}</p>
         )}
         {!deleted && message.forwarded_from && <p className="bc-forwarded-header" data-testid="forwarded-header"><span aria-hidden="true">↪ </span>{message.forwarded_from.display_name ? text('message.forwardedFrom').replace('{name}', message.forwarded_from.display_name) : text('message.forwardedUnknown')}</p>}
         {!deleted && message.reply_to && <button className="bc-reply-quote" onClick={() => message.reply_to?.seq && onJump?.(message.reply_to.seq)}><strong>{replySender ?? text('message.reply')}</strong><span>{message.reply_to.deleted ? 'Deleted message' : message.reply_to.snippet}</span></button>}

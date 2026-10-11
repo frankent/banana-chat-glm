@@ -56,6 +56,9 @@ export { meetingGuestName, meetingReturnPath } from './meeting.js';
 // FR-MSG-013 / FR-KAN-007 / DEC-100 — ticket / meeting / external link cards.
 export { classifyLink, extractLinkCards, linkPreviewLabel, ticketLinkUrl, ticketReturnPath } from './link-cards.js';
 export type { LinkCard, LinkClass } from './link-cards.js';
+// FR-PROF-009 / DEC-101 — avatar profile popup + 1-1 chat helpers.
+export { classifyDmError, findExistingDmRoomId, isAiBotUsername } from './profile-popup.js';
+export type { DmFailureKind } from './profile-popup.js';
 export { editMarkdown } from './markdown-editor.js';
 export type { MarkdownAction } from './markdown-editor.js';
 export {

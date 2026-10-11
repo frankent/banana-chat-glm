@@ -43,6 +43,7 @@ import type {
   SearchPage,
   UploadTicket,
   UserStub,
+  RoomRosterMember,
   WorkspaceInvite,
   WorkspaceSummary,
 } from '@banana-chat/shared';
@@ -346,7 +347,7 @@ export class Endpoints {
 
   /** Room roster for @mention autocomplete (flat cursor-paginated array, API-024). */
   roomMembers(roomId: string, slug: string) {
-    return this.api.request<Array<UserStub & { role: string }>>(`/api/v1/rooms/${roomId}/members?limit=100`, { workspaceSlug: slug });
+    return this.api.request<RoomRosterMember[]>(`/api/v1/rooms/${roomId}/members?limit=100`, { workspaceSlug: slug });
   }
 
   // -- messages (API-040/041) --

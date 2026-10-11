@@ -298,7 +298,7 @@
   .bc-room-tools > summary { width: 44px; height: 44px; }
   .bc-chat-ai-notice { padding: 7px 12px; font-size: 10px; align-items: flex-start; gap: 5px; }
   .bc-timeline-content { padding: 14px 12px 12px; }
-  .bc-chat-shell .bc-message-avatar { display: none; }
+  .bc-chat-shell .bc-message-avatar { width: 24px; height: 24px; font-size: 9px; border-radius: 8px; }
   .bc-chat-shell .bc-message-bubble { max-width: 84%; padding: 8px 12px 5px; }
   .bc-chat-shell .bc-markdown { font-size: 16px; line-height: 1.55; }
   #root .bc-chat-shell .bc-message-actions-toggle { width: 44px; min-width: 44px; height: 44px; min-height: 44px; left: 100%; opacity: 1; color: #73808b; }

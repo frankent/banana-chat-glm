@@ -21,7 +21,9 @@ use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 
 /**
- * FR-ROOM-001/002/012 — DM via dm_key dedupe (200) or create (201);
+ * FR-ROOM-001/002/012 — DM via dm_key dedupe (200) or create (201); dm_key is
+ * unique per workspace (UNIQUE(workspace_id, dm_key)), so the same pair can
+ * have one DM in each workspace they share;
  * group with creator as owner + member_added system message at seq 1.
  *
  * Secret rooms ($expiryDays 1..30): a separate namespace — a secret DM never
@@ -76,7 +78,11 @@ class CreateRoomAction
             });
         } catch (UniqueConstraintViolationException) {
             // race: the other party created the same room first — return theirs
-            $existing = Room::query()->where('dm_key', $dmKey)->whereNull('deleted_at')->firstOrFail();
+            $existing = Room::query()
+                ->where('workspace_id', $this->context->id())
+                ->where('dm_key', $dmKey)
+                ->whereNull('deleted_at')
+                ->firstOrFail();
 
             if (! $existing->isExpired()) {
                 return [$existing, false];

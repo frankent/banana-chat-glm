@@ -31,6 +31,19 @@ export interface UserStub {
   avatar?: UserAvatar | null;
 }
 
+/**
+ * FR-PROF-009 / DEC-101 — reserved username of the AI room bot
+ * (`GenerateRoomBotReply::bot()`); clients never open a profile for it.
+ */
+export const AI_BOT_USERNAME = '__banana_ai_bot__';
+
+/** API-024 room roster entry: user stub + room role (+ presence when known). */
+export interface RoomRosterMember extends UserStub {
+  role: string;
+  joined_at?: string | null;
+  presence?: 'online' | 'offline';
+}
+
 export interface WorkspaceSummary {
   /** avatar: FR-WS-004/DEC-093 — URLs are server-minted per payload; null/absent = no photo. */
   workspace: { id: string; slug: string; name: string; status: string; avatar_attachment_id?: string | null; avatar?: UserAvatar | null };

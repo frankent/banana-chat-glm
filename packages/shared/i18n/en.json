@@ -337,5 +337,18 @@
   "chat.meetingMissing": "Meeting not found",
   "chat.linkPreviewOpen": "Open link",
   "room.previewTicket": "🎫 Ticket",
-  "room.previewMeeting": "📹 Meeting"
+  "room.previewMeeting": "📹 Meeting",
+  "profile.open": "View profile: {name}",
+  "profile.close": "Close",
+  "profile.dm": "Chat 1-1",
+  "profile.dmOpening": "Opening…",
+  "profile.online": "Online",
+  "profile.offline": "Offline",
+  "profile.roleOwner": "Group owner",
+  "profile.roleAdmin": "Group admin",
+  "profile.self": "This is you",
+  "profile.unavailable": "This person can't be messaged",
+  "profile.errForbidden": "You don't have permission to message this person in this workspace.",
+  "profile.errNetwork": "Could not connect. Check your internet and try again.",
+  "profile.errGeneric": "Could not open the chat. Please try again."
 }

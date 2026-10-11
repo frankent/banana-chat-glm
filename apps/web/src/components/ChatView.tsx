@@ -5,9 +5,9 @@ import {CallButtons} from './calls/CallProvider';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { EventEnvelope, Message, ReadStatusEntry, ReactionsChangedEvent } from '@banana-chat/shared';
+import type { EventEnvelope, UserStub, Message, ReadStatusEntry, ReactionsChangedEvent } from '@banana-chat/shared';
 import { ApiError } from '@banana-chat/api-client';
-import { SECRET_EXPIRY_MIN_DAYS, SECRET_EXPIRY_MAX_DAYS, continuesMessage, RoomSync, ReadReceiptReporter, secretExpiryAbsolute, secretExpiryState, isSecretRoomActive, applyRoomEvent, type OutboxEntry } from '@banana-chat/chat-core';
+import { SECRET_EXPIRY_MIN_DAYS, SECRET_EXPIRY_MAX_DAYS, continuesMessage, RoomSync, ReadReceiptReporter, secretExpiryAbsolute, secretExpiryState, isSecretRoomActive, applyRoomEvent, findExistingDmRoomId, type OutboxEntry } from '@banana-chat/chat-core';
 import { sessionOutbox } from '../lib/outbox';
 import { endpoints } from '../lib/api';
 import { evictRoom } from '../lib/room-eviction';
@@ -16,6 +16,7 @@ import { useMessagePage } from '../hooks/useMessages';
 import { useEcho } from '../echo/EchoProvider';
 import { useSession } from '../state/session';
 import { ForwardDialog } from './ForwardDialog';
+import { ProfilePopover } from './ProfilePopover';
 import { MessageItem } from './MessageItem';
 import { ReadReceiptTrigger, ReadReceiptDialog } from './ReadReceipt';
 import { Avatar, Icon } from './Visual';
@@ -49,6 +50,7 @@ export function ChatView() {
   const jumpedRef = useRef<string | undefined>(undefined);
   const [forward, setForward] = useState<{ message: Message; trigger: HTMLButtonElement | null; slug: string } | null>(null);
   const [forwardStatus, setForwardStatus] = useState('');
+  const [profile, setProfile] = useState<{ sender: UserStub; trigger: HTMLButtonElement; rect: DOMRect; slug: string } | null>(null);
   useEffect(() => { if (forwardStatus) { const timer = setTimeout(() => setForwardStatus(''), 6000); return () => clearTimeout(timer); } }, [forwardStatus]);
   const [reply, setReply] = useState<Message | null>(null);
   // FR-READ-002 — owned by the room, not by whichever message triggered it:
@@ -66,7 +68,7 @@ export function ChatView() {
   const [renameOpen, setRenameOpen] = useState(false);
   const [addMembersOpen, setAddMembersOpen] = useState(false);
   const photoReturn = useRef<HTMLElement | null>(null);
-  useEffect(() => {setForward(null);setForwardStatus('');setSecretChatFor(null);setReply(null);setNotesOpen(false);setMediaOpen(false);setToolError('');setReadListFor(null);setPhotoOpen(false);setRenameOpen(false);setAddMembersOpen(false);}, [roomId, slug]);
+  useEffect(() => {setForward(null);setProfile(null);setForwardStatus('');setSecretChatFor(null);setReply(null);setNotesOpen(false);setMediaOpen(false);setToolError('');setReadListFor(null);setPhotoOpen(false);setRenameOpen(false);setAddMembersOpen(false);}, [roomId, slug]);
   const listRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const visible = useRef(false);
@@ -86,6 +88,11 @@ export function ChatView() {
     setReturnPosition(row ? {seq: Number(row.dataset.seq), offset: row.getBoundingClientRect().top - top} : null);
     jumpedRef.current = undefined;
     setSearchParams({ around_seq: String(seq) });
+  };
+  const openProfile = (sender: UserStub, trigger: HTMLButtonElement) => {
+    if (!slug) return;
+    setProfile({ sender, trigger, rect: trigger.getBoundingClientRect(), slug });
+    if (Date.now() - membersQuery.dataUpdatedAt > 30_000) void membersQuery.refetch();
   };
   const latest = () => { setReturnPosition(null); setSearchParams({}); scroll.toLatest(); };
   useEffect(() => {
@@ -450,6 +457,20 @@ export function ChatView() {
       {!!pinsQuery.data?.length && <details className="bc-chat-pins"><summary><Icon name="pin" size={14} />{text('chat.pinned')}<span>{pinsQuery.data.length}</span></summary><div>{pinsQuery.data.map(pin => <div key={pin.id}><button onClick={() => jumpTo(pin.seq)}>{pin.body ?? pin.attachments[0]?.original_name ?? 'Message'}</button><button aria-label="Unpin message" onClick={async () => {try {await endpoints.pin(roomId, slug, pin.id, false);void pinsQuery.refetch();}catch(e){setToolError(e instanceof Error ? e.message : 'Unable to unpin');}}}><Icon name="close" size={16} /></button></div>)}</div></details>}
       {toolError && <p role="alert">{toolError}</p>}
       {forwardStatus && <p className="bc-forward-status" role="status">{forwardStatus}</p>}
+      {profile && me && profile.slug === slug && (
+        <ProfilePopover
+          key={`${slug}:${roomId}:${profile.sender.id}`}
+          user={profile.sender}
+          roster={membersQuery.data?.find(member => member.id === profile.sender.id)}
+          isSelf={profile.sender.id === me.id}
+          returnFocusTo={profile.trigger}
+          anchorRect={profile.rect}
+          slug={slug}
+          existingDmRoomId={findExistingDmRoomId(queryClient.getQueryData(['rooms', slug, 'all']), profile.sender.id)}
+          onClose={() => setProfile(null)}
+          onNavigate={id => navigate(`/rooms/${id}`)}
+        />
+      )}
       {forward && forward.slug === slug && forward.message.room_id === roomId && <ForwardDialog key={`${slug}:${roomId}:${forward.message.id}`} slug={slug} message={forward.message} returnFocus={forward.trigger} onClose={() => setForward(null)} onDone={count => setForwardStatus(text('chat.forwardDone').replace('{count}', String(count)))} />}
 
 
@@ -486,6 +507,7 @@ export function ChatView() {
                 secretActive={secretActive}
                 onForward={room ? (message, trigger) => { setForwardStatus(''); setForward({ message, trigger, slug }); } : undefined}
                 showSender={room?.room.type !== 'dm'}
+                onOpenProfile={room && room.room.type !== 'dm' && slug ? openProfile : undefined}
                 replySender={membersQuery.data?.find(member => member.id === message.reply_to?.sender_id)?.display_name}
                 canModerate={canModerate}
                 onEdit={editMessage}

@@ -337,5 +337,18 @@
   "chat.meetingMissing": "ไม่พบการประชุม",
   "chat.linkPreviewOpen": "เปิดลิงก์",
   "room.previewTicket": "🎫 ตั๋ว",
-  "room.previewMeeting": "📹 ประชุม"
+  "room.previewMeeting": "📹 ประชุม",
+  "profile.open": "ดูโปรไฟล์: {name}",
+  "profile.close": "ปิด",
+  "profile.dm": "แชท 1-1",
+  "profile.dmOpening": "กำลังเปิดแชท…",
+  "profile.online": "ออนไลน์",
+  "profile.offline": "ออฟไลน์",
+  "profile.roleOwner": "เจ้าของกลุ่ม",
+  "profile.roleAdmin": "ผู้ดูแลกลุ่ม",
+  "profile.self": "นี่คือคุณ",
+  "profile.unavailable": "ไม่สามารถแชทกับบัญชีนี้ได้",
+  "profile.errForbidden": "คุณไม่มีสิทธิ์แชทกับคนนี้ในพื้นที่ทำงานนี้",
+  "profile.errNetwork": "เชื่อมต่อไม่ได้ ตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง",
+  "profile.errGeneric": "เปิดแชทไม่สำเร็จ กรุณาลองอีกครั้ง"
 }
