@@ -16,13 +16,16 @@
 import {
   generateDeviceId,
   isWebPushConfigured,
+  mintWebDeviceId,
   resolveWebDeviceId,
   serviceWorkerUrl,
   webPushStatus,
+  withDeviceIdRecovery,
   type FirebaseWebConfig,
   type WebPushStatus,
 } from '@banana-chat/chat-core';
 import { endpoints } from './api';
+import { useSession } from '../state/session';
 
 declare const __SW_BUILD_ID__: string;
 
@@ -240,14 +243,24 @@ async function runEnable(): Promise<EnableWebPushResult> {
     return { state: 'failed', reason: 'Firebase returned an empty token' };
   }
 
+  const userId = currentUserId();
+  if (userId === null) {
+    return { state: 'failed', reason: 'not signed in' };
+  }
+
   try {
-    await endpoints.updateDevice(webDeviceId(), {
-      platform: 'web',
-      push_token: token,
-      push_provider: 'fcm',
-      device_name: navigator.userAgent.slice(0, 100),
-      locale: navigator.language?.slice(0, 5) ?? null,
-    });
+    await withDeviceIdRecovery(
+      (id) =>
+        endpoints.updateDevice(id, {
+          platform: 'web',
+          push_token: token,
+          push_provider: 'fcm',
+          device_name: navigator.userAgent.slice(0, 100),
+          locale: navigator.language?.slice(0, 5) ?? null,
+        }),
+      resolveWebDeviceId(deviceStorage(), generateDeviceId, userId),
+      () => mintWebDeviceId(deviceStorage(), generateDeviceId, userId),
+    );
   } catch (error) {
     // Kept distinct from a token failure: the browser side worked and the next load
     // will retry, which is a different thing to tell the user.
@@ -257,15 +270,23 @@ async function runEnable(): Promise<EnableWebPushResult> {
   return { state: 'enabled' };
 }
 
+function currentUserId(): string | null {
+  return useSession.getState().me?.id ?? null;
+}
+
+function deviceStorage(): Storage | null {
+  return typeof localStorage !== 'undefined' ? localStorage : null;
+}
+
 /**
- * Stable per-browser device id. The server keys a device row on it, so it must
- * survive reloads and logins — see resolveWebDeviceId for the storage-failure rule.
+ * Stable per-browser, per-user device id (DEC-103). The server keys a device row on
+ * it and refuses a row that belongs to another account, so two people signing in on
+ * one browser must not share an id. Survives reloads and logins -- see
+ * resolveWebDeviceId for the storage-failure rule. Null when nobody is signed in.
  */
-export function webDeviceId(): string {
-  return resolveWebDeviceId(
-    typeof localStorage !== 'undefined' ? localStorage : null,
-    generateDeviceId,
-  );
+export function webDeviceId(): string | null {
+  const userId = currentUserId();
+  return userId === null ? null : resolveWebDeviceId(deviceStorage(), generateDeviceId, userId);
 }
 
 /**
@@ -275,8 +296,9 @@ export function webDeviceId(): string {
  * they were actively reading. Fire-and-forget: a failed ping must not surface.
  */
 export function reportFocus(roomId: string | null): void {
-  if (!isWebPushConfigured(config)) {
+  const deviceId = webDeviceId();
+  if (!isWebPushConfigured(config) || deviceId === null) {
     return;
   }
-  void endpoints.reportFocus(webDeviceId(), roomId).catch(() => {});
+  void endpoints.reportFocus(deviceId, roomId).catch(() => {});
 }

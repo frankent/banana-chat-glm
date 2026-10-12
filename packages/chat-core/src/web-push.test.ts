@@ -4,7 +4,7 @@ import {
   webPushStatus,
   serviceWorkerUrl,
   resolveWebDeviceId,
-  WEB_DEVICE_ID_KEY,
+  webDeviceIdKey,
   type FirebaseWebConfig,
 } from './web-push.js';
 
@@ -87,14 +87,14 @@ describe('resolveWebDeviceId', () => {
   const MINTED = '0123456789ABCDEFGHJKMNPQRS';
 
   it('reuses a persisted id so one browser is one device row', () => {
-    const s = store({ [WEB_DEVICE_ID_KEY]: STORED });
-    expect(resolveWebDeviceId(s, () => MINTED)).toBe(STORED);
+    const s = store({ [webDeviceIdKey('u1')]: STORED });
+    expect(resolveWebDeviceId(s, () => MINTED, 'u1')).toBe(STORED);
   });
 
   it('mints and persists on first use', () => {
     const s = store();
-    expect(resolveWebDeviceId(s, () => MINTED)).toBe(MINTED);
-    expect(s.map.get(WEB_DEVICE_ID_KEY)).toBe(MINTED);
+    expect(resolveWebDeviceId(s, () => MINTED, 'u1')).toBe(MINTED);
+    expect(s.map.get(webDeviceIdKey('u1'))).toBe(MINTED);
   });
 
   // Safari private mode throws on write; registering push matters more than
@@ -104,7 +104,7 @@ describe('resolveWebDeviceId', () => {
       getItem() { throw new Error('denied'); },
       setItem() { throw new Error('denied'); },
     };
-    expect(resolveWebDeviceId(hostile, () => 'fresh')).toBe('fresh');
-    expect(resolveWebDeviceId(null, () => 'fresh')).toBe('fresh');
+    expect(resolveWebDeviceId(hostile, () => 'fresh', 'u1')).toBe('fresh');
+    expect(resolveWebDeviceId(null, () => 'fresh', 'u1')).toBe('fresh');
   });
 });

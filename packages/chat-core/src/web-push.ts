@@ -100,19 +100,36 @@ export function serviceWorkerUrl(
 }
 
 /**
- * A device row is per browser profile, not per tab or per login, so the id has to
- * outlive both. Callers hand in their own storage so this stays testable and
- * storage-agnostic; a failure to persist degrades to a fresh id rather than
- * throwing (Safari private mode throws on localStorage writes).
+ * A device row belongs to one user (the server answers DEVICE_FORBIDDEN to anyone
+ * else presenting its id, DEC-103), and one browser profile can be signed in as
+ * several people over time. So the id cannot be one-per-profile: it is kept per user.
+ * Per workspace would be wrong the other way -- a push token is account-wide, and
+ * several rows sharing one FCM token cannot coexist. The origin is already part of
+ * localStorage's own scoping, so per domain needs no key of its own.
+ *
+ * Callers hand in their own storage so this stays testable and storage-agnostic; a
+ * failure to persist degrades to a fresh id rather than throwing (Safari private
+ * mode throws on localStorage writes).
  */
 export const WEB_DEVICE_ID_KEY = 'banana-chat:web-device-id';
 
+/**
+ * The pre-DEC-103 key was one per browser profile and is never read again: an id
+ * from it may belong to a different account, and adopting it is the bug.
+ */
+export function webDeviceIdKey(userId: string): string {
+  return `${WEB_DEVICE_ID_KEY}:${userId}`;
+}
+
+type DeviceIdStorage = { getItem(k: string): string | null; setItem(k: string, v: string): void };
+
 export function resolveWebDeviceId(
-  storage: { getItem(k: string): string | null; setItem(k: string, v: string): void } | null,
+  storage: DeviceIdStorage | null,
   generate: () => string,
+  userId: string,
 ): string {
   try {
-    const existing = storage?.getItem(WEB_DEVICE_ID_KEY);
+    const existing = storage?.getItem(webDeviceIdKey(userId));
     // A stored id the server will reject is worse than none: it is returned on every
     // load, so the browser retries a registration that can only 404, forever. Both
     // endpoints validate before writing anything, so there is no row to orphan by
@@ -124,13 +141,49 @@ export function resolveWebDeviceId(
     // unreadable storage — fall through and mint a throwaway id
   }
 
+  return mintWebDeviceId(storage, generate, userId);
+}
+
+/** Replace this user's stored id with a fresh one (see withDeviceIdRecovery). */
+export function mintWebDeviceId(
+  storage: DeviceIdStorage | null,
+  generate: () => string,
+  userId: string,
+): string {
   const fresh = generate();
   try {
-    storage?.setItem(WEB_DEVICE_ID_KEY, fresh);
+    storage?.setItem(webDeviceIdKey(userId), fresh);
   } catch {
     // unwritable storage (private mode): the id lasts for this page only, which
     // means a duplicate device row per session. Acceptable; the alternative is
     // refusing to register push at all.
   }
   return fresh;
+}
+
+/** The API answered that the device id belongs to another account (DEC-103). */
+export function isDeviceForbidden(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 'DEVICE_FORBIDDEN';
+}
+
+/**
+ * Run a device-scoped call; if the server says the id is someone else's, mint a new
+ * one and try exactly once more. Stored ids made before DEC-103 can belong to a
+ * different account on the same browser, and this is what un-sticks them without
+ * asking anyone to clear site data. One retry only: a second refusal is a real fault
+ * and must surface rather than loop.
+ */
+export async function withDeviceIdRecovery<T>(
+  run: (deviceId: string) => Promise<T>,
+  current: string,
+  remint: () => string,
+): Promise<T> {
+  try {
+    return await run(current);
+  } catch (error) {
+    if (!isDeviceForbidden(error)) {
+      throw error;
+    }
+    return run(remint());
+  }
 }

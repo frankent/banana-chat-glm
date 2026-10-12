@@ -134,6 +134,43 @@ test('TC-NOTI-002 a token previously owned by another user moves over', function
         ->and(Device::query()->where('user_id', $this->tony->id)->where('push_token', 'shared-tok')->exists())->toBeTrue();
 });
 
+test('TC-NOTI-064 a device id already owned by someone else is refused and the refusal changes nothing', function () {
+    // Two accounts on one browser profile: the second one presents the first one's
+    // device id AND the same FCM token. The refusal must be side-effect free -- it used
+    // to strip the owner's token before noticing the id was not theirs.
+    $owner = User::factory()->create();
+    $ownerDevice = Device::query()->create([
+        'user_id' => $owner->id, 'platform' => 'web', 'push_token' => 'owner-tok', 'push_provider' => 'fcm',
+    ]);
+
+    $this->putJson("/api/v1/me/devices/{$ownerDevice->id}", [
+        'platform' => 'web', 'push_token' => 'owner-tok', 'push_provider' => 'fcm',
+    ], authHeaders($this->tonyToken))
+        ->assertStatus(403)
+        ->assertJsonPath('error.code', 'DEVICE_FORBIDDEN');
+
+    expect($ownerDevice->refresh()->user_id)->toBe($owner->id)
+        ->and($ownerDevice->push_token)->toBe('owner-tok')
+        ->and($ownerDevice->push_provider)->toBe('fcm');
+});
+
+test('TC-NOTI-065 a browser that re-mints its device id keeps exactly one row per push token', function () {
+    $first = (string) Str::ulid();
+    $second = (string) Str::ulid();
+
+    $this->putJson("/api/v1/me/devices/{$first}", [
+        'platform' => 'web', 'push_token' => 'tok-same-browser', 'push_provider' => 'fcm',
+    ], authHeaders($this->tonyToken))->assertOk();
+
+    // same user, same FCM token, new id: unique(user_id, push_token) used to turn this into a 500
+    $this->putJson("/api/v1/me/devices/{$second}", [
+        'platform' => 'web', 'push_token' => 'tok-same-browser', 'push_provider' => 'fcm',
+    ], authHeaders($this->tonyToken))->assertOk();
+
+    expect(Device::query()->where('push_token', 'tok-same-browser')->pluck('id')->all())->toBe([$second])
+        ->and(Device::query()->whereKey($first)->value('push_token'))->toBeNull();
+});
+
 test('TC-NOTI-004 invalid platform → 422', function () {
     $this->putJson('/api/v1/me/devices/'.(string) Str::ulid(), [
         'platform' => 'windows-phone',

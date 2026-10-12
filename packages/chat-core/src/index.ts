@@ -119,7 +119,17 @@ export type {
   PublicChatRoomLike,
   PublicChatStatusTone,
 } from './public-chat.js';
-export { isWebPushConfigured, webPushStatus, serviceWorkerUrl, resolveWebDeviceId, WEB_DEVICE_ID_KEY } from './web-push.js';
+export {
+  isWebPushConfigured,
+  webPushStatus,
+  serviceWorkerUrl,
+  resolveWebDeviceId,
+  mintWebDeviceId,
+  webDeviceIdKey,
+  isDeviceForbidden,
+  withDeviceIdRecovery,
+  WEB_DEVICE_ID_KEY,
+} from './web-push.js';
 export type { FirebaseWebConfig, WebPushEnvironment, WebPushStatus } from './web-push.js';
 export { DEVICE_ID_PATTERN, generateDeviceId, isValidDeviceId } from './device-id.js';
 // FR-PROF-006 / DEC-088 — avatar file rules, crop math, render source.

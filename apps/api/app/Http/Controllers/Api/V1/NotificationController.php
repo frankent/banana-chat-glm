@@ -22,8 +22,9 @@ use Illuminate\Support\Carbon;
 class NotificationController extends Controller
 {
     /**
-     * API-070 — upsert device push token. A token already owned by another
-     * user on any device moves to this user (devices follow people).
+     * API-070 — upsert device push token. A token already held by any other
+     * device row moves to this one (tokens follow the install). A device id
+     * owned by another user is refused with DEVICE_FORBIDDEN (TC-NOTI-064).
      */
     public function updateDevice(Request $request, string $deviceId): JsonResponse
     {
@@ -41,18 +42,22 @@ class NotificationController extends Controller
 
         $token = $data['push_token'] ?? null;
 
-        if ($token !== null) {
-            // token drift: same token on someone else's device → reassign here
-            Device::query()->where('push_token', $token)->where('user_id', '!=', $user->id)
-                ->update(['push_token' => null, 'push_provider' => null]); // TC-NOTI-002
-        }
-
         $device = Device::query()->find($deviceId);
 
+        // Ownership is settled before anything is written: a refused request must not
+        // strip the rightful owner's token (FR-NOTI-001).
         if ($device !== null && $device->user_id !== $user->id) {
             return response()->json([
                 'error' => ['code' => 'DEVICE_FORBIDDEN', 'message' => 'อุปกรณ์นี้ไม่ได้ลงทะเบียนกับบัญชีของคุณ'],
             ], 403);
+        }
+
+        if ($token !== null) {
+            // A push token addresses one browser install, so it lives on exactly one
+            // row: another user's device (TC-NOTI-002) or this user's earlier row after
+            // the client re-minted its id (TC-NOTI-065, unique(user_id, push_token)).
+            Device::query()->where('push_token', $token)->where('id', '!=', $deviceId)
+                ->update(['push_token' => null, 'push_provider' => null]);
         }
 
         if ($device === null) {
