@@ -281,7 +281,10 @@ function AgentRoom({ roomId }: { roomId: string }) {
         </Link>
         <div className="bc-pchat-room-who">
           {/* partner-supplied strings: text nodes, never Markdown (MANDATORY fix 20) */}
-          <h2>{current.customer_name}</h2>
+          <div className="bc-pchat-room-title">
+            <h2>{current.customer_name}</h2>
+            <PcStatusPill status={current.status} />
+          </div>
           <p>
             {current.provider_name}
             {current.external_ref !== null && <> · #{current.external_ref}</>}
@@ -294,19 +297,7 @@ function AgentRoom({ roomId }: { roomId: string }) {
                 })}
           </p>
         </div>
-        {current.kind === 'group' && (
-          <GroupRoomTools
-            slug={slug}
-            roomId={roomId}
-            title={current.customer_name}
-            hasMeeting={current.has_meeting === true}
-            host={videoHost}
-            onVideoChange={setVideoOn}
-            memberName={me?.display_name}
-          />
-        )}
         <div className="bc-pchat-room-controls">
-          <PcStatusPill status={current.status} />
           <label>
             <span className="bc-eyebrow">{en('pchat.room.status')}</span>
             <select
@@ -341,6 +332,17 @@ function AgentRoom({ roomId }: { roomId: string }) {
             </select>
           </label>
         </div>
+        {current.kind === 'group' && (
+          <GroupRoomTools
+            slug={slug}
+            roomId={roomId}
+            title={current.customer_name}
+            hasMeeting={current.has_meeting === true}
+            host={videoHost}
+            onVideoChange={setVideoOn}
+            memberName={me?.display_name}
+          />
+        )}
       </header>
 
       {claim === 'other' && (

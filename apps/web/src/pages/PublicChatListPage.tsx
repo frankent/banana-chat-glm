@@ -88,29 +88,30 @@ export function PublicChatListPage() {
             <span>.</span>
           </h1>
           <p>{en('pchat.group.listDescription')}</p>
-          <NewGroupRoom slug={slug} onCreated={(id) => navigate(`/public-chat/${id}`)} />
         </div>
-        {summary.data !== undefined && (
-          <dl className="bc-pchat-summary" aria-label="Queue summary">
-            <div>
-              <dt>{en('pchat.status.new')}</dt>
-              <dd>{summary.data.summary.new}</dd>
-            </div>
-            <div>
-              <dt>{en('pchat.status.problem')}</dt>
-              <dd>{summary.data.summary.problem}</dd>
-            </div>
-            <div>
-              <dt>{en('pchat.filter.needsReply')}</dt>
-              <dd>{summary.data.summary.needs_reply}</dd>
-            </div>
-            <div>
-              <dt>{en('pchat.filter.assignee.me')}</dt>
-              <dd>{summary.data.summary.mine}</dd>
-            </div>
-          </dl>
-        )}
+        <NewGroupRoom slug={slug} onCreated={(id) => navigate(`/public-chat/${id}`)} />
       </header>
+
+      {summary.data !== undefined && (
+        <dl className="bc-pchat-summary" aria-label="Queue summary">
+          <div>
+            <dt><Icon name="chat" size={18} />{en('pchat.status.new')}</dt>
+            <dd>{summary.data.summary.new}</dd>
+          </div>
+          <div>
+            <dt><Icon name="lifebuoy" size={18} />{en('pchat.status.problem')}</dt>
+            <dd>{summary.data.summary.problem}</dd>
+          </div>
+          <div>
+            <dt><Icon name="reply" size={18} />{en('pchat.filter.needsReply')}</dt>
+            <dd>{summary.data.summary.needs_reply}</dd>
+          </div>
+          <div>
+            <dt><Icon name="users" size={18} />{en('pchat.filter.assignee.me')}</dt>
+            <dd>{summary.data.summary.mine ?? '—'}</dd>
+          </div>
+        </dl>
+      )}
 
       {featureOff && (
         <p className="bc-pchat-notice" role="status">
@@ -178,19 +179,21 @@ export function PublicChatListPage() {
             <button className="bc-pchat-row" onClick={() => navigate(`/public-chat/${room.id}`)}>
               {/* customer_name and provider_name are partner-supplied: text nodes only (MANDATORY fix 20) */}
               <span className="bc-pchat-row-who">
-                <strong>{room.customer_name}</strong>
-                {room.kind === 'group' && (
-                  <span className="pc-row bc-pchat-surface">
-                    <span className="pc-badge">
-                      <Icon name="lock" size={12} /> {en('pchat.group.badge')}
-                    </span>
-                    {room.has_meeting === true && (
+                <span className="bc-pchat-row-title">
+                  <strong>{room.customer_name}</strong>
+                  {room.kind === 'group' && (
+                    <span className="pc-row bc-pchat-row-badges">
                       <span className="pc-badge">
-                        <Icon name="video" size={12} /> {en('pchat.group.videoBadge')}
+                        <Icon name="lock" size={12} /> {en('pchat.group.badge')}
                       </span>
-                    )}
-                  </span>
-                )}
+                      {room.has_meeting === true && (
+                        <span className="pc-badge">
+                          <Icon name="video" size={12} /> {en('pchat.group.videoBadge')}
+                        </span>
+                      )}
+                    </span>
+                  )}
+                </span>
                 <small>{room.provider_name}</small>
                 {room.external_ref !== null && <em>#{room.external_ref}</em>}
               </span>

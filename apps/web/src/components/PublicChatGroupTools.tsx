@@ -90,12 +90,11 @@ export function NewGroupRoom({ slug, onCreated }: { slug: string; onCreated: (ro
 
   const body = created ? (
     <>
-      <div className="pc-note" role="status">
-        <strong>{tr('pchat.group.created')}</strong>
-        <br />
-        {tr('pchat.group.savePassword')} {tr('pchat.group.shareSeparately')}
+      <div className="pc-success-note" role="status">
+        <span className="pc-success-icon"><Icon name="check" size={24} /></span>
+        <p>{tr('pchat.group.savePassword')} {tr('pchat.group.shareSeparately')}</p>
       </div>
-      <div className="pc-field-group">
+      <div className="pc-field-group pc-share-card">
         <label className="pc-label" htmlFor="pc-created-link">{tr('pchat.group.link')}</label>
         <div className="pc-input-row">
           <input id="pc-created-link" className="pc-field" readOnly value={created.url} onFocus={(e) => e.currentTarget.select()} />
@@ -104,7 +103,7 @@ export function NewGroupRoom({ slug, onCreated }: { slug: string; onCreated: (ro
           </button>
         </div>
       </div>
-      <div className="pc-field-group">
+      <div className="pc-field-group pc-share-card">
         <label className="pc-label" htmlFor="pc-created-pw">{tr('pchat.group.password')}</label>
         <div className="pc-input-row">
           <input id="pc-created-pw" className="pc-field" readOnly value={created.password} onFocus={(e) => e.currentTarget.select()} />
@@ -117,7 +116,7 @@ export function NewGroupRoom({ slug, onCreated }: { slug: string; onCreated: (ro
         {tr('pchat.group.roomExpires').replace('{date}', created.expiresAt.toLocaleDateString())}
         {created.video ? ` · ${tr('pchat.group.videoEnabled')}` : ''}
       </p>
-      <p role="status" className="pc-help">{notice}</p>
+      <p role="status" className="pc-copy-notice">{notice}</p>
     </>
   ) : (
     <form
@@ -303,6 +302,16 @@ export function GroupRoomTools({
 
   return (
     <div className="bc-pchat-group-tools bc-pchat-surface pc-row">
+      <div className="pc-invite">
+        <div className="pc-invite-address">
+          <span className="pc-label">{tr('pchat.group.link')}</span>
+          <span className="pc-invite-url" title={link}>{link || '—'}</span>
+        </div>
+        <button type="button" className="pc-button" onClick={() => void copyLink()}>
+          {tr('pchat.group.copyLink')}
+        </button>
+        {!open && notice && <span role="status" className="pc-invite-notice">{notice}</span>}
+      </div>
       {hasMeeting && (
         <PublicChatMeeting
           title={title}
@@ -314,25 +323,21 @@ export function GroupRoomTools({
           leave={(token) => pchat.memberMeetingLeave(slug, roomId, token)}
         />
       )}
-      <button type="button" className="pc-button" onClick={() => void copyLink()}>
-        {tr('pchat.group.copyLink')}
-      </button>
-      {!open && notice && <span role="status" className="pc-help">{notice}</span>}
       <button ref={trigger} type="button" className="pc-button" onClick={() => setOpen(true)}>
         <Icon name="lock" size={18} />
         {tr('pchat.group.tools')}
       </button>
       <PcDialog open={open} onClose={close} drawer locale={L} title={tr('pchat.group.tools')}>
-        <section className="pc-field-group">
+        <section className="pc-field-group pc-tool-section">
           <h3 className="pc-h3">{tr('pchat.group.shareRoom')}</h3>
-          <div className="pc-row">
+          <div className="pc-input-row pc-share-link">
             <input className="pc-field" readOnly aria-label={tr('pchat.group.shareRoom')} value={link} onFocus={(e) => e.currentTarget.select()} />
             <button type="button" className="pc-button" onClick={() => void copyLink()}>
               {tr('pchat.group.copyLink')}
             </button>
           </div>
         </section>
-        <section className="pc-field-group">
+        <section className="pc-field-group pc-tool-section">
           <h3 className="pc-h3">{tr('pchat.group.access')}</h3>
           <p className="pc-help">{tr('pchat.group.currentPasswordHidden')}</p>
           <PublicChatPasswordField
@@ -350,7 +355,7 @@ export function GroupRoomTools({
           </button>
           <p className="pc-help">{tr('pchat.group.securityNote')}</p>
         </section>
-        <p role="status" className="pc-help">{notice}</p>
+        <p role="status" className="pc-copy-notice">{notice}</p>
         {error && <p className="pc-alert" role="alert">{error}</p>}
       </PcDialog>
     </div>
