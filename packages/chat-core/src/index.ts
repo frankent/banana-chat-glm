@@ -120,6 +120,19 @@ export type {
   PublicChatStatusTone,
 } from './public-chat.js';
 export {
+  GROUP_EXPIRY_MAX_DAYS,
+  GROUP_EXPIRY_MIN_DAYS,
+  GROUP_PASSWORD_MAX,
+  GROUP_PASSWORD_MIN,
+  GROUP_TITLE_MAX,
+  generateGroupPassword,
+  groupPasswordStrength,
+  isValidGroupPassword,
+  isValidGroupTitle,
+  parseGroupExpiryDays,
+} from './public-chat-group.js';
+export type { GroupPasswordStrength } from './public-chat-group.js';
+export {
   isWebPushConfigured,
   webPushStatus,
   serviceWorkerUrl,

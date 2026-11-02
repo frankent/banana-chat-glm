@@ -51,6 +51,8 @@ function AgentRoom({ roomId }: { roomId: string }) {
   const [messages, setMessages] = useState<PcStaffMessage[]>([]);
   const [hasEarlier, setHasEarlier] = useState(false);
   const [body, setBody] = useState('');
+  const [videoHost, setVideoHost] = useState<HTMLElement | null>(null);
+  const [videoOn, setVideoOn] = useState(false);
   const [replyTo, setReplyTo] = useState<PcStaffMessage | null>(null);
   const [error, setError] = useState('');
   const [visitorTyping, setVisitorTyping] = useState(false);
@@ -293,7 +295,15 @@ function AgentRoom({ roomId }: { roomId: string }) {
           </p>
         </div>
         {current.kind === 'group' && (
-          <GroupRoomTools slug={slug} roomId={roomId} title={current.customer_name} hasMeeting={current.has_meeting === true} />
+          <GroupRoomTools
+            slug={slug}
+            roomId={roomId}
+            title={current.customer_name}
+            hasMeeting={current.has_meeting === true}
+            host={videoHost}
+            onVideoChange={setVideoOn}
+            memberName={me?.display_name}
+          />
         )}
         <div className="bc-pchat-room-controls">
           <PcStatusPill status={current.status} />
@@ -346,6 +356,8 @@ function AgentRoom({ roomId }: { roomId: string }) {
           {error}
         </p>
       )}
+
+      <div ref={setVideoHost} className="pc-member-video" hidden={!videoOn} />
 
       <div className="bc-pchat-transcript">
         {hasEarlier && (

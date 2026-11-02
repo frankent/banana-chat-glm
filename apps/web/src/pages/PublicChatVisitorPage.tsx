@@ -45,9 +45,20 @@ import type { UploadDriver } from '../hooks/useUploader';
 import { useSession } from '../state/session';
 import { PublicChatMeeting } from '../components/PublicChatMeeting';
 import { Banana, Icon } from '../components/Visual';
+import { PcDialog, PublicChatPasswordField } from '../components/PublicChatUi';
 import { PcAttachments, PcPublicStatusPill, PcReplyQuote } from '../components/PublicChatParts';
 import './meetings.css';
 import './public-chat.css';
+
+const LOCALE_KEY = 'bc.pchat.locale';
+function readLocale(): Locale | null {
+  try {
+    const v = localStorage.getItem(LOCALE_KEY);
+    return v === 'th' || v === 'en' ? v : null;
+  } catch {
+    return null;
+  }
+}
 
 export function PublicChatVisitorPage() {
   const { code = '' } = useParams();
@@ -62,36 +73,59 @@ function VisitorChat({ code }: { code: string }) {
   const valid = isPublicChatCode(code);
 
   const [guestToken, setGuestToken] = useState<string | null>(() => readGuestToken(code));
+  const [override, setOverride] = useState<Locale | null>(readLocale);
+  const [ended, setEnded] = useState(false);
+  const [welcome, setWelcome] = useState<{ name: string; saved: boolean } | null>(null);
   const view = useQuery({
     queryKey: ['pchat-visitor', code, sessionStatus, guestToken],
     queryFn: () => pchat.visitorView(code, guestToken),
     enabled: valid && sessionStatus !== 'loading',
     retry: false,
   });
+  const roomLocale: Locale | null = view.data ? (view.data.room.locale === 'th' ? 'th' : 'en') : null;
+  const locale: Locale = override ?? roomLocale ?? 'en';
+  const tr = (key: string) => t(key, locale);
+  function setLocale(next: Locale) {
+    setOverride(next);
+    try {
+      localStorage.setItem(LOCALE_KEY, next);
+    } catch {
+      /* per-visit only */
+    }
+  }
+  const lost = () => {
+    saveGuestToken(code, null);
+    setGuestToken(null);
+  };
 
   if (!valid || view.isError) {
+    const status = view.error instanceof ApiError ? view.error.status : null;
+    const expired = status === 410;
+    const invalid = !valid || status === 404;
     return (
-      <Shell>
-        <p role="alert">
-          {!valid
-            ? t('pchat.error.PCHAT_ROOM_NOT_FOUND', 'en')
-            : view.error instanceof ApiError
-              ? pchatErrorMessage(view.error)
-              : // a transport failure is not a contract error, and the room's
-                // locale is unknown before the first successful load — the same
-                // English fallback PublicMeetingPage uses
-                'Unable to open this conversation. Check your connection and try again.'}
-        </p>
-        <Link className="bc-meeting-back" to="/">
-          Back to Banana Chat
-        </Link>
+      <Shell locale={locale} onLocale={setLocale}>
+        <div className="pc-card pc-form pc-gate" style={{ margin: '0 auto' }}>
+          <h1 className="pc-h2">{tr(expired ? 'pchat.state.expired' : invalid ? 'pchat.state.invalid' : 'pchat.state.networkError')}</h1>
+          {!invalid && !expired && (
+            <button type="button" className="pc-button primary" onClick={() => void view.refetch()}>
+              {tr('pchat.action.retry')}
+            </button>
+          )}
+          <Link className="pc-button" to="/">
+            Banana Chat
+          </Link>
+        </div>
       </Shell>
     );
   }
   if (view.data === undefined) {
     return (
-      <Shell>
-        <p role="status">…</p>
+      <Shell locale={locale} onLocale={setLocale}>
+        <div className="pc-card pc-skeleton pc-gate" style={{ margin: '0 auto' }} role="status" aria-label={tr('pchat.state.loading')}>
+          <i />
+          <i />
+          <i />
+        </div>
       </Shell>
     );
   }
@@ -101,14 +135,19 @@ function VisitorChat({ code }: { code: string }) {
       <PasswordGate
         code={code}
         view={view.data}
-        onJoined={(token) => {
+        locale={locale}
+        onLocale={setLocale}
+        ended={ended}
+        onJoined={(token, name) => {
           saveGuestToken(code, token);
+          setEnded(false);
+          setWelcome({ name, saved: readGuestToken(code) === token });
           setGuestToken(token);
         }}
         onStale={() => {
           if (guestToken !== null) {
-            saveGuestToken(code, null);
-            setGuestToken(null);
+            lost();
+            setEnded(true);
           }
         }}
       />
@@ -119,29 +158,58 @@ function VisitorChat({ code }: { code: string }) {
     <Conversation
       code={code}
       view={view.data}
+      locale={locale}
+      onLocale={setLocale}
       guestToken={guestToken}
+      welcome={welcome}
+      onDismissWelcome={() => setWelcome(null)}
       onReload={() => void view.refetch()}
+      onForget={() => {
+        lost();
+        setWelcome(null);
+      }}
       onGuestLost={() => {
-        saveGuestToken(code, null);
-        setGuestToken(null);
+        lost();
+        setEnded(true);
       }}
     />
   );
 }
 
-function Shell({ children, title }: { children: ReactNode; title?: string }) {
+function LocaleSwitch({ locale, onLocale }: { locale: Locale; onLocale: (l: Locale) => void }) {
   return (
-    <main className="bc-public-meeting bc-pchat-visitor">
-      <div className="bc-meeting-wordmark">
-        <Banana size={30} />
+    <div className="pc-lang" role="group" aria-label={t('pchat.action.language', locale)}>
+      {(['en', 'th'] as const).map((l) => (
+        <button key={l} type="button" lang={l} aria-pressed={locale === l} onClick={() => onLocale(l)}>
+          {l === 'en' ? 'EN' : 'ไทย'}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Topbar({ locale, onLocale, children }: { locale: Locale; onLocale: (l: Locale) => void; children?: ReactNode }) {
+  return (
+    <div className="pc-topbar">
+      <div className="pc-brand">
+        <Banana size={28} />
         <strong>
           banana<span>chat</span>
         </strong>
       </div>
-      <section className="bc-pchat-visitor-card">
-        {title !== undefined && <h1>{title}</h1>}
+      <div className="pc-row">
         {children}
-      </section>
+        <LocaleSwitch locale={locale} onLocale={onLocale} />
+      </div>
+    </div>
+  );
+}
+
+function Shell({ children, locale, onLocale }: { children: ReactNode; locale: Locale; onLocale: (l: Locale) => void }) {
+  return (
+    <main className="bc-pchat-surface pc-page" lang={locale}>
+      <Topbar locale={locale} onLocale={onLocale} />
+      <div className="pc-gate-wrap">{children}</div>
     </main>
   );
 }
@@ -149,59 +217,111 @@ function Shell({ children, title }: { children: ReactNode; title?: string }) {
 function PasswordGate({
   code,
   view,
+  locale,
+  onLocale,
+  ended,
   onJoined,
   onStale,
 }: {
   code: string;
   view: PcVisitorView;
-  onJoined: (token: string) => void;
+  locale: Locale;
+  onLocale: (l: Locale) => void;
+  ended: boolean;
+  onJoined: (token: string, name: string) => void;
   onStale: () => void;
 }) {
-  const locale: Locale = view.room.locale === 'th' ? 'th' : 'en';
   const tr = (key: string) => t(key, locale);
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [error, setError] = useState('');
+  const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
+  const nameOk = name.trim().length >= 1 && name.trim().length <= 40;
 
   // a token the server no longer honours (password rotated, re-entered elsewhere)
   useEffect(onStale, [onStale]);
 
   async function submit() {
+    setTouched(true);
+    if (!nameOk || password === '') return;
     setBusy(true);
     setError('');
     try {
       const joined = await pchat.guestJoin(code, { password, display_name: name.trim() });
-      onJoined(joined.guest_token);
+      onJoined(joined.guest_token, joined.guest.display_name);
     } catch (e) {
-      setError(pchatErrorMessage(e, locale));
+      setError(e instanceof ApiError && e.status === 429 ? tr('pchat.gate.tooManyAttempts') : pchatErrorMessage(e, locale));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <Shell title={view.room.customer_name}>
+    <Shell locale={locale} onLocale={onLocale}>
       <form
+        className="pc-card pc-form pc-gate"
+        noValidate
         onSubmit={(e) => {
           e.preventDefault();
           void submit();
         }}
       >
-        <p>{tr('pchat.gate.title')}</p>
-        <label>
-          {tr('pchat.gate.name')}
-          <input required maxLength={40} autoComplete="nickname" value={name} onChange={(e) => setName(e.target.value)} />
-        </label>
-        <label>
-          {tr('pchat.gate.password')}
-          <input required type="password" maxLength={128} autoComplete="off" value={password} onChange={(e) => setPassword(e.target.value)} />
-        </label>
-        <p className="bc-meeting-hint">{tr('pchat.gate.hint')}</p>
-        <button className="bc-primary" disabled={busy || name.trim() === '' || password === ''}>
-          {tr('pchat.gate.submit')}
+        <div className="pc-lock" aria-hidden="true">
+          <Icon name="lock" size={22} />
+        </div>
+        {/* customer_name is partner/member-supplied — text node */}
+        <h1 className="pc-h1">{view.room.customer_name}</h1>
+        <p className="pc-help">
+          {tr('pchat.gate.title')} {tr('pchat.gate.noAccount')}
+        </p>
+        {ended && (
+          <p className="pc-note" role="status">
+            {tr('pchat.gate.sessionEnded')}
+          </p>
+        )}
+        <div className="pc-field-group">
+          <label className="pc-label" htmlFor="pc-gate-name">
+            {tr('pchat.gate.name')}
+          </label>
+          <input
+            id="pc-gate-name"
+            className="pc-field"
+            maxLength={40}
+            autoComplete="nickname"
+            autoFocus
+            value={name}
+            aria-invalid={touched && !nameOk ? true : undefined}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <p className="pc-help">{tr('pchat.gate.hint')}</p>
+          {touched && !nameOk && (
+            <p className="pc-field-error" role="alert">
+              {tr('pchat.gate.nameInvalid')}
+            </p>
+          )}
+        </div>
+        <PublicChatPasswordField
+          value={password}
+          onChange={setPassword}
+          locale={locale}
+          label={tr('pchat.gate.password')}
+          autoComplete="current-password"
+          error={touched && password === '' ? tr('pchat.gate.passwordRequired') : undefined}
+        />
+        {error && (
+          <p className="pc-alert" role="alert">
+            {error}
+          </p>
+        )}
+        <button className="pc-button primary lg" disabled={busy}>
+          {busy ? tr('pchat.gate.joining') : tr('pchat.gate.submit')}
         </button>
-        {error && <p role="alert">{error}</p>}
+        <details className="pc-disclosure">
+          <summary>{tr('pchat.gate.howReturningWorks')}</summary>
+          <p className="pc-help">{tr('pchat.gate.reentryDetail')}</p>
+          <p className="pc-help">{tr('pchat.gate.rememberHint')}</p>
+        </details>
       </form>
     </Shell>
   );
@@ -210,17 +330,26 @@ function PasswordGate({
 function Conversation({
   code,
   view,
+  locale,
+  onLocale,
   guestToken,
+  welcome,
+  onDismissWelcome,
   onReload,
+  onForget,
   onGuestLost,
 }: {
   code: string;
   view: PcVisitorView;
+  locale: Locale;
+  onLocale: (l: Locale) => void;
   guestToken: string | null;
+  welcome: { name: string; saved: boolean } | null;
+  onDismissWelcome: () => void;
   onReload: () => void;
+  onForget: () => void;
   onGuestLost: () => void;
 }) {
-  const locale: Locale = view.room.locale === 'th' ? 'th' : 'en';
   const tr = useMemo(() => (key: string) => t(key, locale), [locale]);
 
   const [messages, setMessages] = useState<PcPublicMessage[]>([]);
@@ -229,6 +358,14 @@ function Conversation({
   const [error, setError] = useState('');
   const [agentTyping, setAgentTyping] = useState(false);
   const bottom = useRef<HTMLDivElement | null>(null);
+  const log = useRef<HTMLDivElement | null>(null);
+  const nearBottom = useRef(true);
+  const [unread, setUnread] = useState(0);
+  const [videoHost, setVideoHost] = useState<HTMLElement | null>(null);
+  const [videoOn, setVideoOn] = useState(false);
+  const [tab, setTab] = useState<'video' | 'chat'>('video');
+  const [forgetOpen, setForgetOpen] = useState(false);
+  const composer = useRef<HTMLTextAreaElement | null>(null);
   const seen = useRef(0);
   const clientMessageId = useRef(crypto.randomUUID());
   // held in refs: an inline callback in the deps would tear down and rebuild the
@@ -341,9 +478,19 @@ function Conversation({
     if (connected) void refetch.current();
   }, [connected]);
 
+  const prevCount = useRef(0);
   useEffect(() => {
-    bottom.current?.scrollIntoView({ block: 'end' });
-  }, [messages.length]);
+    const added = messages.length - prevCount.current;
+    prevCount.current = messages.length;
+    if (added <= 0) return;
+    const last = messages[messages.length - 1];
+    const guestId = view.viewer?.kind === 'guest' ? (view.viewer.guest_id ?? null) : null;
+    const own = last?.sender_kind === 'visitor' && (guestId === null ? last.guest_id == null : last.guest_id === guestId);
+    if (nearBottom.current || own || prevCount.current === added) {
+      bottom.current?.scrollIntoView({ block: 'end' });
+      setUnread(0);
+    } else setUnread((n) => n + added);
+  }, [messages, view.viewer]);
 
   // ---- uploads: API-213/214, room-scoped, no uploader identity --------------
   const driver: UploadDriver = useMemo(
@@ -408,129 +555,249 @@ function Conversation({
   const bannerKey = publicChatComposerBannerKey(composerState);
   const busy = send.isPending || uploader.staged.some((s) => s.status === 'creating' || s.status === 'uploading');
 
-  return (
-    <main className="bc-public-meeting bc-pchat-visitor" lang={locale}>
-      <div className="bc-meeting-wordmark">
-        <Banana size={30} />
-        <strong>
-          banana<span>chat</span>
-        </strong>
-      </div>
+  const isGuest = view.viewer?.kind === 'guest';
+  const guestName = view.viewer?.display_name ?? '';
+  const guestId = isGuest ? (view.viewer?.guest_id ?? null) : null;
+  const title = isGuest ? view.room.customer_name : interpolate(tr('pchat.visitor.with'), { provider: view.room.provider_name });
 
-      <section className="bc-pchat-visitor-card">
-        <header className="bc-pchat-visitor-head">
-          <div>
-            <span className="bc-eyebrow">{tr('pchat.visitor.title').toUpperCase()}</span>
-            {/* provider_name is partner-supplied — text node */}
-            <h1>{interpolate(tr('pchat.visitor.with'), { provider: view.room.provider_name })}</h1>
-            <p className="bc-caption">{view.room.customer_name}</p>
-          </div>
-          {/* status_public ONLY — `problem` never reaches this page */}
-          <PcPublicStatusPill status={view.room.status_public} locale={locale} />
-        </header>
-        {view.has_meeting === true && guestToken !== null && (
-          <PublicChatMeeting
-            title={view.room.customer_name}
-            locale={locale}
-            join={(resume) => pchat.meetingJoin(code, guestToken, resume)}
-            leave={(token) => pchat.meetingLeave(code, token)}
-          />
-        )}
-
-        <div className="bc-pchat-visitor-log">
-          {messages.length === 0 && <p className="bc-pchat-empty">{tr('pchat.visitor.empty')}</p>}
+  const chatPane = (
+    <div className="pc-stage-chat">
+      <div
+        ref={log}
+        className="pc-log"
+        role="log"
+        aria-label={tr('pchat.chat.transcript')}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          nearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+          if (nearBottom.current) setUnread(0);
+        }}
+      >
+        <div className="pc-log-inner">
+          {messages.length === 0 && (
+            <div className="pc-empty">
+              <Banana size={40} />
+              <strong className="pc-h3">{isGuest ? tr('pchat.chat.emptyTitle') : tr('pchat.visitor.empty')}</strong>
+              {isGuest && <p>{interpolate(tr('pchat.chat.emptyBody'), { room: view.room.customer_name })}</p>}
+            </div>
+          )}
           {messages.map((message) => (
-            <VisitorRow key={message.id} message={message} locale={locale} guestId={view.viewer?.kind === 'guest' ? (view.viewer.guest_id ?? null) : null} />
+            <VisitorRow key={message.id} message={message} locale={locale} guestId={guestId} />
           ))}
           <div ref={bottom} />
         </div>
-
-        <div className="bc-pchat-typing" aria-live="polite">
-          {agentTyping ? interpolate(tr('pchat.visitor.with'), { provider: view.room.provider_name }) + ' …' : ''}
-          {!connected && page.isFetching ? tr('pchat.visitor.reconnecting') : ''}
-        </div>
-
-        {error !== '' && (
-          <p role="alert" className="bc-pchat-alert">
-            {error}
-          </p>
+        {unread > 0 && (
+          <button
+            type="button"
+            className="pc-button primary pc-jump"
+            onClick={() => {
+              bottom.current?.scrollIntoView({ block: 'end' });
+              setUnread(0);
+            }}
+          >
+            {unread === 1 ? tr('pchat.chat.newMessage') : interpolate(tr('pchat.chat.newMessages'), { count: String(unread) })}
+          </button>
         )}
+      </div>
 
-        {bannerKey !== null ? (
-          <p className="bc-pchat-banner" role="status">
-            {composerState === 'signed_in'
-              ? interpolate(tr(bannerKey), { name: view.viewer?.display_name ?? '' })
-              : tr(bannerKey)}
+      <div className="pc-composer-foot" aria-live="polite" style={{ padding: '0 16px', minHeight: 20 }}>
+        {agentTyping ? interpolate(tr('pchat.visitor.with'), { provider: view.room.provider_name }) + ' …' : ''}
+      </div>
+
+      {error !== '' && (
+        <p role="alert" className="pc-alert" style={{ margin: '0 16px 8px' }}>
+          {error}
+        </p>
+      )}
+
+      {bannerKey !== null ? (
+        <p className="pc-banner" role="status">
+          <span>
+            {composerState === 'signed_in' ? interpolate(tr(bannerKey), { name: view.viewer?.display_name ?? '' }) : tr(bannerKey)}
             {composerState === 'signed_in' && (
               <>
                 {' '}
                 <Link to={`/public-chat/${view.room.id}`}>{tr('pchat.room.openInPublicChat')}</Link>
               </>
             )}
-          </p>
-        ) : (
-          <form
-            className="bc-pchat-composer"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (busy) return;
-              if (body.trim() === '' && uploader.staged.length === 0) return;
-              send.mutate();
-            }}
-          >
-            {uploader.staged.length > 0 && (
-              <div className="bc-pchat-staged">
-                {uploader.staged.map((staged) => (
-                  <span key={staged.localId}>
-                    <Icon name="paperclip" size={14} />
-                    {staged.filename}
-                    <small>{staged.status}</small>
-                    <button type="button" onClick={() => uploader.remove(staged.localId)} aria-label={`Remove ${staged.filename}`}>
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-            <div className="bc-pchat-compose-box">
-              <label className="bc-pchat-attach" title={tr('pchat.composer.attach')}>
-                <Icon name="paperclip" size={18} />
-                <span className="sr-only">{tr('pchat.composer.attach')}</span>
-                {/* chat + file + video only — there is no call or meeting here */}
-                <input
-                  type="file"
-                  multiple
-                  accept="image/*,video/*,.pdf,.txt,.csv,.doc,.docx,.xls,.xlsx,.zip"
-                  onChange={(event) => {
-                    if (event.target.files !== null) uploader.addFiles(event.target.files);
-                    event.target.value = '';
-                  }}
-                />
-              </label>
-              <textarea
-                aria-label={tr('pchat.composer.placeholder')}
-                placeholder={tr('pchat.composer.placeholder')}
-                value={body}
-                rows={2}
+          </span>
+        </p>
+      ) : (
+        <form
+          className="pc-composer"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (busy) return;
+            if (body.trim() === '' && uploader.staged.length === 0) return;
+            send.mutate();
+          }}
+        >
+          {uploader.staged.length > 0 && (
+            <div className="pc-staged">
+              {uploader.staged.map((staged) => (
+                <span key={staged.localId}>
+                  <Icon name="paperclip" size={14} />
+                  {staged.filename}
+                  <small>{staged.status}</small>
+                  <button
+                    type="button"
+                    className="pc-button pc-icon-button"
+                    style={{ minHeight: 36, width: 36, minWidth: 36, height: 36 }}
+                    onClick={() => uploader.remove(staged.localId)}
+                    aria-label={`${tr('pchat.action.remove')} ${staged.filename}`}
+                  >
+                    <Icon name="close" size={14} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="pc-composer-box">
+            <label className="pc-attach">
+              <Icon name="paperclip" size={18} />
+              <span className="sr-only">{tr('pchat.composer.attach')}</span>
+              {/* chat + file + video only — there is no call or meeting here */}
+              <input
+                type="file"
+                multiple
+                accept="image/*,video/*,.pdf,.txt,.csv,.doc,.docx,.xls,.xlsx,.zip"
                 onChange={(event) => {
-                  setBody(event.target.value);
-                  pingTyping();
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault();
-                    if (!busy && (body.trim() !== '' || uploader.staged.length > 0)) send.mutate();
-                  }
+                  if (event.target.files !== null) uploader.addFiles(event.target.files);
+                  event.target.value = '';
                 }}
               />
-              <button className="bc-pchat-send" disabled={busy || (body.trim() === '' && uploader.staged.length === 0)}>
-                <Icon name="send" size={16} />
-                <span>{tr('pchat.composer.send')}</span>
-              </button>
-            </div>
-          </form>
+            </label>
+            <textarea
+              ref={composer}
+              className="pc-field"
+              aria-label={tr('pchat.composer.placeholder')}
+              placeholder={tr('pchat.composer.placeholder')}
+              value={body}
+              rows={1}
+              onChange={(event) => {
+                setBody(event.target.value);
+                pingTyping();
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                  event.preventDefault();
+                  if (!busy && (body.trim() !== '' || uploader.staged.length > 0)) send.mutate();
+                }
+              }}
+            />
+            <button className="pc-button primary pc-icon-button" aria-label={tr('pchat.composer.send')} disabled={busy || (body.trim() === '' && uploader.staged.length === 0)}>
+              <Icon name="send" size={18} />
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+
+  return (
+    <main className="bc-pchat-surface pc-page" lang={locale}>
+      <Topbar locale={locale} onLocale={onLocale} />
+      <section className="pc-chat">
+        <header className="pc-head">
+          <div className="pc-head-who">
+            {/* provider_name / customer_name are partner-supplied — text nodes */}
+            <h1 className="pc-h2">{title}</h1>
+            <p>
+              {isGuest && <span>{interpolate(tr('pchat.chat.asGuest'), { name: guestName })}</span>}
+              <span>
+                <span className={`pc-dot${connected ? '' : ' off'}`} aria-hidden="true" />{' '}
+                {connected ? tr('pchat.chat.connected') : tr('pchat.chat.reconnecting')}
+              </span>
+            </p>
+          </div>
+          <div className="pc-row">
+            {/* status_public ONLY — `problem` never reaches this page */}
+            <PcPublicStatusPill status={view.room.status_public} locale={locale} />
+            {view.has_meeting === true && guestToken !== null && (
+              <PublicChatMeeting
+                title={view.room.customer_name}
+                locale={locale}
+                name={guestName}
+                host={videoHost}
+                onActiveChange={(on) => {
+                  setVideoOn(on);
+                  if (on) setTab('video');
+                }}
+                join={(resume) => pchat.meetingJoin(code, guestToken, resume)}
+                leave={(token) => pchat.meetingLeave(code, token)}
+              />
+            )}
+            {isGuest && guestToken !== null && (
+              <details className="pc-menu">
+                <summary className="pc-button pc-icon-button" aria-label={tr('pchat.chat.details')}>
+                  <Icon name="more" size={18} />
+                </summary>
+                <div className="pc-menu-pop pc-card">
+                  <p className="pc-help" style={{ padding: 8 }}>
+                    {tr('pchat.gate.remembered')}
+                  </p>
+                  <button type="button" className="pc-button" onClick={() => setForgetOpen(true)}>
+                    {tr('pchat.gate.forgetDevice')}
+                  </button>
+                </div>
+              </details>
+            )}
+          </div>
+        </header>
+
+        {welcome && (
+          <div className="pc-banner" role="status">
+            <span>
+              {interpolate(tr('pchat.gate.joined'), { name: welcome.name })}{' '}
+              {welcome.saved ? tr('pchat.gate.remembered') + '.' : tr('pchat.gate.storageUnavailable')}
+            </span>
+            <button type="button" className="pc-button" onClick={onDismissWelcome}>
+              {tr('pchat.action.dismiss')}
+            </button>
+          </div>
         )}
+
+        <div className="pc-stage" data-call={videoOn} data-tab={tab}>
+          <div className="pc-stage-tabs" role="group">
+            <button type="button" className="pc-button pc-chip" aria-pressed={tab === 'video'} onClick={() => setTab('video')}>
+              {tr('pchat.meeting.videoTab')}
+            </button>
+            <button type="button" className="pc-button pc-chip" aria-pressed={tab === 'chat'} onClick={() => setTab('chat')}>
+              {tr('pchat.meeting.chatTab')}
+            </button>
+          </div>
+          <div className="pc-stage-panes">
+            <div ref={setVideoHost} className="pc-stage-video" />
+            {chatPane}
+          </div>
+        </div>
       </section>
+
+      <PcDialog
+        open={forgetOpen}
+        onClose={() => setForgetOpen(false)}
+        locale={locale}
+        title={tr('pchat.gate.forgetDevice')}
+        footer={
+          <>
+            <button type="button" className="pc-button" onClick={() => setForgetOpen(false)}>
+              {tr('pchat.action.cancel')}
+            </button>
+            <button
+              type="button"
+              className="pc-button primary"
+              onClick={() => {
+                setForgetOpen(false);
+                onForget();
+              }}
+            >
+              {tr('pchat.gate.forgetDevice')}
+            </button>
+          </>
+        }
+      >
+        <p className="pc-help">{tr('pchat.gate.forgetHint')}</p>
+      </PcDialog>
     </main>
   );
 }
@@ -542,28 +809,37 @@ function VisitorRow({ message, locale, guestId }: { message: PcPublicMessage; lo
     // VISITOR-SAFE sentences: no actor, no raw status. system_meta arrives
     // already projected through status_public, and the catalog strings carry no
     // placeholders for it.
-    return <p className="bc-pchat-system">{tr(`pchat.system.${message.system_event ?? 'status_changed'}`)}</p>;
+    return <p className="pc-system">{tr(`pchat.system.${message.system_event ?? 'status_changed'}`)}</p>;
   }
 
   const mine = message.sender_kind === 'visitor' && (guestId === null ? message.guest_id == null : message.guest_id === guestId);
+  const staff = message.sender_kind === 'agent';
+  const name = mine ? tr('pchat.visitor.you') : (message.display_name ?? '');
   return (
-    <article className={`bc-pchat-msg kind-${message.sender_kind}`} data-mine={mine}>
-      <div className="bc-pchat-bubble">
-        <p className="bc-pchat-author">
-          {/* `display_name` is assembled server-side: the customer's own name, or
-              "provider name (admin username)" for an agent (FR-PCHAT-014). */}
-          {mine ? tr('pchat.visitor.you') : (message.display_name ?? '')}
+    <article className="pc-msg" data-mine={mine} data-staff={staff}>
+      {!mine && (
+        <div className="pc-avatar" aria-hidden="true">
+          {(name.trim()[0] ?? '?').toUpperCase()}
+        </div>
+      )}
+      <div className="pc-msg-col">
+        <div className="pc-meta">
+          {/* `display_name` is assembled server-side (FR-PCHAT-014); render as text */}
+          <strong>{name}</strong>
+          {staff && <span className="pc-badge staff">{tr('pchat.chat.staff')}</span>}
           <time>{pchatTime(message.created_at)}</time>
-        </p>
-        {message.reply_to !== null && <PcReplyQuote snippet={message.reply_to.snippet} locale={locale} />}
-        {message.deleted ? (
-          <p className="bc-pchat-deleted">{tr('pchat.message.deleted')}</p>
-        ) : (
-          <>
-            {message.body !== null && <p className="bc-pchat-body">{message.body}</p>}
-            <PcAttachments attachments={message.attachments} />
-          </>
-        )}
+        </div>
+        <div className="pc-bubble">
+          {message.reply_to !== null && <PcReplyQuote snippet={message.reply_to.snippet} locale={locale} />}
+          {message.deleted ? (
+            <span className="pc-deleted">{tr('pchat.message.deleted')}</span>
+          ) : (
+            <>
+              {message.body !== null && <span>{message.body}</span>}
+              <PcAttachments attachments={message.attachments} />
+            </>
+          )}
+        </div>
       </div>
     </article>
   );

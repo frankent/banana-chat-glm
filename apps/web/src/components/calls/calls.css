@@ -407,3 +407,15 @@
 .bc-call-msg-join:disabled { opacity: .55; cursor: default; }
 @keyframes bc-call-msg-pulse { 0% { box-shadow: 0 0 0 0 #0e926b55; } 70% { box-shadow: 0 0 0 8px #0e926b00; } 100% { box-shadow: 0 0 0 0 #0e926b00; } }
 @media (prefers-reduced-motion: reduce) { .bc-call-msg[data-state="live"] .bc-call-msg-icon { animation: none; } }
+
+/* FR-PCHAT-043 — embedded presentation: fills its parent instead of floating over the page. */
+.bc-call-stage.is-embedded {
+position: relative;
+inset: auto;
+z-index: auto;
+width: 100%;
+height: 100%;
+min-height: 0;
+border-radius: 14px;
+box-shadow: none;
+}

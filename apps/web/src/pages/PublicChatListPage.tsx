@@ -87,7 +87,7 @@ export function PublicChatListPage() {
             {en('pchat.title')}
             <span>.</span>
           </h1>
-          <p>Conversations customers started from a support link.</p>
+          <p>{en('pchat.group.listDescription')}</p>
           <NewGroupRoom slug={slug} onCreated={(id) => navigate(`/public-chat/${id}`)} />
         </div>
         {summary.data !== undefined && (
@@ -179,7 +179,18 @@ export function PublicChatListPage() {
               {/* customer_name and provider_name are partner-supplied: text nodes only (MANDATORY fix 20) */}
               <span className="bc-pchat-row-who">
                 <strong>{room.customer_name}</strong>
-                {room.kind === 'group' && <em className="bc-eyebrow"> {en('pchat.group.badge')}</em>}
+                {room.kind === 'group' && (
+                  <span className="pc-row bc-pchat-surface">
+                    <span className="pc-badge">
+                      <Icon name="lock" size={12} /> {en('pchat.group.badge')}
+                    </span>
+                    {room.has_meeting === true && (
+                      <span className="pc-badge">
+                        <Icon name="video" size={12} /> {en('pchat.group.videoBadge')}
+                      </span>
+                    )}
+                  </span>
+                )}
                 <small>{room.provider_name}</small>
                 {room.external_ref !== null && <em>#{room.external_ref}</em>}
               </span>

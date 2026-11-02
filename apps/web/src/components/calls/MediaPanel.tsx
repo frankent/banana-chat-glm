@@ -175,6 +175,8 @@ export default function MediaPanel({
   refreshCredentials,
   canMinimize = true,
   headerAvatar,
+  presentation = "overlay",
+  initialMedia,
 }: {
   id: string;
   kind: "video" | "voice";
@@ -189,6 +191,10 @@ export default function MediaPanel({
   canMinimize?: boolean;
   /** FR-PROF-007 — DM calls show the peer's photo beside the title (undefined = no photo). */
   headerAvatar?: UserAvatar | null;
+  /** FR-PCHAT-043 — 'embedded' lays the call out inside its parent instead of as a fixed overlay. */
+  presentation?: "overlay" | "embedded";
+  /** FR-PCHAT-043 — pre-join choices; undefined keeps the legacy mic-on / camera-off start. */
+  initialMedia?: { microphoneEnabled: boolean; cameraEnabled: boolean };
 }) {
   const [audioContext, setAudioContext] = useState<AudioContext | null>(null);
   const [gain, setGain] = useState(DEFAULT_CALL_GAIN);
@@ -202,7 +208,8 @@ export default function MediaPanel({
   const ownDisconnect = useEffectEvent(registerDisconnect);
   // FR-CALL-009: the user's own mute choice survives OS interruptions and
   // rejoins; rejoin/keepalive restore the microphone only when this is false.
-  const userMuted = useRef(false);
+  const userMuted = useRef(initialMedia?.microphoneEnabled === false);
+  const initialMediaRef = useRef(initialMedia);
   // Kept current between renders so the join effect (deps: id/kind/token/url)
   // can always call the freshest credential refresher without re-joining.
   const refreshRef = useRef(refreshCredentials);
@@ -456,12 +463,17 @@ export default function MediaPanel({
         }
         setConnecting(false);
         try {
-          await room.localParticipant.setMicrophoneEnabled(true);
+          await room.localParticipant.setMicrophoneEnabled(
+            initialMediaRef.current?.microphoneEnabled !== false,
+          );
           if (cancelled) {
             await room.disconnect(true);
             return;
           }
-          // FR-CALL-007: camera always starts off, including public guests. Explicit opt-in only.
+          // FR-CALL-007: camera starts off unless the guest explicitly opted in on the pre-join screen.
+          if (initialMediaRef.current?.cameraEnabled === true && kind === "video") {
+            await room.localParticipant.setCameraEnabled(true);
+          }
           if (cancelled) await room.disconnect(true);
         } catch {
           if (!cancelled)
@@ -510,7 +522,7 @@ export default function MediaPanel({
   if (!room) return null;
   return (
     <div
-      className={`bc-call-stage ${minimized ? "is-minimized" : ""} ${kind === "voice" ? "is-voice" : ""}`}
+      className={`bc-call-stage ${minimized ? "is-minimized" : ""} ${kind === "voice" ? "is-voice" : ""} ${presentation === "embedded" ? "is-embedded" : ""}`}
       data-lk-theme="default"
       role="dialog"
       aria-label={kind === "voice" ? "Voice call" : "Video call"}
