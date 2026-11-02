@@ -12,7 +12,7 @@ const shot = (page: Page, testInfo: { project: { outputDir: string } }, name: st
   page.screenshot({ path: resolve(testInfo.project.outputDir, '../screenshots', `pchat-${name}.png`), fullPage: false });
 
 const staffRoom = {
-  id: ROOM_ID, customer_name: 'Friday planning', provider_name: 'Banana Studio', status: 'open', status_public: 'open',
+  id: ROOM_ID, customer_name: 'Friday planning', provider_name: 'Banana Studio', status: 'in_progress', status_public: 'open',
   kind: 'group', has_meeting: true, created_by: 'ui-me', locale: 'en', last_seq: 4, needs_reply: false,
   created_at: '2026-11-02T09:00:00Z', expires_at: '2026-12-02T09:00:00Z', last_message_at: null, assigned_to: null, claimed_at: null, first_response_at: null,
   external_ref: null, last_visitor_seq: 0, last_agent_seq: 0, my_last_read_seq: 0, unread_count: 0, closed_at: null, meta: null,

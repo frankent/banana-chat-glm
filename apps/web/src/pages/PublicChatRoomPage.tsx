@@ -274,7 +274,7 @@ function AgentRoom({ roomId }: { roomId: string }) {
   const busy = send.isPending || uploader.staged.some((s) => s.status === 'creating' || s.status === 'uploading');
 
   return (
-    <div className="bc-pchat-room">
+    <div className="bc-pchat-surface bc-pchat-room">
       <header className="bc-pchat-room-head">
         <Link className="bc-pchat-back" to="/public-chat" aria-label="Back to the support queue">
           <Icon name="arrow" size={16} />

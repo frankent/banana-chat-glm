@@ -533,3 +533,120 @@ html[data-theme='dark'] .pc-gate .pc-lock { color: var(--pc-accent); }
   vertical-align: top;
 }
 .bc-pchat-group-tools.pc-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+/* -----------------------------------------------------------------------
+   Member-side finish pass. The queue and room are also token surfaces now,
+   so these rules work in both explicit themes and keep the global button
+   geometry from turning card/action controls into fixed-width pills.
+   ----------------------------------------------------------------------- */
+.bc-pchat-queue {
+  background: var(--pc-bg);
+  color: var(--pc-ink);
+  padding: clamp(22px, 2.5vw, 36px) clamp(16px, 3vw, 44px);
+  gap: 18px;
+}
+.bc-pchat-queue-head { align-items: flex-end; gap: 24px; }
+.bc-pchat-queue-head > div:first-child { min-width: min(100%, 360px); }
+.bc-pchat-queue-head h1 { color: var(--pc-ink); font-size: clamp(28px, 2.3vw, 36px); line-height: 1.1; }
+.bc-pchat-queue-head p { color: var(--pc-muted); font-size: 13px; }
+.bc-pchat-queue-head .pc-button.primary { margin-top: 16px; }
+.bc-pchat-summary { flex: 0 1 auto; justify-content: flex-end; gap: 10px; }
+.bc-pchat-summary > div {
+  min-width: 88px; min-height: 68px; box-sizing: border-box; padding: 11px 14px;
+  background: var(--pc-surface); border-color: var(--pc-line); border-radius: 12px;
+  box-shadow: 0 1px 2px #24351a0a;
+}
+.bc-pchat-summary dt { color: var(--pc-muted); font-size: 10px; font-weight: 600; letter-spacing: .7px; }
+.bc-pchat-summary dd { color: var(--pc-ink); font-size: 22px; line-height: 1; }
+.bc-pchat-toolbar {
+  padding: 6px; background: var(--pc-subtle); border: 1px solid var(--pc-line); border-radius: 12px; gap: 8px;
+}
+.bc-pchat-segment { background: transparent; padding: 0; gap: 2px; }
+#root .bc-pchat-queue .bc-pchat-segment button {
+  min-height: 40px; height: auto; min-width: 0; padding: 8px 12px; color: var(--pc-muted);
+  border: 0; border-radius: 8px; background: transparent; font-size: 12px; white-space: nowrap;
+}
+#root .bc-pchat-queue .bc-pchat-segment button.selected { color: var(--pc-ink); background: var(--pc-surface); box-shadow: 0 1px 3px #24351a12; }
+.bc-pchat-search, .bc-pchat-toolbar select, .bc-pchat-toggle {
+  min-height: 40px; box-sizing: border-box; background: var(--pc-surface); color: var(--pc-ink); border-color: var(--pc-line);
+}
+.bc-pchat-search { border-radius: 9px; }
+.bc-pchat-search input { color: var(--pc-ink); }
+.bc-pchat-toolbar select { min-width: 150px; border-radius: 9px; padding: 8px 32px 8px 11px; }
+#root .bc-pchat-queue button.bc-pchat-toggle { height: auto; min-width: 0; padding: 8px 12px; border-radius: 9px; font-size: 12px; white-space: nowrap; }
+.bc-pchat-toggle { white-space: nowrap; }
+.bc-pchat-toggle.selected { color: var(--pc-ink); border-color: var(--pc-focus); background: var(--pc-mine); }
+.bc-pchat-list { gap: 10px; }
+#root .bc-pchat-queue button.bc-pchat-row {
+  grid-template-columns: minmax(0, 1fr) auto minmax(120px, .42fr) auto;
+  background: var(--pc-surface); border-color: var(--pc-line); border-radius: 13px; padding: 15px 18px;
+  min-height: 76px; box-shadow: 0 1px 2px #24351a08; transition: border-color .15s, box-shadow .15s, transform .15s;
+}
+#root .bc-pchat-queue button.bc-pchat-row:hover { border-color: var(--pc-focus); box-shadow: 0 5px 18px #24351a12; transform: translateY(-1px); }
+.bc-pchat-row:focus-visible { outline: 3px solid var(--pc-focus); outline-offset: 2px; }
+.bc-pchat-row-who strong { color: var(--pc-ink); font-size: 14px; }
+.bc-pchat-row-who small, .bc-pchat-row-who em, .bc-pchat-row-meta { color: var(--pc-muted); }
+.bc-pchat-row-agent { color: var(--pc-ink); }
+.bc-pchat-pill.tone-neutral { background: var(--pc-subtle); color: var(--pc-muted); }
+.bc-pchat-queue .bc-pchat-empty, .bc-pchat-queue .bc-caption { color: var(--pc-muted); }
+.bc-pchat-room { background: var(--pc-bg); color: var(--pc-ink); }
+.bc-pchat-room > .bc-caption { padding: 24px; color: var(--pc-muted); }
+.bc-pchat-room > .bc-pchat-alert { margin: 16px; }
+
+.bc-pchat-room-head {
+  align-items: center; gap: 12px; padding: 14px clamp(14px, 2vw, 28px); background: var(--pc-surface); border-color: var(--pc-line);
+}
+.bc-pchat-room-who { flex: 1 1 250px; }
+.bc-pchat-room-who h2 { color: var(--pc-ink); font-size: 17px; }
+.bc-pchat-room-who p { color: var(--pc-muted); }
+.bc-pchat-room-controls { flex: 1 0 100%; display: flex; align-items: flex-end; gap: 10px; padding-left: 32px; }
+.bc-pchat-room-controls label { gap: 4px; min-width: 150px; flex: 0 1 190px; }
+.bc-pchat-room-controls select { width: 100%; min-height: 40px; background: var(--pc-surface); color: var(--pc-ink); border-color: var(--pc-control-line); }
+.bc-pchat-room-controls > .bc-pchat-pill { margin-right: auto; align-self: center; }
+.bc-pchat-group-tools { flex: 0 1 auto; justify-content: flex-end; min-width: 0; }
+.bc-pchat-group-tools .pc-help { font-size: 12px; white-space: normal; }
+.bc-pchat-room .pc-button { min-width: 0; }
+.bc-pchat-transcript { background: var(--pc-surface); }
+
+@media (min-width: 1100px) {
+  .bc-pchat-room-head { flex-wrap: wrap; }
+  .bc-pchat-room-controls { flex-basis: 100%; padding-left: 32px; }
+}
+
+@media (max-width: 900px) {
+  .bc-pchat-queue-head { align-items: flex-start; }
+  .bc-pchat-summary { width: 100%; justify-content: flex-start; }
+  .bc-pchat-room-head { align-items: flex-start; }
+  .bc-pchat-room-who { flex-basis: calc(100% - 38px); }
+  .bc-pchat-group-tools { flex-basis: calc(100% - 38px); justify-content: flex-start; margin-left: 38px; }
+  .bc-pchat-room-controls { padding-left: 38px; }
+  .bc-pchat-room-controls label { flex: 1 1 160px; }
+}
+@media (max-width: 760px) {
+  .bc-pchat-queue { padding: 22px 14px 28px; gap: 16px; }
+  .bc-pchat-queue-head > div:first-child { width: 100%; }
+  .bc-pchat-queue-head .pc-button.primary { width: 100%; justify-content: center; margin-top: 14px; }
+  .bc-pchat-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .bc-pchat-summary > div { min-width: 0; min-height: 62px; padding: 10px 12px; }
+  .bc-pchat-summary dt { font-size: 10px; white-space: nowrap; }
+  .bc-pchat-toolbar { padding: 6px; }
+  .bc-pchat-segment { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); }
+  #root .bc-pchat-queue .bc-pchat-segment button { min-height: 42px; padding-inline: 6px; }
+  .bc-pchat-search { flex-basis: 100%; min-width: 0; order: 2; }
+  .bc-pchat-toolbar select { flex: 1 1 150px; order: 3; }
+  #root .bc-pchat-queue button.bc-pchat-toggle { flex: 1 1 auto; min-height: 44px; order: 4; }
+  #root .bc-pchat-queue button.bc-pchat-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .bc-pchat-row-agent { grid-column: 1; }
+  .bc-pchat-row-meta { grid-column: 2; grid-row: 2; }
+  .bc-pchat-row > .bc-pchat-pill { justify-self: end; grid-column: 2; grid-row: 1; }
+  #root .bc-pchat-queue button.bc-pchat-row { padding: 14px; min-height: 0; }
+  .bc-pchat-room-head { padding: 12px 14px; }
+  .bc-pchat-group-tools { flex-basis: 100%; margin-left: 0; display: flex; flex-wrap: wrap; justify-content: flex-start; }
+  .bc-pchat-group-tools > button { flex: 1 1 140px; }
+  .bc-pchat-room-controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding-left: 0; }
+  .bc-pchat-room-controls > .bc-pchat-pill { grid-column: 1 / -1; justify-self: start; }
+  .bc-pchat-room-controls label { min-width: 0; }
+  .bc-pchat-room-controls label select { min-width: 0; }
+  .bc-pchat-transcript { padding: 14px; }
+  .bc-pchat-msg { max-width: 92%; }
+}

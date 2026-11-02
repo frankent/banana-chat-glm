@@ -79,7 +79,7 @@ export function PublicChatListPage() {
   }
 
   return (
-    <div className="bc-pchat-queue">
+    <div className="bc-pchat-surface bc-pchat-queue">
       <header className="bc-pchat-queue-head">
         <div>
           <span className="bc-eyebrow">SUPPORT</span>
