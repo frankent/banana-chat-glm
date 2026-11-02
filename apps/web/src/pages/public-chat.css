@@ -353,8 +353,10 @@ html[data-theme='dark'] .bc-pchat-surface {
   --pc-staff: #304735; --pc-danger: #ffb4a8; --pc-danger-bg: #462b29; --pc-focus: #f4d35a;
   color-scheme: dark;
 }
+/* The member app is light-only (no theme setting); only the public guest page follows the OS scheme. */
 @media (prefers-color-scheme: dark) {
-  html:not([data-theme='light']) .bc-pchat-surface {
+  html:not([data-theme='light']) .pc-page.bc-pchat-surface,
+  html:not([data-theme='light']) .pc-page .bc-pchat-surface {
     --pc-bg: #19221d; --pc-surface: #253129; --pc-subtle: #1e2922; --pc-ink: #f1f3ec; --pc-muted: #bbc5b5;
     --pc-line: #4b5848; --pc-control-line: #899780; --pc-accent-hover: #f8df79; --pc-mine: #413d26;
     --pc-staff: #304735; --pc-danger: #ffb4a8; --pc-danger-bg: #462b29; --pc-focus: #f4d35a;

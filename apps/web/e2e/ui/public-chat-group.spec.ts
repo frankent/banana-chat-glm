@@ -71,6 +71,18 @@ async function guestFixture(page: Page, opts: { requiresPassword: boolean; hasMe
   return { attempts: () => passwordAttempts };
 }
 
+async function luminance(loc: import('@playwright/test').Locator) {
+  return loc.evaluate((el) => {
+    let n: Element | null = el;
+    while (n) {
+      const m = getComputedStyle(n).backgroundColor.match(/[\d.]+/g);
+      if (m && (m[3] === undefined || Number(m[3]) > 0.5)) return (Number(m[0]) + Number(m[1]) + Number(m[2])) / 3;
+      n = n.parentElement;
+    }
+    return 255;
+  });
+}
+
 const sizes = [{ name: 'desktop', width: 1440, height: 900 }, { name: 'mobile', width: 390, height: 844 }];
 
 for (const size of sizes) {
@@ -93,6 +105,9 @@ for (const size of sizes) {
       }
       await expect(page.getByLabel(/room name/i)).toBeVisible();
       await expect(page.getByLabel(/room password/i)).toBeVisible();
+      // member app is light-only: an OS dark scheme must not darken it
+      expect(await luminance(dialog)).toBeGreaterThan(200);
+      expect(await luminance(page.locator('.bc-pchat-queue'))).toBeGreaterThan(200);
       expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
       await shot(page, testInfo, `create-${size.name}-${scheme}`);
     });
@@ -235,4 +250,17 @@ test('TC-UI-PCHAT-010 staff room page shows Copy link in the header and the link
   await page.getByRole('button', { name: /room tools/i }).click();
   await expect(page.locator('dialog.pc-dialog[open] input[readonly]').first()).toHaveValue(new RegExp(`/support/${CODE}$`));
   await shot(page, testInfo, 'room-tools-link');
+});
+
+test('TC-UI-PCHAT-011 staff room page stays light under an OS dark scheme', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await memberFixture(page);
+  await page.route(`**/api/v1/public-chat/rooms/${ROOM_ID}/link`, (r) => r.fulfill({ json: { data: { url: `http://127.0.0.1:5180/support/${CODE}` } } }));
+  await page.route(`**/api/v1/public-chat/rooms/${ROOM_ID}`, (r) => r.fulfill({ json: { data: { room: staffRoom } } }));
+  await page.route(`**/api/v1/public-chat/rooms/${ROOM_ID}/messages**`, (r) => r.fulfill({ json: { data: { messages: [], last_seq: 0 } } }));
+  await page.goto(`/public-chat/${ROOM_ID}`);
+  await expect(page.locator('.bc-pchat-room')).toBeVisible();
+  expect(await luminance(page.locator('.bc-pchat-room'))).toBeGreaterThan(200);
+  await shot(page, testInfo, 'room-os-dark-stays-light');
 });
