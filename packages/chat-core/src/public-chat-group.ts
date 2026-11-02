@@ -16,7 +16,10 @@ type RandomBytes = (bytes: Uint8Array) => Uint8Array;
 /** Uniform password from `crypto` randomness using rejection sampling (no modulo bias). */
 export function generateGroupPassword(
   length = 20,
-  random: RandomBytes = (bytes) => globalThis.crypto.getRandomValues(bytes),
+  random: RandomBytes = (bytes) => {
+    globalThis.crypto.getRandomValues(bytes as never);
+    return bytes;
+  },
 ): string {
   const limit = 256 - (256 % ALPHABET.length);
   let out = '';
