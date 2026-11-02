@@ -420,15 +420,16 @@ html[data-theme='dark'] .bc-pchat-surface {
 dialog.pc-dialog {
   padding: 0; border: 1px solid var(--pc-line); border-radius: 16px; background: var(--pc-surface); color: var(--pc-ink);
   width: min(512px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); overflow: hidden; box-shadow: 0 24px 80px #0006;
+  position: fixed; inset: 50% auto auto 50%; transform: translate(-50%, -50%); margin: 0;
 }
 dialog.pc-dialog[open] { display: flex; flex-direction: column; }
 dialog.pc-dialog::backdrop { background: #0a120d99; }
-dialog.pc-dialog.drawer { margin: 0 0 0 auto; width: min(440px, 100vw); height: 100dvh; max-height: 100dvh; border-radius: 0; border-width: 0 0 0 1px; }
+dialog.pc-dialog.drawer { inset: 0 0 0 auto; transform: none; margin: 0; width: min(440px, 100vw); height: 100dvh; max-height: 100dvh; border-radius: 0; border-width: 0 0 0 1px; }
 .pc-dialog-head { display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; padding: 20px 20px 0; }
 .pc-dialog-body { padding: 16px 20px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; min-height: 0; flex: 1; }
 .pc-dialog-foot { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; padding: 12px 20px calc(16px + env(safe-area-inset-bottom)); border-top: 1px solid var(--pc-line); }
 @media (max-width: 639px) {
-  dialog.pc-dialog { width: 100vw; height: 100dvh; max-height: 100dvh; border-radius: 0; border-width: 0; }
+  dialog.pc-dialog { inset: 0; transform: none; max-width: none; width: 100vw; height: 100dvh; max-height: 100dvh; border-radius: 0; border-width: 0; }
 }
 
 /* ---- guest page ------------------------------------------------------ */

@@ -189,7 +189,7 @@ export function PublicChatPreJoin({
   onCancel: () => void;
   onJoin: (media: { microphoneEnabled: boolean; cameraEnabled: boolean }) => void;
 }) {
-  const [mic, setMic] = useState(true);
+  const [mic, setMic] = useState(false);
   const [cam, setCam] = useState(false);
   const initial = (name.trim()[0] ?? '?').toUpperCase();
   return (
@@ -238,7 +238,6 @@ export function PublicChatPreJoin({
           <span className="pc-help">{t(cam ? 'pchat.meeting.cameraOn' : 'pchat.meeting.cameraOff', locale)}</span>
         </span>
       </label>
-      <p className="pc-help">{t('pchat.meeting.permissionDenied', locale)}</p>
       {error && (
         <p className="pc-alert" role="alert">
           {error}
