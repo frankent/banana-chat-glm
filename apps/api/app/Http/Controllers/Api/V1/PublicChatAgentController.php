@@ -208,6 +208,88 @@ class PublicChatAgentController extends Controller
     }
 
     /**
+     * API-242 POST /public-chat/rooms — FR-PCHAT-040. Any active member opens a
+     * password-protected multi-guest room and gets the shareable link back.
+     * The link carries the bearer code; the password is shared separately.
+     */
+    public function store(Request $request): JsonResponse
+    {
+        $this->gate->assertEnabled();
+
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:120'],
+            'password' => ['required', 'string', 'min:6', 'max:72'],
+            'expires_in_days' => ['nullable', 'integer', 'min:1', 'max:365'],
+            'locale' => ['nullable', 'string', 'in:th,en'],
+            'with_meeting' => ['nullable', 'boolean'],
+        ]);
+
+        if (! empty($data['with_meeting'])) {
+            abort_unless(config('calls.enabled') && config('calls.secret') && config('calls.url'), 503);
+        }
+
+        $room = $this->rooms->createGroup($request->user(), $this->workspaceId(), $data);
+
+        return response()->json([
+            'room' => $this->serializer->room($room->load('assignedTo')),
+            'url' => $this->rooms->publicUrl($room),
+        ], 201);
+    }
+
+    /** API-243 POST /public-chat/rooms/{id}/password — any active member rotates it; revokes all guest tokens. */
+    public function changePassword(Request $request, string $id): JsonResponse
+    {
+        $room = $this->roomOrFail($id);
+
+        if (! $room->isGroup()) {
+            throw ApiException::pchatRoomNotFound();
+        }
+
+        $data = $request->validate(['password' => ['required', 'string', 'min:6', 'max:72']]);
+
+        $this->rooms->changePassword($room, $request->user(), $data['password']);
+
+        return response()->json(['ok' => true]);
+    }
+
+    /** API-245 POST /public-chat/rooms/{id}/meeting/join — a member joins the room's meeting as themselves. */
+    public function meetingJoin(Request $request, string $id): JsonResponse
+    {
+        $room = $this->roomOrFail($id);
+        $data = $request->validate(['participant_token' => ['nullable', 'string', 'size:64']]);
+
+        return response()->json(['data' => $this->rooms->joinMeeting(
+            $room,
+            $request->user(),
+            $request->attributes->get('chat_session')->id,
+            null,
+            $data['participant_token'] ?? null,
+        )])->header('Cache-Control', 'no-store');
+    }
+
+    /** API-246 POST /public-chat/rooms/{id}/meeting/leave. */
+    public function meetingLeave(Request $request, string $id): JsonResponse
+    {
+        $room = $this->roomOrFail($id);
+        $data = $request->validate(['participant_token' => ['required', 'string', 'max:128']]);
+        $this->rooms->leaveMeeting($room, $data['participant_token']);
+
+        return response()->json([], 200);
+    }
+
+    /** API-244 GET /public-chat/rooms/{id}/link — the share URL, to any active workspace member (Decision A). */
+    public function link(Request $request, string $id): JsonResponse
+    {
+        $room = $this->roomOrFail($id);
+
+        if (! $room->isGroup()) {
+            throw ApiException::pchatRoomNotFound();
+        }
+
+        return response()->json(['url' => $this->rooms->publicUrl($room)]);
+    }
+
+    /**
      * API-224 PATCH /public-chat/rooms/{id} — status and/or assignment.
      *
      * The service writes a system row inside the same lockForUpdate, so the

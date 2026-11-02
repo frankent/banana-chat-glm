@@ -53,6 +53,7 @@ class PublicChatPublicSerializer
     {
         return [
             'id' => $room->id,
+            'kind' => $room->kind,
             'customer_name' => $room->customer_name,
             'provider_name' => $room->provider_name,
             'status_public' => $room->statusPublic(),
@@ -171,6 +172,7 @@ class PublicChatPublicSerializer
             'seq' => (int) $message->seq,
             'sender_kind' => $message->sender_kind->value,
             'display_name' => $this->displayName($message, $room),
+            'guest_id' => $message->guest_id,
             'type' => $message->type->value,
             'body' => $message->body,
             'system_event' => $message->system_event?->value,
@@ -194,7 +196,7 @@ class PublicChatPublicSerializer
     {
         return match ($message->sender_kind) {
             PublicChatSenderKind::Agent => $message->externalDisplayName(),
-            PublicChatSenderKind::Visitor => $room->customer_name,
+            PublicChatSenderKind::Visitor => $message->guest_name_snapshot ?? $room->customer_name,
             PublicChatSenderKind::System => null,
         };
     }

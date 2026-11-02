@@ -183,6 +183,12 @@ Route::prefix('v1')->group(function (): void {
             ->where('code', $pchatCode)->middleware('throttle:pchat-visitor-read'); // API-211
         Route::post('/{code}/messages', [PublicChatVisitorController::class, 'send'])
             ->where('code', $pchatCode)->middleware('throttle:pchat-visitor-write'); // API-212
+        Route::post('/{code}/join', [PublicChatVisitorController::class, 'join'])
+            ->where('code', $pchatCode)->middleware('throttle:pchat-visitor-join'); // API-217
+        Route::post('/{code}/meeting/join', [PublicChatVisitorController::class, 'meetingJoin'])
+            ->where('code', $pchatCode)->middleware('throttle:pchat-visitor-join'); // API-218
+        Route::post('/{code}/meeting/leave', [PublicChatVisitorController::class, 'meetingLeave'])
+            ->where('code', $pchatCode)->middleware('throttle:pchat-visitor-read'); // API-219
         Route::post('/{code}/uploads', [PublicChatVisitorController::class, 'createUpload'])
             ->where('code', $pchatCode)->middleware('throttle:pchat-visitor-upload'); // API-213
         Route::post('/{code}/uploads/{attachment}/complete', [PublicChatVisitorController::class, 'completeUpload'])
@@ -265,6 +271,13 @@ Route::prefix('v1')->group(function (): void {
         // can see all room + message". Declared BEFORE the /rooms block below
         // so these literal paths are never shadowed.
         Route::get('/public-chat/rooms', [PublicChatAgentController::class, 'index']); // API-220
+        Route::post('/public-chat/rooms', [PublicChatAgentController::class, 'store'])
+            ->middleware('throttle:pchat-agent-write'); // API-242
+        Route::post('/public-chat/rooms/{id}/meeting/join', [PublicChatAgentController::class, 'meetingJoin'])->whereUlid('id')->middleware('throttle:20,1'); // API-245
+        Route::post('/public-chat/rooms/{id}/meeting/leave', [PublicChatAgentController::class, 'meetingLeave'])->whereUlid('id')->middleware('throttle:60,1'); // API-246
+        Route::get('/public-chat/rooms/{id}/link', [PublicChatAgentController::class, 'link'])->whereUlid('id'); // API-244
+        Route::post('/public-chat/rooms/{id}/password', [PublicChatAgentController::class, 'changePassword'])
+            ->whereUlid('id')->middleware('throttle:pchat-agent-write'); // API-243
         Route::get('/public-chat/summary', [PublicChatAgentController::class, 'summary']); // API-227
         Route::get('/public-chat/rooms/{id}', [PublicChatAgentController::class, 'show'])->whereUlid('id'); // API-221
         Route::patch('/public-chat/rooms/{id}', [PublicChatAgentController::class, 'update'])->whereUlid('id'); // API-224

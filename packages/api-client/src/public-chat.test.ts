@@ -230,3 +230,43 @@ describe('FR-PCHAT-014 — the visitor wire shapes cannot name an internal field
     void meta.actor_username;
   });
 });
+
+describe('FR-PCHAT-041/042 — password group rooms', () => {
+  it('API-217 join posts password + display_name with no guest header', () => {
+    const { endpoints, fetchImpl } = harness({ guest: { id: 'g', display_name: 'Ann' }, guest_token: 'pcg_x' });
+    void endpoints.publicChatGuestJoin(CODE, { password: 'pw-123456', display_name: 'Ann' });
+    const { url, init } = call(fetchImpl);
+    expect(url).toBe(`http://x/api/v1/public-chat/${CODE}/join`);
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body!)).toEqual({ password: 'pw-123456', display_name: 'Ann' });
+  });
+
+  it('API-210 view sends the guest token as X-PChat-Guest', () => {
+    const { endpoints, fetchImpl } = harness({ data: {} });
+    void endpoints.publicChatVisitorView(CODE, 'pcg_tok');
+    expect(call(fetchImpl).init.headers['X-PChat-Guest']).toBe('pcg_tok');
+  });
+
+  it('API-218 meeting join carries the guest header and resume token', () => {
+    const { endpoints, fetchImpl } = harness({ data: {} });
+    void endpoints.publicChatMeetingJoin(CODE, 'pcg_tok', 'r'.repeat(64));
+    const { url, init } = call(fetchImpl);
+    expect(url).toBe(`http://x/api/v1/public-chat/${CODE}/meeting/join`);
+    expect(init.headers['X-PChat-Guest']).toBe('pcg_tok');
+    expect(JSON.parse(init.body!)).toEqual({ participant_token: 'r'.repeat(64) });
+  });
+
+  it('API-242 create passes with_meeting through', () => {
+    const { endpoints, fetchImpl } = harness({ room: {}, url: 'u' });
+    void endpoints.publicChatCreateGroup('acme', { title: 'T', password: 'pw-123456', with_meeting: true });
+    const { url, init } = call(fetchImpl);
+    expect(url).toBe('http://x/api/v1/public-chat/rooms');
+    expect(JSON.parse(init.body!)).toMatchObject({ with_meeting: true });
+  });
+
+  it('API-245 member meeting join targets the room route', () => {
+    const { endpoints, fetchImpl } = harness({ data: {} });
+    void endpoints.publicChatMemberMeetingJoin('acme', ROOM);
+    expect(call(fetchImpl).url).toBe(`http://x/api/v1/public-chat/rooms/${ROOM}/meeting/join`);
+  });
+});

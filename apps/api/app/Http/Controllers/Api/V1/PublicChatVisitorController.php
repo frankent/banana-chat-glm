@@ -6,6 +6,7 @@ use App\Domain\Media\UploadService;
 use App\Domain\PublicChat\PublicChatGate;
 use App\Domain\PublicChat\PublicChatMessageWriter;
 use App\Domain\PublicChat\PublicChatPublicSerializer;
+use App\Domain\PublicChat\PublicChatService;
 use App\Enums\PublicChatSenderKind;
 use App\Enums\PublicChatStatus;
 use App\Events\PublicChatTyping;
@@ -13,6 +14,7 @@ use App\Events\PublicChatTypingStaff;
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Models\Attachment;
+use App\Models\PublicChatGuest;
 use App\Models\PublicChatMessage;
 use App\Models\PublicChatRoom;
 use App\Models\User;
@@ -61,6 +63,7 @@ class PublicChatVisitorController extends Controller
         private readonly PublicChatPublicSerializer $serializer,
         private readonly WorkspaceContext $context,
         private readonly UploadService $uploads,
+        private readonly PublicChatService $rooms,
     ) {}
 
     /**
@@ -78,12 +81,15 @@ class PublicChatVisitorController extends Controller
     {
         $room = $this->resolve($code);
         $viewer = $this->viewer($request);
+        $guest = $room->isGroup() ? $this->guest($request, $room) : null;
 
         return $this->noStore([
             'room' => $this->serializer->room($room),
-            'viewer' => $viewer,
+            'viewer' => $viewer ?? ($guest !== null ? ['kind' => 'guest', 'display_name' => $guest->display_name, 'guest_id' => $guest->id] : null),
+            'has_meeting' => $room->isGroup() && $room->meeting_id !== null,
+            'requires_password' => $room->isGroup() && $guest === null && $viewer === null,
             'feature_enabled' => $this->gate->enabled(),
-            'can_send' => $this->canSend($room, $viewer),
+            'can_send' => $this->canSend($room, $viewer) && (! $room->isGroup() || $guest !== null),
             'closed_reason' => $this->closedReason($room),
         ]);
     }
@@ -96,7 +102,7 @@ class PublicChatVisitorController extends Controller
     public function messages(Request $request, string $code): JsonResponse
     {
         $room = $this->resolve($code);
-        $this->viewer($request); // a dead bearer is 401 even on a read
+        $this->assertMayRead($request, $room); // a dead bearer is 401 even on a read
 
         $data = $request->validate([
             'after_seq' => ['nullable', 'integer', 'min:0'],
@@ -135,7 +141,7 @@ class PublicChatVisitorController extends Controller
     public function send(Request $request, string $code): JsonResponse
     {
         $room = $this->resolve($code);
-        $this->assertVisitorMayWrite($request, $room);
+        $guest = $this->assertVisitorMayWrite($request, $room);
 
         $data = $request->validate([
             'client_message_id' => ['required', 'string', 'uuid'],
@@ -156,6 +162,7 @@ class PublicChatVisitorController extends Controller
             $data['client_message_id'],
             $data['reply_to_message_id'] ?? null,
             array_values($data['attachment_ids'] ?? []),
+            $guest,
         );
 
         $message->loadMissing(['attachments', 'replyTo']);
@@ -163,6 +170,64 @@ class PublicChatVisitorController extends Controller
         return $this->noStore([
             'message' => $this->serializer->message($message, $room),
         ], $created ? 201 : 200);
+    }
+
+    /**
+     * API-217 POST /public-chat/{code}/join — FR-PCHAT-041. Trade the room
+     * password + a display name for a guest token. Re-entering with the same
+     * name resumes the same guest (see PublicChatService::joinAsGuest). Wrong
+     * password and "not a group room" are the SAME 403, so the endpoint does not
+     * reveal a room's kind. Brute force is bounded by pchat-visitor-join.
+     */
+    public function join(Request $request, string $code): JsonResponse
+    {
+        $room = $this->resolve($code);
+        $this->gate->assertEnabled();
+
+        if ($this->viewer($request) !== null) {
+            throw ApiException::pchatSignedIn();
+        }
+
+        $data = $request->validate([
+            'password' => ['required', 'string', 'max:128'],
+            'display_name' => ['required', 'string', 'max:80'],
+        ]);
+
+        [$guest, $token] = $this->rooms->joinAsGuest($room, $data['password'], $data['display_name']);
+
+        return $this->noStore([
+            'guest' => ['id' => $guest->id, 'display_name' => $guest->display_name],
+            'guest_token' => $token,
+        ], 201);
+    }
+
+    /**
+     * API-218 POST /public-chat/{code}/meeting/join — FR-PCHAT-042. A guest with
+     * a live room token joins the room's video meeting under their room name.
+     */
+    public function meetingJoin(Request $request, string $code): JsonResponse
+    {
+        $room = $this->resolve($code);
+        $this->gate->assertEnabled();
+        $guest = $this->guest($request, $room);
+
+        if ($guest === null) {
+            throw ApiException::pchatGuestRequired();
+        }
+
+        $data = $request->validate(['participant_token' => ['nullable', 'string', 'size:64']]);
+
+        return $this->noStore(['data' => $this->rooms->joinMeeting($room, null, null, $guest->display_name, $data['participant_token'] ?? null)]);
+    }
+
+    /** API-219 POST /public-chat/{code}/meeting/leave. */
+    public function meetingLeave(Request $request, string $code): JsonResponse
+    {
+        $room = $this->resolve($code);
+        $data = $request->validate(['participant_token' => ['required', 'string', 'max:128']]);
+        $this->rooms->leaveMeeting($room, $data['participant_token']);
+
+        return $this->noStore([]);
     }
 
     /**
@@ -269,7 +334,7 @@ class PublicChatVisitorController extends Controller
     public function broadcastAuth(Request $request, string $code): JsonResponse
     {
         $room = $this->resolve($code);
-        $this->viewer($request); // a dead bearer is still 401
+        $this->assertMayRead($request, $room); // a dead bearer is still 401
 
         $socketId = (string) $request->input('socket_id', '');
         $channelName = (string) $request->input('channel_name', '');
@@ -382,8 +447,11 @@ class PublicChatVisitorController extends Controller
         return ['kind' => 'member', 'display_name' => $user->display_name];
     }
 
-    /** The write-side gate: feature on, link live, room open, not signed in. */
-    private function assertVisitorMayWrite(Request $request, PublicChatRoom $room): void
+    /**
+     * The write-side gate: feature on, link live, room open, not signed in. For a
+     * group room it also demands a live guest token and returns that guest.
+     */
+    private function assertVisitorMayWrite(Request $request, PublicChatRoom $room): ?PublicChatGuest
     {
         $this->gate->assertEnabled();
 
@@ -391,9 +459,37 @@ class PublicChatVisitorController extends Controller
             throw ApiException::pchatSignedIn();
         }
 
+        $guest = null;
+        if ($room->isGroup()) {
+            $guest = $this->guest($request, $room) ?? throw ApiException::pchatGuestRequired();
+        }
+
         if ($room->isClosed()) {
             throw ApiException::pchatRoomClosed();
         }
+
+        return $guest;
+    }
+
+    /** Group-room reads need a live guest token (or a signed-in member); support rooms stay link-only. */
+    private function assertMayRead(Request $request, PublicChatRoom $room): void
+    {
+        $viewer = $this->viewer($request);
+
+        if ($room->isGroup() && $viewer === null && $this->guest($request, $room) === null) {
+            throw ApiException::pchatGuestRequired();
+        }
+    }
+
+    private function guest(Request $request, PublicChatRoom $room): ?PublicChatGuest
+    {
+        $guest = $this->rooms->guestFromToken($room, $request->header('X-PChat-Guest'));
+
+        if ($guest !== null && ($guest->last_seen_at === null || $guest->last_seen_at->lt(now()->subMinute()))) {
+            $guest->forceFill(['last_seen_at' => now()])->saveQuietly();
+        }
+
+        return $guest;
     }
 
     /**

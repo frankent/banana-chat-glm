@@ -80,6 +80,8 @@ class PublicChatMessage extends Model
         'system_meta',
         'reply_to_message_id',
         'client_message_id',
+        'guest_id',
+        'guest_name_snapshot',
         'deleted_at',
         'deleted_by',
     ];

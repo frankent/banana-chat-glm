@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Support\WorkspaceContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class MeetingController extends Controller
 {
@@ -46,7 +47,7 @@ class MeetingController extends Controller
     {
         $this->enabled();
 
-        return response()->json(['data' => Meeting::where('workspace_id', $this->context->id())->where('created_by', $r->user()->id)->latest()->limit(100)->get()->map(fn ($m) => $this->meetings->summary($m))]);
+        return response()->json(['data' => Meeting::where('workspace_id', $this->context->id())->where('created_by', $r->user()->id)->whereNotIn('id', DB::table('public_chat_rooms')->whereNotNull('meeting_id')->select('meeting_id'))->latest()->limit(100)->get()->map(fn ($m) => $this->meetings->summary($m))]);
     }
 
     public function create(Request $r)

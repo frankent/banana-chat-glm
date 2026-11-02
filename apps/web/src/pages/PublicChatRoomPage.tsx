@@ -18,6 +18,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { GroupRoomTools } from '../components/PublicChatGroupTools';
 import { PUBLIC_CHAT_STATUSES, publicChatClaimState, publicChatStatusLabelKey } from '@banana-chat/chat-core';
 import { t } from '@banana-chat/shared';
 import type { PublicChatStatus, UserStub } from '@banana-chat/shared';
@@ -291,6 +292,9 @@ function AgentRoom({ roomId }: { roomId: string }) {
                 })}
           </p>
         </div>
+        {current.kind === 'group' && (
+          <GroupRoomTools slug={slug} roomId={roomId} title={current.customer_name} hasMeeting={current.has_meeting === true} />
+        )}
         <div className="bc-pchat-room-controls">
           <PcStatusPill status={current.status} />
           <label>

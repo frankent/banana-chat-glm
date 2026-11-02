@@ -63,6 +63,7 @@ class PublicChatRoom extends Model
 
     protected $fillable = [
         'workspace_id',
+        'meeting_id',
         'api_key_id',
         'code',
         'customer_name',
@@ -80,6 +81,9 @@ class PublicChatRoom extends Model
         'last_message_at',
         'expires_at',
         'closed_at',
+        'kind',
+        'password_hash',
+        'created_by',
     ];
 
     /**
@@ -97,7 +101,7 @@ class PublicChatRoom extends Model
      * link column — read `$room->code` as a property, which $hidden does not
      * touch; only array/JSON serialisation is affected.
      */
-    protected $hidden = ['meta', 'code'];
+    protected $hidden = ['meta', 'code', 'password_hash'];
 
     protected function casts(): array
     {
@@ -120,6 +124,12 @@ class PublicChatRoom extends Model
     public static function generateCode(): string
     {
         return bin2hex(random_bytes(32));
+    }
+
+    /** FR-PCHAT-040 — a member-created, password-protected multi-guest room. */
+    public function isGroup(): bool
+    {
+        return $this->kind === 'group';
     }
 
     public function isExpired(): bool
@@ -164,6 +174,11 @@ class PublicChatRoom extends Model
     public function assignedTo(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_to');
+    }
+
+    public function guests(): HasMany
+    {
+        return $this->hasMany(PublicChatGuest::class, 'room_id');
     }
 
     public function messages(): HasMany

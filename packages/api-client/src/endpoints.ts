@@ -25,6 +25,7 @@ import type {
   MessageSearchResult,
   NotificationSettings,
   ReadStatusEntry,
+  PublicChatGuestJoin,
   PublicChatListQuery,
   PublicChatPublicMessage,
   PublicChatReadState,
@@ -134,6 +135,10 @@ export interface PublicChatBroadcastAuth {
  * "undefined", which the server would then match against. Drop empty values
  * instead of trusting the caller to omit the key.
  */
+function pchatGuestHeader(token?: string | null): Record<string, string> | undefined {
+  return token ? { 'X-PChat-Guest': token } : undefined;
+}
+
 function pchatQuery(params: Record<string, string | number | boolean | undefined | null>): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
@@ -747,22 +752,33 @@ export class Endpoints {
   // PCHAT_SIGNED_IN, rather than silently recording an agent as the customer.
 
   /** API-210 — room, `can_send`, `feature_enabled`, `closed_reason`, `viewer`. */
-  publicChatVisitorView(code: string) {
-    return this.api.request<PublicChatVisitorView>(`/api/v1/public-chat/${code}`);
+  publicChatVisitorView(code: string, guestToken?: string | null) {
+    return this.api.request<PublicChatVisitorView>(`/api/v1/public-chat/${code}`, { headers: pchatGuestHeader(guestToken) });
+  }
+
+  /**
+   * API-217 — FR-PCHAT-041. Password + display name -> guest token. The same
+   * name in the same room resumes the same guest, so a returning guest on a new
+   * device just types the password and name again.
+   */
+  publicChatGuestJoin(code: string, input: { password: string; display_name: string }) {
+    return this.api.request<PublicChatGuestJoin>(`/api/v1/public-chat/${code}/join`, { method: 'POST', body: input });
   }
 
   /** API-211 — reconnect catch-up and the 5 s polling fallback. */
-  publicChatVisitorMessages(code: string, params: { after_seq?: number; limit?: number } = {}) {
+  publicChatVisitorMessages(code: string, params: { after_seq?: number; limit?: number } = {}, guestToken?: string | null) {
     return this.api.request<PublicChatVisitorMessagePage>(
       `/api/v1/public-chat/${code}/messages${pchatQuery(params)}`,
+      { headers: pchatGuestHeader(guestToken) },
     );
   }
 
   /** API-212 — 201 on a first send, 200 with the identical message on replay. */
-  publicChatVisitorSend(code: string, input: PublicChatVisitorSendInput) {
+  publicChatVisitorSend(code: string, input: PublicChatVisitorSendInput, guestToken?: string | null) {
     return this.api.request<{ message: PublicChatPublicMessage }>(`/api/v1/public-chat/${code}/messages`, {
       method: 'POST',
       body: input,
+      headers: pchatGuestHeader(guestToken),
     });
   }
 
@@ -775,15 +791,15 @@ export class Endpoints {
    * adapt it explicitly — the divergence is real and is reported upstream
    * rather than papered over with a wrong type here.
    */
-  publicChatVisitorUpload(code: string, input: PublicChatUploadInput) {
-    return this.api.request<PublicChatUploadTicket>(`/api/v1/public-chat/${code}/uploads`, { method: 'POST', body: input });
+  publicChatVisitorUpload(code: string, input: PublicChatUploadInput, guestToken?: string | null) {
+    return this.api.request<PublicChatUploadTicket>(`/api/v1/public-chat/${code}/uploads`, { method: 'POST', body: input, headers: pchatGuestHeader(guestToken) });
   }
 
   /** API-214 — ownership is asserted against the ROOM, not an uploader identity. */
-  publicChatVisitorCompleteUpload(code: string, attachmentId: string, parts?: { part_number: number; etag: string }[]) {
+  publicChatVisitorCompleteUpload(code: string, attachmentId: string, parts?: { part_number: number; etag: string }[], guestToken?: string | null) {
     return this.api.request<PublicChatUploadCompletion>(
       `/api/v1/public-chat/${code}/uploads/${attachmentId}/complete`,
-      { method: 'POST', body: parts !== undefined ? { parts } : {} },
+      { method: 'POST', body: parts !== undefined ? { parts } : {}, headers: pchatGuestHeader(guestToken) },
     );
   }
 
@@ -793,16 +809,17 @@ export class Endpoints {
    * string equality and 403s anything else, including the -staff channel
    * (MANDATORY fix 7/14). Do not build this string by pattern.
    */
-  publicChatVisitorBroadcastAuth(code: string, socketId: string, channelName: string) {
+  publicChatVisitorBroadcastAuth(code: string, socketId: string, channelName: string, guestToken?: string | null) {
     return this.api.request<PublicChatBroadcastAuth>(`/api/v1/public-chat/${code}/broadcasting/auth`, {
       method: 'POST',
       body: { socket_id: socketId, channel_name: channelName },
+      headers: pchatGuestHeader(guestToken),
     });
   }
 
   /** API-216 — EVT-085; the visitor variant carries sender_kind only. Answers 202 `{ok:true}`. */
-  publicChatVisitorTyping(code: string, typing: boolean) {
-    return this.api.request<{ ok: boolean }>(`/api/v1/public-chat/${code}/typing`, { method: 'POST', body: { typing } });
+  publicChatVisitorTyping(code: string, typing: boolean, guestToken?: string | null) {
+    return this.api.request<{ ok: boolean }>(`/api/v1/public-chat/${code}/typing`, { method: 'POST', body: { typing }, headers: pchatGuestHeader(guestToken) });
   }
 
   // ---- §5.18 FR-PCHAT tier 3: the support agent (API-220..228) ----
@@ -826,6 +843,64 @@ export class Endpoints {
       limit: filters.limit,
     });
     return this.api.request<PublicChatRoomPage>(`/api/v1/public-chat/rooms${query}`, { workspaceSlug: slug });
+  }
+
+  /** API-242 — FR-PCHAT-040. Any member creates a password-protected group room; returns the share URL. */
+  publicChatCreateGroup(slug: string, input: { title: string; password: string; expires_in_days?: number; with_meeting?: boolean }) {
+    return this.api.request<{ room: PublicChatStaffRoom; url: string }>(`/api/v1/public-chat/rooms`, {
+      method: 'POST',
+      workspaceSlug: slug,
+      body: input,
+    });
+  }
+
+  /** API-243 — rotating the password signs every current guest out. */
+  publicChatChangePassword(slug: string, roomId: string, password: string) {
+    return this.api.request<{ ok: boolean }>(`/api/v1/public-chat/rooms/${roomId}/password`, {
+      method: 'POST',
+      workspaceSlug: slug,
+      body: { password },
+    });
+  }
+
+  /** API-218 — a password-authenticated guest joins the room's video meeting. */
+  publicChatMeetingJoin(code: string, guestToken: string, participantToken?: string) {
+    return this.api.request<MeetingJoin>(`/api/v1/public-chat/${code}/meeting/join`, {
+      method: 'POST',
+      body: { participant_token: participantToken },
+      headers: pchatGuestHeader(guestToken),
+    });
+  }
+
+  /** API-219. */
+  publicChatMeetingLeave(code: string, participantToken: string) {
+    return this.api.request<void>(`/api/v1/public-chat/${code}/meeting/leave`, {
+      method: 'POST',
+      body: { participant_token: participantToken },
+    });
+  }
+
+  /** API-245 — a workspace member joins the room's meeting as themselves. */
+  publicChatMemberMeetingJoin(slug: string, roomId: string, participantToken?: string) {
+    return this.api.request<MeetingJoin>(`/api/v1/public-chat/rooms/${roomId}/meeting/join`, {
+      method: 'POST',
+      workspaceSlug: slug,
+      body: { participant_token: participantToken },
+    });
+  }
+
+  /** API-246. */
+  publicChatMemberMeetingLeave(slug: string, roomId: string, participantToken: string) {
+    return this.api.request<void>(`/api/v1/public-chat/rooms/${roomId}/meeting/leave`, {
+      method: 'POST',
+      workspaceSlug: slug,
+      body: { participant_token: participantToken },
+    });
+  }
+
+  /** API-244 — the share URL of a group room. */
+  publicChatGroupLink(slug: string, roomId: string) {
+    return this.api.request<{ url: string }>(`/api/v1/public-chat/rooms/${roomId}/link`, { workspaceSlug: slug });
   }
 
   /** API-221 — the detail row, including `meta`, `my_last_read_seq`, `unread_count`. */

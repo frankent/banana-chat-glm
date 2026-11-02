@@ -131,14 +131,27 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('pchat-partner', fn (Request $request) => Limit::perMinute(120)
             ->by('pchat-partner:'.($request->header('X-PChat-Key') ?: $request->ip())));
 
-        RateLimiter::for('pchat-visitor-read', fn (Request $request) => Limit::perMinute(120)
-            ->by('pchat-read:'.$request->route('code')));
+        // FR-PCHAT-041 — group rooms have many guests behind one code, so the
+        // per-guest bucket is the real limit; the x10 per-code ceiling stops a
+        // caller varying X-PChat-Guest to dodge it.
+        RateLimiter::for('pchat-visitor-read', fn (Request $request) => [
+            Limit::perMinute(120)->by('pchat-read:'.$request->route('code').':'.sha1((string) $request->header('X-PChat-Guest'))),
+            Limit::perMinute(1200)->by('pchat-read-room:'.$request->route('code')),
+        ]);
 
-        RateLimiter::for('pchat-visitor-write', fn (Request $request) => Limit::perMinute(20)
-            ->by('pchat-write:'.$request->route('code')));
+        // FR-PCHAT-041 — password guessing budget, per code AND client IP.
+        RateLimiter::for('pchat-visitor-join', fn (Request $request) => Limit::perMinute(8)
+            ->by('pchat-join:'.$request->route('code').':'.$request->ip()));
 
-        RateLimiter::for('pchat-visitor-upload', fn (Request $request) => Limit::perMinute(10)
-            ->by('pchat-upload:'.$request->route('code')));
+        RateLimiter::for('pchat-visitor-write', fn (Request $request) => [
+            Limit::perMinute(20)->by('pchat-write:'.$request->route('code').':'.sha1((string) $request->header('X-PChat-Guest'))),
+            Limit::perMinute(200)->by('pchat-write-room:'.$request->route('code')),
+        ]);
+
+        RateLimiter::for('pchat-visitor-upload', fn (Request $request) => [
+            Limit::perMinute(10)->by('pchat-upload:'.$request->route('code').':'.sha1((string) $request->header('X-PChat-Guest'))),
+            Limit::perMinute(100)->by('pchat-upload-room:'.$request->route('code')),
+        ]);
 
         // Route middleware runs AFTER the group's auth:api, so ->user() is set.
         RateLimiter::for('pchat-agent-write', fn (Request $request) => Limit::perMinute(60)

@@ -14,6 +14,7 @@ use App\Events\PublicChatRoomChanged;
 use App\Events\PublicChatRoomChangedStaff;
 use App\Exceptions\ApiException;
 use App\Models\Attachment;
+use App\Models\PublicChatGuest;
 use App\Models\PublicChatMessage;
 use App\Models\PublicChatRead;
 use App\Models\PublicChatRoom;
@@ -80,6 +81,7 @@ class PublicChatMessageWriter
         string $clientMessageId,
         ?string $replyToMessageId = null,
         array $attachmentIds = [],
+        ?PublicChatGuest $guest = null,
     ): array {
         if ($kind === PublicChatSenderKind::System) {
             // System rows are appended under a caller-held lock, never here.
@@ -133,7 +135,7 @@ class PublicChatMessageWriter
         }
 
         /** @var array{0: PublicChatMessage, 1: bool, 2: ?PublicChatMessage, 3: bool} $result */
-        $result = DB::transaction(function () use ($room, $kind, $sender, $body, $clientMessageId, $replyToMessageId, $attachmentIds): array {
+        $result = DB::transaction(function () use ($room, $kind, $sender, $body, $clientMessageId, $replyToMessageId, $attachmentIds, $guest): array {
             /** @var PublicChatRoom $locked */
             $locked = PublicChatRoom::withoutGlobalScopes()
                 ->whereKey($room->id)
@@ -148,6 +150,7 @@ class PublicChatMessageWriter
                 ->where('workspace_id', $locked->workspace_id)
                 ->where('sender_kind', $kind->value)
                 ->where('client_message_id', $clientMessageId)
+                ->where('guest_id', $guest?->id)
                 ->first();
 
             if ($existing !== null) {
@@ -172,6 +175,8 @@ class PublicChatMessageWriter
                 // transcript and a buggy join cannot leak a user row externally.
                 'agent_username_snapshot' => $kind === PublicChatSenderKind::Agent ? $sender?->username : null,
                 'provider_name_snapshot' => $kind === PublicChatSenderKind::Agent ? $locked->provider_name : null,
+                'guest_id' => $kind === PublicChatSenderKind::Visitor ? $guest?->id : null,
+                'guest_name_snapshot' => $kind === PublicChatSenderKind::Visitor ? $guest?->display_name : null,
                 'type' => $this->deriveType($attachments),
                 'body' => $body,
                 'reply_to_message_id' => $replyToMessageId,

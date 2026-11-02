@@ -59,8 +59,10 @@ export interface PcVisitorRoom {
 
 /** FR-PCHAT-013 — a signed-in member who opened the customer link. */
 export interface PcViewer {
-  kind: 'member';
+  kind: 'member' | 'guest';
   display_name: string;
+  /** FR-PCHAT-041 — present when kind === 'guest'. */
+  guest_id?: string;
 }
 
 export interface PcVisitorView {
@@ -69,6 +71,10 @@ export interface PcVisitorView {
   feature_enabled: boolean;
   can_send: boolean;
   closed_reason: 'done' | 'disabled' | null;
+  /** FR-PCHAT-041 — group room and no live guest token. */
+  requires_password?: boolean;
+  /** FR-PCHAT-042 */
+  has_meeting?: boolean;
 }
 
 /** Snippet only — the public variant carries no author at all. */
@@ -87,6 +93,7 @@ export interface PcPublicMessage {
   sender_kind: PublicChatSenderKind;
   /** Assembled SERVER-SIDE. Render as a text node — never Markdown (fix 20). */
   display_name: string | null;
+  guest_id?: string | null;
   type: PublicChatMessageType;
   body: string | null;
   system_event: PublicChatSystemEvent | null;
@@ -144,6 +151,8 @@ export interface PcStaffMessagePage {
  */
 export interface PcStaffRoom {
   id: string;
+  kind?: 'support' | 'group';
+  has_meeting?: boolean;
   customer_name: string;
   provider_name: string;
   external_ref: string | null;
@@ -228,6 +237,28 @@ function toUploadTicket(raw: PcUploadTicketWire): UploadTicket {
   };
 }
 
+// ----------------------------------------------------------- guest token store
+
+const guestKey = (code: string) => `bc.pchat.guest.${code}`;
+
+/** FR-PCHAT-041 — re-entry: the token survives reloads so a returning guest skips the password. */
+export function readGuestToken(code: string): string | null {
+  try {
+    return localStorage.getItem(guestKey(code));
+  } catch {
+    return null;
+  }
+}
+
+export function saveGuestToken(code: string, token: string | null): void {
+  try {
+    if (token) localStorage.setItem(guestKey(code), token);
+    else localStorage.removeItem(guestKey(code));
+  } catch {
+    /* private mode: the session still works until reload */
+  }
+}
+
 // ------------------------------------------------------------------ transport
 
 /** The api-client generics predate the current contract; re-type at the seam. */
@@ -237,27 +268,39 @@ function as<T>(promise: Promise<unknown>): Promise<T> {
 
 export const pchat = {
   // -- tier 2, the visitor. No workspace slug; the code in the path IS the credential.
-  visitorView: (code: string) => as<PcVisitorView>(endpoints.publicChatVisitorView(code)),
+  visitorView: (code: string, guestToken?: string | null) => as<PcVisitorView>(endpoints.publicChatVisitorView(code, guestToken)),
 
-  visitorMessages: (code: string, params: { after_seq?: number; limit?: number } = {}) =>
-    as<PcVisitorMessagePage>(endpoints.publicChatVisitorMessages(code, params)),
+  visitorMessages: (code: string, params: { after_seq?: number; limit?: number } = {}, guestToken?: string | null) =>
+    as<PcVisitorMessagePage>(endpoints.publicChatVisitorMessages(code, params, guestToken)),
 
-  visitorSend: (code: string, input: { client_message_id: string; body?: string; attachment_ids?: string[] }) =>
-    as<{ message: PcPublicMessage }>(endpoints.publicChatVisitorSend(code, input)),
+  visitorSend: (code: string, input: { client_message_id: string; body?: string; attachment_ids?: string[] }, guestToken?: string | null) =>
+    as<{ message: PcPublicMessage }>(endpoints.publicChatVisitorSend(code, input, guestToken)),
 
-  visitorUpload: (code: string, input: { kind: 'image' | 'video' | 'file'; filename: string; mime_type: string; size_bytes: number }) =>
-    as<PcUploadTicketWire>(endpoints.publicChatVisitorUpload(code, input)).then(toUploadTicket),
+  visitorUpload: (code: string, input: { kind: 'image' | 'video' | 'file'; filename: string; mime_type: string; size_bytes: number }, guestToken?: string | null) =>
+    as<PcUploadTicketWire>(endpoints.publicChatVisitorUpload(code, input, guestToken)).then(toUploadTicket),
 
   /** API-214 answers `{attachment:{id,status}}` — a status, not a full row. */
-  visitorCompleteUpload: (code: string, attachmentId: string, parts?: { part_number: number; etag: string }[]) =>
+  visitorCompleteUpload: (code: string, attachmentId: string, parts?: { part_number: number; etag: string }[], guestToken?: string | null) =>
     as<{ attachment: { id: string; status: AttachmentStatus } }>(
-      endpoints.publicChatVisitorCompleteUpload(code, attachmentId, parts),
+      endpoints.publicChatVisitorCompleteUpload(code, attachmentId, parts, guestToken),
     ),
 
-  visitorBroadcastAuth: (code: string, socketId: string, channelName: string) =>
-    as<{ auth: string }>(endpoints.publicChatVisitorBroadcastAuth(code, socketId, channelName)),
+  visitorBroadcastAuth: (code: string, socketId: string, channelName: string, guestToken?: string | null) =>
+    as<{ auth: string }>(endpoints.publicChatVisitorBroadcastAuth(code, socketId, channelName, guestToken)),
 
-  visitorTyping: (code: string, typing: boolean) => endpoints.publicChatVisitorTyping(code, typing),
+  visitorTyping: (code: string, typing: boolean, guestToken?: string | null) => endpoints.publicChatVisitorTyping(code, typing, guestToken),
+
+  // -- FR-PCHAT-041/042, password group rooms
+  guestJoin: (code: string, input: { password: string; display_name: string }) =>
+    as<{ guest: { id: string; display_name: string }; guest_token: string }>(endpoints.publicChatGuestJoin(code, input)),
+  meetingJoin: (code: string, guestToken: string, resume?: string) => endpoints.publicChatMeetingJoin(code, guestToken, resume),
+  meetingLeave: (code: string, participantToken: string) => endpoints.publicChatMeetingLeave(code, participantToken),
+  memberMeetingJoin: (slug: string, roomId: string, resume?: string) => endpoints.publicChatMemberMeetingJoin(slug, roomId, resume),
+  memberMeetingLeave: (slug: string, roomId: string, token: string) => endpoints.publicChatMemberMeetingLeave(slug, roomId, token),
+  createGroup: (slug: string, input: { title: string; password: string; expires_in_days?: number; with_meeting?: boolean }) =>
+    endpoints.publicChatCreateGroup(slug, input),
+  changePassword: (slug: string, roomId: string, password: string) => endpoints.publicChatChangePassword(slug, roomId, password),
+  groupLink: (slug: string, roomId: string) => endpoints.publicChatGroupLink(slug, roomId),
 
   // -- tier 3, the agent. Ordinary auth + X-Workspace-Id.
   rooms: (slug: string, filters: PcListFilters, cursor?: string) =>
@@ -342,6 +385,8 @@ export function pchatErrorMessage(error: unknown, locale: Locale = 'en'): string
       'PCHAT_ROOM_CLOSED',
       'PCHAT_DISABLED',
       'PCHAT_SIGNED_IN',
+      'PCHAT_PASSWORD_INVALID',
+      'PCHAT_GUEST_REQUIRED',
       'PCHAT_INVALID_TRANSITION',
       'RATE_LIMITED',
     ];

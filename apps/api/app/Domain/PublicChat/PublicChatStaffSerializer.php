@@ -53,6 +53,9 @@ class PublicChatStaffSerializer
 
         return [
             'id' => $room->id,
+            'kind' => $room->kind,
+            'has_meeting' => $room->meeting_id !== null,
+            'created_by' => $room->created_by,
             'customer_name' => $room->customer_name,
             'provider_name' => $room->provider_name,
             'external_ref' => $room->external_ref,
@@ -109,7 +112,7 @@ class PublicChatStaffSerializer
             // The same string the customer sees, so an agent can tell at a
             // glance how their message was signed externally.
             'external_display_name' => $message->externalDisplayName(),
-            'visitor_display_name' => $room->customer_name,
+            'visitor_display_name' => $message->guest_name_snapshot ?? $room->customer_name,
             'type' => $message->type->value,
             'body' => $deleted ? null : $message->body,
             'system_event' => $message->system_event?->value,

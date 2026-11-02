@@ -5,6 +5,7 @@ interface RequestOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   body?: unknown;
   workspaceSlug?: string | null;
+  headers?: Record<string, string>;
   /** internal: prevent infinite refresh loop */
   _isRetry?: boolean;
 }
@@ -79,6 +80,9 @@ export class ApiClient {
       headers['Content-Type'] = 'application/json';
     }
     for (const [key, value] of Object.entries(this.extraHeaders())) {
+      headers[key] = value;
+    }
+    for (const [key, value] of Object.entries(options.headers ?? {})) {
       headers[key] = value;
     }
 

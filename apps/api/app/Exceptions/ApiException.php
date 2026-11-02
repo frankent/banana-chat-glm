@@ -352,4 +352,16 @@ class ApiException extends RuntimeException
     {
         return new self('PCHAT_SIGNED_IN', 'คุณกำลังเข้าสู่ระบบอยู่ — เปิดห้องนี้จากเมนู Public Chat แทน', 403);
     }
+
+    /** API-217 — wrong room password. Uniform: never says whether the room is a group room. */
+    public static function pchatPasswordInvalid(): self
+    {
+        return new self('PCHAT_PASSWORD_INVALID', 'รหัสผ่านห้องไม่ถูกต้อง', 403);
+    }
+
+    /** Tier-2 group-room route called without a live guest token. */
+    public static function pchatGuestRequired(): self
+    {
+        return new self('PCHAT_GUEST_REQUIRED', 'ต้องใส่รหัสผ่านห้องก่อนเข้าร่วม', 401);
+    }
 }

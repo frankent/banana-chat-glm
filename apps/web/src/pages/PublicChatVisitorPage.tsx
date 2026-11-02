@@ -38,11 +38,12 @@ import {
 } from '@banana-chat/chat-core';
 import { t } from '@banana-chat/shared';
 import type { Locale } from '@banana-chat/shared';
-import { interpolate, mergeBySeq, pchat, pchatErrorMessage, pchatTime } from '../lib/public-chat';
+import { interpolate, mergeBySeq, pchat, pchatErrorMessage, pchatTime, readGuestToken, saveGuestToken } from '../lib/public-chat';
 import type { PcPublicMessage, PcVisitorView } from '../lib/public-chat';
 import { useUploader } from '../hooks/useUploader';
 import type { UploadDriver } from '../hooks/useUploader';
 import { useSession } from '../state/session';
+import { PublicChatMeeting } from '../components/PublicChatMeeting';
 import { Banana, Icon } from '../components/Visual';
 import { PcAttachments, PcPublicStatusPill, PcReplyQuote } from '../components/PublicChatParts';
 import './meetings.css';
@@ -60,9 +61,10 @@ function VisitorChat({ code }: { code: string }) {
   const { status: sessionStatus } = useSession();
   const valid = isPublicChatCode(code);
 
+  const [guestToken, setGuestToken] = useState<string | null>(() => readGuestToken(code));
   const view = useQuery({
-    queryKey: ['pchat-visitor', code, sessionStatus],
-    queryFn: () => pchat.visitorView(code),
+    queryKey: ['pchat-visitor', code, sessionStatus, guestToken],
+    queryFn: () => pchat.visitorView(code, guestToken),
     enabled: valid && sessionStatus !== 'loading',
     retry: false,
   });
@@ -94,7 +96,37 @@ function VisitorChat({ code }: { code: string }) {
     );
   }
 
-  return <Conversation code={code} view={view.data} onReload={() => void view.refetch()} />;
+  if (view.data.requires_password === true) {
+    return (
+      <PasswordGate
+        code={code}
+        view={view.data}
+        onJoined={(token) => {
+          saveGuestToken(code, token);
+          setGuestToken(token);
+        }}
+        onStale={() => {
+          if (guestToken !== null) {
+            saveGuestToken(code, null);
+            setGuestToken(null);
+          }
+        }}
+      />
+    );
+  }
+
+  return (
+    <Conversation
+      code={code}
+      view={view.data}
+      guestToken={guestToken}
+      onReload={() => void view.refetch()}
+      onGuestLost={() => {
+        saveGuestToken(code, null);
+        setGuestToken(null);
+      }}
+    />
+  );
 }
 
 function Shell({ children, title }: { children: ReactNode; title?: string }) {
@@ -114,7 +146,80 @@ function Shell({ children, title }: { children: ReactNode; title?: string }) {
   );
 }
 
-function Conversation({ code, view, onReload }: { code: string; view: PcVisitorView; onReload: () => void }) {
+function PasswordGate({
+  code,
+  view,
+  onJoined,
+  onStale,
+}: {
+  code: string;
+  view: PcVisitorView;
+  onJoined: (token: string) => void;
+  onStale: () => void;
+}) {
+  const locale: Locale = view.room.locale === 'th' ? 'th' : 'en';
+  const tr = (key: string) => t(key, locale);
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  // a token the server no longer honours (password rotated, re-entered elsewhere)
+  useEffect(onStale, [onStale]);
+
+  async function submit() {
+    setBusy(true);
+    setError('');
+    try {
+      const joined = await pchat.guestJoin(code, { password, display_name: name.trim() });
+      onJoined(joined.guest_token);
+    } catch (e) {
+      setError(pchatErrorMessage(e, locale));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Shell title={view.room.customer_name}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void submit();
+        }}
+      >
+        <p>{tr('pchat.gate.title')}</p>
+        <label>
+          {tr('pchat.gate.name')}
+          <input required maxLength={40} autoComplete="nickname" value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <label>
+          {tr('pchat.gate.password')}
+          <input required type="password" maxLength={128} autoComplete="off" value={password} onChange={(e) => setPassword(e.target.value)} />
+        </label>
+        <p className="bc-meeting-hint">{tr('pchat.gate.hint')}</p>
+        <button className="bc-primary" disabled={busy || name.trim() === '' || password === ''}>
+          {tr('pchat.gate.submit')}
+        </button>
+        {error && <p role="alert">{error}</p>}
+      </form>
+    </Shell>
+  );
+}
+
+function Conversation({
+  code,
+  view,
+  guestToken,
+  onReload,
+  onGuestLost,
+}: {
+  code: string;
+  view: PcVisitorView;
+  guestToken: string | null;
+  onReload: () => void;
+  onGuestLost: () => void;
+}) {
   const locale: Locale = view.room.locale === 'th' ? 'th' : 'en';
   const tr = useMemo(() => (key: string) => t(key, locale), [locale]);
 
@@ -130,18 +235,26 @@ function Conversation({ code, view, onReload }: { code: string; view: PcVisitorV
   // WebSocket on every parent render
   const reload = useRef(onReload);
   reload.current = onReload;
+  const guestTokenRef = useRef(guestToken);
+  guestTokenRef.current = guestToken;
+  const guestLost = useRef(onGuestLost);
+  guestLost.current = onGuestLost;
 
   // ---- transcript: API-211 is both the first load and the polling fallback ---
   // `after_seq` is read from a ref so the query key stays stable: every poll is
   // an incremental catch-up, and the same call gap-fills after a reconnect.
   const page = useQuery({
     queryKey: ['pchat-visitor-messages', code],
-    queryFn: () => pchat.visitorMessages(code, seen.current > 0 ? { after_seq: seen.current } : { limit: 100 }),
+    queryFn: () => pchat.visitorMessages(code, seen.current > 0 ? { after_seq: seen.current } : { limit: 100 }, guestToken),
     retry: false,
     // PublicMeetingPage's 10s precedent, tightened to the 5s the design names
     // for a chat surface. Off while the socket is up.
     refetchInterval: connected ? false : 5000,
   });
+
+  useEffect(() => {
+    if (page.error instanceof ApiError && page.error.code === 'PCHAT_GUEST_REQUIRED') guestLost.current();
+  }, [page.error]);
 
   useEffect(() => {
     if (page.data === undefined) return;
@@ -175,7 +288,7 @@ function Conversation({ code, view, onReload }: { code: string; view: PcVisitorV
           // `channel.name` is already `private-public-chat.<ulid>`; pass it
           // through verbatim — the server compares the exact string.
           void pchat
-            .visitorBroadcastAuth(code, socketId, channel.name)
+            .visitorBroadcastAuth(code, socketId, channel.name, guestTokenRef.current)
             .then((response) => callback(false, response))
             .catch((err: unknown) => callback(true as never, err as never));
         },
@@ -235,12 +348,12 @@ function Conversation({ code, view, onReload }: { code: string; view: PcVisitorV
   // ---- uploads: API-213/214, room-scoped, no uploader identity --------------
   const driver: UploadDriver = useMemo(
     () => ({
-      create: (input) => pchat.visitorUpload(code, input),
-      complete: (attachmentId, parts) => pchat.visitorCompleteUpload(code, attachmentId, parts),
+      create: (input) => pchat.visitorUpload(code, input, guestToken),
+      complete: (attachmentId, parts) => pchat.visitorCompleteUpload(code, attachmentId, parts, guestToken),
       // deliberately no `poll`: there is no visitor read-back endpoint, and the
       // transcript re-renders the attachment ready on the next message fetch
     }),
-    [code],
+    [code, guestToken],
   );
   const uploader = useUploader('', driver);
 
@@ -249,7 +362,7 @@ function Conversation({ code, view, onReload }: { code: string; view: PcVisitorV
     const now = Date.now();
     if (now - typingSent.current < 3000) return;
     typingSent.current = now;
-    void pchat.visitorTyping(code, true).catch(() => {});
+    void pchat.visitorTyping(code, true, guestToken).catch(() => {});
   }
 
   const send = useMutation({
@@ -261,7 +374,7 @@ function Conversation({ code, view, onReload }: { code: string; view: PcVisitorV
         client_message_id: clientMessageId.current,
         body: body.trim() === '' ? undefined : body.trim(),
         attachment_ids: attachmentIds.length > 0 ? attachmentIds : undefined,
-      });
+      }, guestToken);
     },
     // transport and 5xx only: PCHAT_SIGNED_IN / PCHAT_ROOM_CLOSED / PCHAT_DISABLED
     // will not change on a retry, and retrying a 429 spends what is left of the
@@ -289,7 +402,7 @@ function Conversation({ code, view, onReload }: { code: string; view: PcVisitorV
   const composerState = publicChatComposerState({
     feature_enabled: view.feature_enabled,
     status_public: view.room.status_public,
-    viewer: view.viewer,
+    viewer: view.viewer?.kind === 'member' ? view.viewer : null,
     expires_at: view.room.expires_at,
   });
   const bannerKey = publicChatComposerBannerKey(composerState);
@@ -315,11 +428,19 @@ function Conversation({ code, view, onReload }: { code: string; view: PcVisitorV
           {/* status_public ONLY — `problem` never reaches this page */}
           <PcPublicStatusPill status={view.room.status_public} locale={locale} />
         </header>
+        {view.has_meeting === true && guestToken !== null && (
+          <PublicChatMeeting
+            title={view.room.customer_name}
+            locale={locale}
+            join={(resume) => pchat.meetingJoin(code, guestToken, resume)}
+            leave={(token) => pchat.meetingLeave(code, token)}
+          />
+        )}
 
         <div className="bc-pchat-visitor-log">
           {messages.length === 0 && <p className="bc-pchat-empty">{tr('pchat.visitor.empty')}</p>}
           {messages.map((message) => (
-            <VisitorRow key={message.id} message={message} locale={locale} />
+            <VisitorRow key={message.id} message={message} locale={locale} guestId={view.viewer?.kind === 'guest' ? (view.viewer.guest_id ?? null) : null} />
           ))}
           <div ref={bottom} />
         </div>
@@ -414,7 +535,7 @@ function Conversation({ code, view, onReload }: { code: string; view: PcVisitorV
   );
 }
 
-function VisitorRow({ message, locale }: { message: PcPublicMessage; locale: Locale }) {
+function VisitorRow({ message, locale, guestId }: { message: PcPublicMessage; locale: Locale; guestId: string | null }) {
   const tr = (key: string) => t(key, locale);
 
   if (message.sender_kind === 'system') {
@@ -424,7 +545,7 @@ function VisitorRow({ message, locale }: { message: PcPublicMessage; locale: Loc
     return <p className="bc-pchat-system">{tr(`pchat.system.${message.system_event ?? 'status_changed'}`)}</p>;
   }
 
-  const mine = message.sender_kind === 'visitor';
+  const mine = message.sender_kind === 'visitor' && (guestId === null ? message.guest_id == null : message.guest_id === guestId);
   return (
     <article className={`bc-pchat-msg kind-${message.sender_kind}`} data-mine={mine}>
       <div className="bc-pchat-bubble">

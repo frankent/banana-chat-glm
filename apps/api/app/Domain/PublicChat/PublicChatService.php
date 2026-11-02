@@ -8,6 +8,10 @@ use App\Enums\PublicChatSystemEvent;
 use App\Events\PublicChatRoomCreated;
 use App\Exceptions\ApiException;
 use App\Models\PublicChatApiKey;
+use App\Domain\Calls\CallCapacity;
+use App\Domain\Calls\MeetingService;
+use App\Models\Meeting;
+use App\Models\PublicChatGuest;
 use App\Models\PublicChatRoom;
 use App\Models\User;
 use App\Models\WorkspaceMember;
@@ -15,6 +19,7 @@ use App\Services\AuditLogger;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 
 /**
  * FR-PCHAT-001/009/012 — room lifecycle: create, close, rotate-link, status and
@@ -34,6 +39,8 @@ class PublicChatService
         private readonly AuditLogger $audit,
         private readonly PublicChatMessageWriter $writer,
         private readonly PublicChatStaffSerializer $staff,
+        private readonly MeetingService $meetings,
+        private readonly CallCapacity $capacity,
     ) {}
 
     /**
@@ -100,6 +107,166 @@ class PublicChatService
         broadcast(new PublicChatRoomCreated($room, $this->staff->room($room)));
 
         return [$room, true];
+    }
+
+    /**
+     * API-242 / FR-PCHAT-040 — a workspace member opens a password-protected,
+     * multi-guest room. The creator is the room's owner (assigned_to) and the
+     * room starts `in_progress`, so it never inflates the support queue's
+     * new/problem badge and the agent auto-claim never fires.
+     *
+     * @param  array{title: string, password: string, expires_in_days?: ?int, locale?: ?string}  $input
+     */
+    public function createGroup(User $creator, string $workspaceId, array $input): PublicChatRoom
+    {
+        $workspaceName = (string) DB::table('workspaces')->where('id', $workspaceId)->value('name');
+        $days = isset($input['expires_in_days'])
+            ? max(1, min(365, (int) $input['expires_in_days']))
+            : $this->gate->linkTtlDays();
+
+        $room = PublicChatRoom::withoutGlobalScopes()->create([
+            'workspace_id' => $workspaceId,
+            'code' => PublicChatRoom::generateCode(),
+            'kind' => 'group',
+            'password_hash' => Hash::make($input['password']),
+            'created_by' => $creator->id,
+            'customer_name' => $this->sanitizeText($input['title'] ?? null, 120, required: true),
+            'provider_name' => $this->sanitizeText($workspaceName, 120, required: false) ?? 'Banana Chat',
+            'status' => PublicChatStatus::InProgress->value,
+            'assigned_to' => $creator->id,
+            'claimed_at' => now(),
+            'locale' => in_array($input['locale'] ?? null, ['th', 'en'], true) ? $input['locale'] : 'th',
+            'expires_at' => now()->addDays($days),
+        ]);
+
+        if (! empty($input['with_meeting'])) {
+            $meeting = Meeting::create([
+                'workspace_id' => $workspaceId,
+                'created_by' => $creator->id,
+                'title' => $room->customer_name,
+                'code' => bin2hex(random_bytes(32)),
+                'expires_at' => $room->expires_at,
+                'capacity' => $this->capacity->group(),
+            ]);
+            $room->forceFill(['meeting_id' => $meeting->id])->save();
+        }
+
+        $this->audit->system('public_chat.group_room_created', $workspaceId, 'public_chat_room', $room->id, [
+            'created_by' => $creator->id,
+        ]);
+
+        broadcast(new PublicChatRoomCreated($room, $this->staff->room($room)));
+
+        return $room;
+    }
+
+    /** FR-PCHAT-042 — the room's meeting, or 404 when the room has none / it has ended. */
+    public function meetingOrFail(PublicChatRoom $room): Meeting
+    {
+        $meeting = $room->isGroup() && $room->meeting_id !== null
+            ? Meeting::query()->where('workspace_id', $room->workspace_id)->find($room->meeting_id)
+            : null;
+
+        if ($meeting === null || ! $this->meetings->available($meeting)) {
+            throw ApiException::pchatRoomNotFound();
+        }
+
+        return $meeting;
+    }
+
+    /** @return array<string, mixed> LiveKit join payload (MeetingService::join), without the meeting's public code. */
+    public function joinMeeting(PublicChatRoom $room, ?User $member, ?string $session, ?string $guestName, ?string $resume): array
+    {
+        $meeting = $this->meetingOrFail($room);
+        $out = $this->meetings->join($meeting, $member, $session, $guestName, $resume);
+        unset($out['meeting']['code']);
+
+        return $out;
+    }
+
+    public function leaveMeeting(PublicChatRoom $room, string $participantToken): void
+    {
+        $this->meetings->leave($this->meetingOrFail($room), $participantToken);
+    }
+
+    /**
+     * API-243 / FR-PCHAT-041 — rotating the password revokes every existing
+     * guest token: knowing the OLD password must not keep a guest inside.
+     */
+    public function changePassword(PublicChatRoom $room, User $actor, string $password): void
+    {
+        DB::transaction(function () use ($room, $password): void {
+            $room->forceFill(['password_hash' => Hash::make($password)])->save();
+
+            PublicChatGuest::query()
+                ->where('room_id', $room->id)
+                ->where('workspace_id', $room->workspace_id)
+                ->whereNull('revoked_at')
+                ->update(['revoked_at' => now()]);
+        });
+
+        $this->audit->system('public_chat.group_password_changed', $room->workspace_id, 'public_chat_room', $room->id, [
+            'actor_id' => $actor->id,
+        ]);
+    }
+
+    /**
+     * API-217 / FR-PCHAT-041 — trade the room password for a guest token.
+     * Returns [guest, plaintextToken]; the token exists only in this return value.
+     *
+     * @return array{0: PublicChatGuest, 1: string}
+     */
+    public function joinAsGuest(PublicChatRoom $room, string $password, string $displayName): array
+    {
+        if (! $room->isGroup() || $room->password_hash === null || ! Hash::check($password, $room->password_hash)) {
+            throw ApiException::pchatPasswordInvalid();
+        }
+
+        $name = $this->sanitizeText($displayName, 40, required: true);
+        $token = 'pcg_'.bin2hex(random_bytes(32));
+
+        // RE-ENTRY: the same name in the same room resumes the SAME guest row
+        // (history, "mine" bubbles). The token rotates, so the previous device's
+        // token stops working; a guest revoked by a password change is revived.
+        $guest = DB::transaction(function () use ($room, $name, $token): PublicChatGuest {
+            $guest = PublicChatGuest::query()
+                ->where('room_id', $room->id)
+                ->where('workspace_id', $room->workspace_id)
+                ->whereRaw('lower(display_name) = ?', [mb_strtolower($name)])
+                ->lockForUpdate()
+                ->first();
+
+            $attrs = ['token_hash' => hash('sha256', $token), 'revoked_at' => null, 'last_seen_at' => now()];
+
+            if ($guest !== null) {
+                $guest->forceFill($attrs)->save();
+
+                return $guest;
+            }
+
+            return PublicChatGuest::query()->create($attrs + [
+                'room_id' => $room->id,
+                'workspace_id' => $room->workspace_id,
+                'display_name' => $name,
+            ]);
+        });
+
+        return [$guest, $token];
+    }
+
+    /** Resolve a presented guest token to a live guest of THIS room, else null. */
+    public function guestFromToken(PublicChatRoom $room, ?string $token): ?PublicChatGuest
+    {
+        if ($token === null || ! preg_match('/\Apcg_[a-f0-9]{64}\z/', $token)) {
+            return null;
+        }
+
+        return PublicChatGuest::query()
+            ->where('token_hash', hash('sha256', $token))
+            ->where('room_id', $room->id)
+            ->where('workspace_id', $room->workspace_id)
+            ->whereNull('revoked_at')
+            ->first();
     }
 
     private function findByExternalRef(string $workspaceId, string $externalRef): ?PublicChatRoom

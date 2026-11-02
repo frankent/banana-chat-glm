@@ -23,6 +23,7 @@ import type { PcListFilters, PcStaffRoom } from '../lib/public-chat';
 import { useSession } from '../state/session';
 import { Avatar, Icon } from '../components/Visual';
 import { PcStatusPill } from '../components/PublicChatParts';
+import { NewGroupRoom } from '../components/PublicChatGroupTools';
 import './public-chat.css';
 
 const en = (key: string) => t(key, 'en');
@@ -87,6 +88,7 @@ export function PublicChatListPage() {
             <span>.</span>
           </h1>
           <p>Conversations customers started from a support link.</p>
+          <NewGroupRoom slug={slug} onCreated={(id) => navigate(`/public-chat/${id}`)} />
         </div>
         {summary.data !== undefined && (
           <dl className="bc-pchat-summary" aria-label="Queue summary">
@@ -177,6 +179,7 @@ export function PublicChatListPage() {
               {/* customer_name and provider_name are partner-supplied: text nodes only (MANDATORY fix 20) */}
               <span className="bc-pchat-row-who">
                 <strong>{room.customer_name}</strong>
+                {room.kind === 'group' && <em className="bc-eyebrow"> {en('pchat.group.badge')}</em>}
                 <small>{room.provider_name}</small>
                 {room.external_ref !== null && <em>#{room.external_ref}</em>}
               </span>

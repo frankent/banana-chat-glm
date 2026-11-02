@@ -663,6 +663,7 @@ export type PublicChatAgentStub = Pick<UserStub, 'id' | 'username' | 'display_na
  */
 export interface PublicChatVisitorRoom {
   id: string;
+  kind: 'support' | 'group';
   customer_name: string;
   provider_name: string;
   status_public: PublicChatStatusPublic;
@@ -674,14 +675,26 @@ export interface PublicChatVisitorRoom {
 
 /** FR-PCHAT-013 — a signed-in member who opened the customer link. */
 export interface PublicChatViewer {
-  kind: 'member';
+  kind: 'member' | 'guest';
   display_name: string;
+  /** FR-PCHAT-041 — present when kind === 'guest'. */
+  guest_id?: string;
+}
+
+/** API-217 response. The token is shown once; the client persists it for re-entry. */
+export interface PublicChatGuestJoin {
+  guest: { id: string; display_name: string };
+  guest_token: string;
 }
 
 /** API-210 response. `can_send` is authoritative; the client derives the reason. */
 export interface PublicChatVisitorView {
   room: PublicChatVisitorRoom;
   can_send: boolean;
+  /** FR-PCHAT-041 — group room and the caller holds no live guest token. */
+  requires_password: boolean;
+  /** FR-PCHAT-042 — the group room owns a video meeting. */
+  has_meeting?: boolean;
   feature_enabled: boolean;
   closed_reason: PublicChatClosedReason | null;
   /** null for a genuine visitor; FR-PCHAT-013 populates it for a member bearer. */
@@ -731,6 +744,8 @@ export interface PublicChatPublicMessage {
    * an existing transcript (FR-PCHAT-014).
    */
   display_name: string | null;
+  /** FR-PCHAT-041 — author guest on a group-room visitor row; compare with viewer.guest_id for "mine". */
+  guest_id?: string | null;
   type: PublicChatMessageType;
   body: string | null;
   reply_to: PublicChatPublicReplySnippet | null;
@@ -844,6 +859,9 @@ export interface PublicChatStaffMessagePage {
  */
 export interface PublicChatStaffRoom {
   id: string;
+  kind: 'support' | 'group';
+  created_by: string | null;
+  has_meeting?: boolean;
   customer_name: string;
   provider_name: string;
   external_ref: string | null;
