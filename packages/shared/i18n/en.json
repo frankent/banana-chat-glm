@@ -93,6 +93,7 @@
   "pchat.title": "Public Chat",
   "pchat.rail": "Public Chat",
   "pchat.paused": "Paused",
+  "pchat.status.open": "Open",
   "pchat.status.new": "New",
   "pchat.status.in_progress": "In progress",
   "pchat.status.done": "Done",

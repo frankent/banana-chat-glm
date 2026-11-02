@@ -199,3 +199,40 @@ test('TC-UI-PCHAT-008 forget this device clears the stored token and returns to 
   await expect(page.getByLabel(/password/i).first()).toBeVisible();
   await expect.poll(() => page.evaluate((c) => localStorage.getItem(`bc.pchat.guest.${c}`), CODE)).toBeNull();
 });
+
+for (const size of sizes) {
+  test(`TC-UI-PCHAT-009 queue row for a group room keeps its content inside the row — ${size.name}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: size.width, height: size.height });
+    await memberFixture(page);
+    await page.goto('/public-chat');
+    const row = page.locator('.bc-pchat-row').first();
+    await expect(row).toBeVisible();
+    await shot(page, testInfo, `list-${size.name}`);
+    const rb = (await row.boundingBox())!;
+    const who = (await row.locator('.bc-pchat-row-who').boundingBox())!;
+    const badges = page.locator('.bc-pchat-row .pc-badge');
+    await expect(badges).toHaveCount(2);
+    const b0 = (await badges.nth(0).boundingBox())!;
+    const b1 = (await badges.nth(1).boundingBox())!;
+    expect(who.y).toBeGreaterThanOrEqual(rb.y - 1);
+    expect(who.y + who.height).toBeLessThanOrEqual(rb.y + rb.height + 1);
+    expect(b1.x).toBeGreaterThanOrEqual(b0.x + b0.width + 2);
+    expect(who.x).toBeLessThan(rb.x + 40);
+  });
+}
+
+test('TC-UI-PCHAT-010 staff room page shows Copy link in the header and the link in the tools drawer', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await memberFixture(page);
+  await page.route(`**/api/v1/public-chat/rooms/${ROOM_ID}/link`, (r) => r.fulfill({ json: { data: { url: `http://127.0.0.1:5180/support/${CODE}` } } }));
+  await page.route(`**/api/v1/public-chat/rooms/${ROOM_ID}`, (r) => r.fulfill({ json: { data: { room: staffRoom } } }));
+  await page.route(`**/api/v1/public-chat/rooms/${ROOM_ID}/messages**`, (r) => r.fulfill({ json: { data: { messages: [], last_seq: 0 } } }));
+  await page.goto(`/public-chat/${ROOM_ID}`);
+  await page.getByRole('button', { name: /^copy link$/i }).first().click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toContain(`/support/${CODE}`);
+  await shot(page, testInfo, 'room-copy-link');
+  await page.getByRole('button', { name: /room tools/i }).click();
+  await expect(page.locator('dialog.pc-dialog[open] input[readonly]').first()).toHaveValue(new RegExp(`/support/${CODE}$`));
+  await shot(page, testInfo, 'room-tools-link');
+});

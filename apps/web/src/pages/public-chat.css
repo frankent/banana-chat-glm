@@ -513,6 +513,23 @@ html[data-theme='dark'] .pc-gate .pc-lock { color: var(--pc-accent); }
 @media (prefers-reduced-motion: reduce) { .bc-pchat-surface * { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
 
 /* ---- member list rows ------------------------------------------------- */
-.bc-pchat-row-who .pc-row { gap: 6px; margin-top: 2px; }
+.bc-pchat-row-who .pc-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 2px; }
 .pc-member-video { height: min(46vh, 480px); margin: 8px 0; border-radius: 14px; overflow: hidden; background: #121824; }
 .pc-member-video[hidden] { display: none; }
+
+/* Queue row is a card, not an action button: undo repo-wide button geometry (buttons.css). */
+#root .bc-pchat-queue button.bc-pchat-row {
+  display: grid;
+  justify-content: stretch;
+  height: auto;
+  min-height: 0;
+  min-width: 0;
+  padding: 13px 15px;
+  border-radius: 11px;
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: 1.4;
+  white-space: normal;
+  vertical-align: top;
+}
+.bc-pchat-group-tools.pc-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }

@@ -93,6 +93,7 @@
   "pchat.title": "แชทสนับสนุน",
   "pchat.rail": "แชทสนับสนุน",
   "pchat.paused": "หยุดชั่วคราว",
+  "pchat.status.open": "เปิดอยู่",
   "pchat.status.new": "ใหม่",
   "pchat.status.in_progress": "กำลังดำเนินการ",
   "pchat.status.done": "เสร็จสิ้น",

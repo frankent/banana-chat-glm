@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { t } from '@banana-chat/shared';
 import type { Locale } from '@banana-chat/shared';
@@ -252,7 +252,16 @@ export function GroupRoomTools({
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+  const [link, setLink] = useState('');
   const trigger = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    let live = true;
+    pchat.groupLink(slug, roomId).then((out) => live && setLink(out.url), () => undefined);
+    return () => {
+      live = false;
+    };
+  }, [slug, roomId]);
 
   function close() {
     setOpen(false);
@@ -266,8 +275,10 @@ export function GroupRoomTools({
   async function copyLink() {
     setError('');
     try {
-      const out = await pchat.groupLink(slug, roomId);
-      setNotice((await copyText(out.url)) ? tr('pchat.group.copied') : tr('pchat.group.copyFailed'));
+      const url = link || (await pchat.groupLink(slug, roomId)).url;
+      setLink(url);
+      setNotice((await copyText(url)) ? tr('pchat.group.copied') : tr('pchat.group.copyFailed'));
+      window.setTimeout(() => setNotice(''), 3000);
     } catch (e) {
       setError(pchatErrorMessage(e, L));
     }
@@ -303,6 +314,10 @@ export function GroupRoomTools({
           leave={(token) => pchat.memberMeetingLeave(slug, roomId, token)}
         />
       )}
+      <button type="button" className="pc-button" onClick={() => void copyLink()}>
+        {tr('pchat.group.copyLink')}
+      </button>
+      {!open && notice && <span role="status" className="pc-help">{notice}</span>}
       <button ref={trigger} type="button" className="pc-button" onClick={() => setOpen(true)}>
         <Icon name="lock" size={18} />
         {tr('pchat.group.tools')}
@@ -310,9 +325,12 @@ export function GroupRoomTools({
       <PcDialog open={open} onClose={close} drawer locale={L} title={tr('pchat.group.tools')}>
         <section className="pc-field-group">
           <h3 className="pc-h3">{tr('pchat.group.shareRoom')}</h3>
-          <button type="button" className="pc-button" onClick={() => void copyLink()}>
-            {tr('pchat.group.copyLink')}
-          </button>
+          <div className="pc-row">
+            <input className="pc-field" readOnly aria-label={tr('pchat.group.shareRoom')} value={link} onFocus={(e) => e.currentTarget.select()} />
+            <button type="button" className="pc-button" onClick={() => void copyLink()}>
+              {tr('pchat.group.copyLink')}
+            </button>
+          </div>
         </section>
         <section className="pc-field-group">
           <h3 className="pc-h3">{tr('pchat.group.access')}</h3>
