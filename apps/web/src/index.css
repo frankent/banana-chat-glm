@@ -177,6 +177,9 @@ input:focus,textarea:focus,select:focus { outline-color:#c8b564; }
 .bc-compose-box [data-testid="send-button"] { display:flex; align-items:center; gap:9px; font-size:11px; border-radius:8px; padding:11px 15px; }
 .bc-compose-hint { display:flex; justify-content:space-between; gap:10px; font-size:9px; color:#96a086; padding:10px 2px 0; }
 .bc-compose-hint kbd { font:inherit; }
+.bc-enter-toggle { display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:10px; border:1px solid #d9d4bf; background:transparent; color:#6b7257; cursor:pointer; }
+.bc-enter-toggle[aria-pressed="true"] { background:#fff4bf; border-color:#e0b800; color:#2d3320; }
+.bc-enter-toggle:focus-visible { outline:2px solid #e0b800; outline-offset:2px; }
 .bc-mobile-top,.bc-sidebar-shade { display:none; }
 /* FR-ADM-015/DEC-082 — the admin-uploaded system logo, or the built-in
    Banana mark. Global (not chat.css-scoped) since Logo renders on /login

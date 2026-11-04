@@ -1,5 +1,15 @@
 import { suspendPrivacyLock } from '../lib/privacy';
 import { useEffect, useMemo, useRef, useState } from 'react';
+
+const ENTER_SENDS_KEY = 'bc.composer.enterSends';
+
+function readEnterSends(): boolean {
+  try {
+    return localStorage.getItem(ENTER_SENDS_KEY) !== 'false';
+  } catch {
+    return true;
+  }
+}
 import type { ClipboardEvent, KeyboardEvent } from 'react';
 import { TypingPublisher, pastedImageName, selectPastedImages } from '@banana-chat/chat-core';
 import { endpoints } from '../lib/api';
@@ -117,6 +127,17 @@ export function Composer({ roomId, workspaceId, slug, senderId, members = [], re
     }
   };
 
+  const [enterSends, setEnterSends] = useState(readEnterSends);
+  const toggleEnterSends = () => {
+    const next = !enterSends;
+    setEnterSends(next);
+    try {
+      localStorage.setItem(ENTER_SENDS_KEY, String(next));
+    } catch {
+      /* private mode: the choice lasts for this session only */
+    }
+  };
+
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (mentionQuery !== null && mentionMatches.length > 0) {
       if (event.key === 'ArrowDown') {
@@ -140,7 +161,9 @@ export function Composer({ roomId, workspaceId, slug, senderId, members = [], re
       }
     }
 
-    if (event.key === 'Enter' && !event.shiftKey) {
+    if (event.key !== 'Enter' || event.nativeEvent.isComposing) return;
+    const sendsNow = enterSends ? !event.shiftKey : event.ctrlKey || event.metaKey;
+    if (sendsNow) {
       event.preventDefault();
       void send();
     }
@@ -258,6 +281,17 @@ export function Composer({ roomId, workspaceId, slug, senderId, members = [], re
           className="flex-1 resize-none rounded-xl border border-slate-300 px-3 py-2 text-sm focus:border-yellow-400 focus:outline-none"
         />
         <button
+          type="button"
+          className="bc-enter-toggle"
+          onClick={toggleEnterSends}
+          aria-pressed={enterSends}
+          aria-label={text('chat.enterSends')}
+          title={text(enterSends ? 'chat.enterSendsOn' : 'chat.enterSendsOff')}
+          data-testid="enter-sends-toggle"
+        >
+          <Icon name="keyboard" size={17} />
+        </button>
+        <button
           onClick={() => void send()}
           disabled={!canSend}
           aria-label={text('chat.send')}
@@ -267,7 +301,7 @@ export function Composer({ roomId, workspaceId, slug, senderId, members = [], re
           <span>Send</span><Icon name="send" size={17} />
         </button>
       </div>
-      <div className="bc-compose-hint"><span>Make room for a good conversation.</span><span><kbd>Enter</kbd> to send · <kbd>Shift + Enter</kbd> for a new line</span></div>
+      <div className="bc-compose-hint"><span>Make room for a good conversation.</span><span>{enterSends ? <><kbd>Enter</kbd> to send · <kbd>Shift + Enter</kbd> for a new line</> : <><kbd>Enter</kbd> for a new line · <kbd>Ctrl/⌘ + Enter</kbd> to send</>}</span></div>
       {mentionQuery !== null && mentionMatches.length > 0 && (
         <div
           className="absolute bottom-full left-12 mb-1 w-64 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg"
